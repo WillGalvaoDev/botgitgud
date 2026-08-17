@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 
+from botgitgud.errors import ApiError
+from botgitgud.wcl.client import WclClient, WclClientConfig
+
 load_dotenv()
 
 WCL_CLIENT_ID = os.getenv("WCL_CLIENT_ID")
@@ -18,8 +21,11 @@ BLIZZARD_CLIENT_ID = os.getenv("BLIZZARD_CLIENT_ID")
 BLIZZARD_CLIENT_SECRET = os.getenv("BLIZZARD_CLIENT_SECRET")
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-API_URL = "https://www.warcraftlogs.com/api/v2/client"
-HEADERS_BASE = {"Content-Type": "application/json", "Accept-Language": "en-US"}
+# T0.3: raw requests.post to the WCL API replaced by WclClient (timeouts,
+# retry/backoff, auth-token caching, rate-limit floor). See docs/desvios.md D-7.
+_wcl_client = WclClient(
+    WclClientConfig(client_id=WCL_CLIENT_ID or "", client_secret=WCL_CLIENT_SECRET or "")
+)
 
 SPELLS_FILE = "spells.json"
 SPELL_NAME_CACHE = {}
@@ -65,7 +71,8 @@ def get_blizzard_token():
         res = requests.post(
             url,
             data={"grant_type": "client_credentials"},
-            auth=(BLIZZARD_CLIENT_ID, BLIZZARD_CLIENT_SECRET)
+            auth=(BLIZZARD_CLIENT_ID, BLIZZARD_CLIENT_SECRET),
+            timeout=10
         )
         if res.status_code == 200:
             BLIZZARD_TOKEN_CACHE = res.json().get("access_token")
@@ -150,22 +157,8 @@ def save_spell_to_local_db(spell_id: int, name: str, source: str = "wcl"):
 
 
 ################################################################################
-# OAUTH WCL & UTILS
+# UTILS
 ################################################################################
-def get_wcl_token():
-    url = "https://www.warcraftlogs.com/oauth/token"
-    try:
-        res = requests.post(
-            url,
-            data={"grant_type": "client_credentials"},
-            auth=(WCL_CLIENT_ID, WCL_CLIENT_SECRET)
-        )
-        if res.status_code == 200:
-            return res.json().get("access_token")
-    except Exception as e:
-        print(f"❌ [ERRO OAUTH WCL]: {e}")
-    return None
-
 def parse_report_input(input_str):
     fight_match = re.search(r"fight=(\d+)", input_str)
     fight_id = int(fight_match.group(1)) if fight_match else None
@@ -183,9 +176,7 @@ def parse_report_input(input_str):
 ################################################################################
 # MÓDULO: CAPTURA DE TIMELINE
 ################################################################################
-def fetch_player_timeline_data(token, report_code, fight_id, char_name):
-    headers = {**HEADERS_BASE, "Authorization": f"Bearer {token}"}
-    
+def fetch_player_timeline_data(report_code, fight_id, char_name):
     query_meta = """
     query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {
       reportData {
@@ -200,11 +191,10 @@ def fetch_player_timeline_data(token, report_code, fight_id, char_name):
     }
     """
     try:
-        res = requests.post(API_URL, json={"query": query_meta, "variables": {"code": report_code, "fightIDs": [fight_id]}}, headers=headers)
-        if res.status_code != 200:
-            return None
-        
-        data = res.json().get("data", {}).get("reportData", {}).get("report", {})
+        res_json = _wcl_client.query(
+            query_meta, {"code": report_code, "fightIDs": [fight_id]}, op_name="fetch_player_meta"
+        )
+        data = res_json.get("data", {}).get("reportData", {}).get("report", {})
         fights = data.get("fights", [])
         if not fights:
             return None
@@ -257,20 +247,21 @@ def fetch_player_timeline_data(token, report_code, fight_id, char_name):
         """
 
         while current_start < end_time_ms:
-            ev_res = requests.post(API_URL, json={
-                "query": query_events,
-                "variables": {
-                    "code": report_code,
-                    "fightIDs": [fight_id],
-                    "startTime": current_start,
-                    "endTime": end_time_ms
-                }
-            }, headers=headers)
-
-            if ev_res.status_code != 200:
+            try:
+                ev_res_json = _wcl_client.query(
+                    query_events,
+                    {
+                        "code": report_code,
+                        "fightIDs": [fight_id],
+                        "startTime": current_start,
+                        "endTime": end_time_ms,
+                    },
+                    op_name="fetch_player_events",
+                )
+            except ApiError:
                 break
 
-            ev_json = ev_res.json().get("data", {}).get("reportData", {}).get("report", {}).get("events", {})
+            ev_json = ev_res_json.get("data", {}).get("reportData", {}).get("report", {}).get("events", {})
             events_data = ev_json.get("data", [])
             
             for ev in events_data:
@@ -309,11 +300,10 @@ def fetch_player_timeline_data(token, report_code, fight_id, char_name):
 ################################################################################
 # PERFIL DE REFERÊNCIA DE MAJOR CDS (Filtro ajustado para 100+ logs e duração do player + 30s)
 ################################################################################
-def fetch_top_logs_for_cds(token, encounter_id, user_class, user_spec, target_duration_sec):
+def fetch_top_logs_for_cds(encounter_id, user_class, user_spec, target_duration_sec):
     if DEBUG:
         print(f"🔎 [DEBUG RANKINGS] Buscando rankings paginados para Encounter ID {encounter_id} | Class: {user_class} | Spec: {user_spec} | Alvo Duração: {target_duration_sec}s")
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
-    
+
     # Query atualizada para aceitar páginas (page)
     query = """
     query GetRankingsCDs($encounterID: Int!, $className: String!, $specName: String!, $page: Int!) {
@@ -333,14 +323,14 @@ def fetch_top_logs_for_cds(token, encounter_id, user_class, user_spec, target_du
     try:
         while page <= max_pages and len(valid_refs) < 100:
             variables = {"encounterID": encounter_id, "className": user_class.strip(), "specName": clean_spec, "page": page}
-            res = requests.post(API_URL, json={"query": query, "variables": variables}, headers=headers)
-            
-            if res.status_code != 200:
+            try:
+                res_json = _wcl_client.query(query, variables, op_name="fetch_rankings_page")
+            except ApiError as e:
                 if DEBUG:
-                    print(f"❌ [DEBUG RANKINGS] Erro HTTP na página {page}: {res.text}")
+                    print(f"❌ [DEBUG RANKINGS] Erro na página {page}: {e}")
                 break
 
-            rankings_data = res.json().get("data", {}).get("worldData", {}).get("encounter", {}).get("characterRankings", {})
+            rankings_data = res_json.get("data", {}).get("worldData", {}).get("encounter", {}).get("characterRankings", {})
             rankings_list = rankings_data.get("rankings", [])
             
             if not rankings_list:
@@ -388,7 +378,7 @@ def fetch_top_logs_for_cds(token, encounter_id, user_class, user_spec, target_du
 
         reference_players = []
         with ThreadPoolExecutor(max_workers=5) as executor:
-            tasks = [executor.submit(fetch_player_timeline_data, token, r["report"]["code"], r["report"]["fightID"], r["name"]) for r in top_refs]
+            tasks = [executor.submit(fetch_player_timeline_data, r["report"]["code"], r["report"]["fightID"], r["name"]) for r in top_refs]
             for future in as_completed(tasks):
                 ref_res = future.result()
                 if ref_res:
@@ -701,22 +691,16 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
         await ctx.send("❌ Fight não encontrado no link (certifique-se de incluir `?fight=X` no link do WCL).")
         return
 
-    token = get_wcl_token()
-    if not token:
-        await ctx.send("❌ Falha ao obter token de acesso da API do Warcraft Logs.")
-        return
-
     await ctx.send(f"🔍 Analisando **{char_name}** com até 100 logs de referência (Duração de kill compatível)...")
 
     loop = asyncio.get_running_loop()
-    
+
     def process_analysis():
-        user_data = fetch_player_timeline_data(token, code, fight_id, char_name)
+        user_data = fetch_player_timeline_data(code, fight_id, char_name)
         if not user_data:
             return None, None, None, None, None, None, None, None, None
 
         references, matched, min_d, max_d, avg_p, parses, min_p, max_p = fetch_top_logs_for_cds(
-            token,
             user_data["fight"]["encounter_id"],
             user_data["build"]["class"],
             user_data["build"]["spec"],

@@ -116,3 +116,49 @@
   foram apagados e regravados do zero.
 - **Impacto:** nenhuma credencial real chega a ser commitada. Reforça a checagem de segurança que
   já fazia parte do critério de aceite da T0.2, sem alterar seu escopo.
+
+## D-7 — `WclClient.__init__` recebe `WclClientConfig`, não `Settings` (que ainda não existe)
+
+- **Tarefa:** T0.3
+- **Documento diz:** `class WclClient: def __init__(self, settings: Settings, transport: ...) -> None: ...`
+- **Realidade:** `Settings` (config tipada via `pydantic-settings`) só é criada na **T1.1**, que é
+  Fase 1 — depois da T0.3. O próprio documento confirma essa ordem: a T1.1 diz "Todos os números
+  mágicos das Fases 0–3 migram para cá", implicando que na Fase 0 as constantes normativas (T0.3
+  tem uma tabela inteira delas) ainda não vivem numa classe `Settings` centralizada. A assinatura
+  da T0.3 é pseudocódigo prospectivo, não algo literalmente construível nesta ordem.
+- **Ação tomada:** aplicado alternativo óbvio — criado `WclClientConfig` (dataclass frozen local em
+  `client.py`) com os mesmos campos que a tabela de constantes normativas da T0.3 especifica
+  (timeouts, tentativas, backoff, piso de pontos) mais as credenciais. `WclClient.__init__` recebe
+  esse `WclClientConfig` no lugar de `Settings`. A superfície pública (`query()`,
+  `points_remaining`) é idêntica à documentada. Quando a T1.1 criar `Settings`, ela pode either (a)
+  adaptar `WclClientConfig` para ler de `Settings`, ou (b) trocar o tipo do parâmetro — troca
+  mecânica, sem reescrever a lógica de retry/backoff/auth.
+- **Impacto:** nenhum na metodologia ou no comportamento observável do cliente. Apenas o tipo do
+  parâmetro de configuração difere do pseudocódigo até a T1.1 unificar.
+  **Consequência menor em `bot.py` (raiz):** como `WclClient.query()` já gerencia o token
+  internamente, `get_wcl_token()` e o parâmetro `token` threaded por `fetch_player_timeline_data`/
+  `fetch_top_logs_for_cds` foram removidos (senão ficariam mortos/inúteis). O cabeçalho separado
+  "❌ Falha ao obter token..." do Discord deixa de existir como mensagem distinta — uma falha de
+  autenticação agora aparece pela mesma mensagem genérica "❌ Jogador ... não foi encontrado ... ou
+  ocorreu um erro na busca", já que `fetch_player_timeline_data` captura a exceção e retorna
+  `None` como fazia antes para qualquer outra falha de rede. Validado ponta a ponta contra a API
+  real: a saída do `bot.py` atualizado é **byte-idêntica** ao snapshot golden da T0.2 para a
+  fixture (mesmo `matched=2`, mesmos deltas). `legacy/bot.py` permanece intocado.
+
+## D-8 — Nenhuma tarefa constrói `src/botgitgud/blizzard/client.py`, mas a T0.4 já exige `BlizzardClient`
+
+- **Tarefa:** T0.3 (achado durante o trabalho; afeta T0.4)
+- **Documento diz:** a árvore de diretórios (§1.1) lista `src/botgitgud/blizzard/client.py`, e a
+  assinatura da T0.4 é `SpellCatalog.__init__(self, path: Path, blizzard: BlizzardClient | None)`.
+  Nenhuma das 27 tarefas (T0.0–T4.4) tem "construir BlizzardClient" como entregável explícito.
+- **Realidade:** sem essa classe, a T0.4 não consegue satisfazer sua própria assinatura.
+- **Ação tomada:** registrado aqui para rastreabilidade; resolvido **na T0.4**, não aqui — T0.3 é
+  estritamente sobre `wcl/client.py` (seu próprio título). Como parte da T0.3, apenas corrigido o
+  achado 4.3 pontualmente em `bot.py`: adicionado `timeout=` explícito na única chamada
+  `requests.post` sem timeout que resta fora do escopo do `WclClient` (`get_blizzard_token()`),
+  sem construir uma classe nova — isso já satisfaz o critério de aceite literal da T0.3 ("nenhuma
+  chamada requests.* sem timeout permanece em bot.py"). Um `BlizzardClient` completo (com o mesmo
+  padrão de robustez do `WclClient`: timeout, retry, cache de token) fica para a T0.4, que é onde a
+  assinatura realmente exige o tipo.
+- **Impacto:** nenhum na T0.3. A T0.4 deve construir `BlizzardClient` como pré-requisito implícito
+  antes de finalizar `SpellCatalog`.
