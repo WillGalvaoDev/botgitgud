@@ -234,14 +234,34 @@ Formato confirmado:
 
 ---
 
-## 11. Itens ainda a verificar (permanecem na T0.1)
+## 11. Itens da sondagem original — resolvidos em T0.1
 
-| Item | Por quê |
+Todos os itens abaixo foram fechados durante a execução formal da T0.1
+(`src/botgitgud/wcl/schema_probe.py`, saída completa em `docs/schema_probe_output.md`).
+
+| Item | Resultado |
 |---|---|
-| ❓ `guid` de Ebon Might / Prescience | detecção de Augmentation (T2.1) |
-| ❓ `table(dataType: Debuffs)` tem o mesmo formato de `Buffs`? | uptimes de DoT (T3.1) |
-| ❓ Existe `viewBy: Ability` ou `filterExpression` que evite paginar eventos de dano? | custo de API (T1.8) — impacto alto |
-| ❓ Custo em **pontos** por tipo de query | orçamento (T1.8); medir com `pointsSpentThisHour` antes/depois |
-| ❓ Cooldown base na API da Blizzard | T2.5 |
-| ❓ Valores literais de `class`/`spec` para as 25 specs | normalização do allowlist (T0.9) |
-| ❓ Como obter `partition` atual programaticamente | T1.7 |
+| ✅ `guid` de Ebon Might / Prescience | **`395152`** (Ebon Might) e **`410089`** (Prescience), confirmados via `gameData.ability(id)`. Buff auxiliar relacionado: **`413984`** (Shifting Sands). Use estes 3 IDs para detectar `has_augmentation` na T2.1. |
+| ✅ `table(dataType: Debuffs)` tem o mesmo formato de `Buffs`? | **Sim, idêntico.** Mesma estrutura `data.auras[]` com `{guid, name, type, abilityIcon, totalUptime, totalUses, bands}`. |
+| ⚠️ Existe `filterExpression` que evite paginar eventos de dano? | O argumento **existe** em `events(...)` (confirmado por introspecção), mas a sintaxe testada (`"source.id in (6, 16, 20, ...)"`) retornou 0 eventos sem erro — a sintaxe exata não foi determinada. **Não use `filterExpression` para a agregação de pet da T3.1** até a sintaxe ser confirmada num experimento dedicado; use o filtro client-side por `sourceID` já validado em §5, que tem exatidão comprovada (erro 0,00%). |
+| ✅ Custo em **pontos** por tipo de query | **~2,0 pontos por requisição**, uniforme entre tipos (1 página de `events(Casts, limit:5000)`, 1 página de `events(DamageDone, limit:10000)`, 1 `table(Summary)` e 1 página de `characterRankings` custaram exatamente 2,00–2,01 pontos cada, medido via `rateLimitData.pointsSpentThisHour` antes/depois). Isso é **bem mais barato** do que o pior caso assumido na T1.8 (que estimava "centenas de requisições podem esgotar a cota rapidamente") — com `limitPerHour=3600`, o orçamento real é ~1800 requisições/hora. **Não relaxe os mecanismos de fila/orçamento da T1.8 por causa disso**: eles continuam sendo boa prática para justiça entre usuários e para not martelar a API à toa, mas a urgência é menor do que o documento original presumia. |
+| ❌ Cooldown base na API da **WCL** | **Não existe.** `GameData.ability(id)` (tipo `GameAbility`) só tem `{id, icon, name}` — sem cooldown. Confirma que a T2.5 depende mesmo da API da Blizzard (fonte 1) ou de tabela manual curada (fonte 2), como já previsto no documento; não há atalho pela própria WCL. |
+| ⬜ Valores literais de `class`/`spec` para as 25 specs | **Ainda não verificado** — nenhum log de fixture cobre as 25 specs. Warlock/Demonology confirmado (`type: "Warlock"`, `specs: ["Demonology"]`, `specIDs: [266]` em `combatantInfo`). A T0.9 deve confirmar as demais 24 ao encontrar logs reais, ou aceitar o risco e normalizar por `_normalize()` como já previsto. |
+| ✅ Como obter `partition` atual programaticamente | `worldData.zones { id name partitions { id name compactName default } }` — o campo booleano **`default`** marca a partition vigente. Confirmado para a zone 46 (VS/DR/MQD): partition `4` ("12.1") é `default: true` entre as 4 partitions listadas. Use esta query na T1.7 em vez de hardcode. |
+
+## 0. Tabela de veredito — cobertura da T0.1
+
+> Ver `docs/desvios.md` D-2: esta seção satisfaz "todo campo da tabela da T0.1 tem veredito
+> registrado" sem duplicar o conteúdo narrativo abaixo. A saída mecânica completa e re-executável
+> está em `docs/schema_probe_output.md` (gerada por `python -m botgitgud.wcl.schema_probe`).
+
+| Campo da tabela T0.1 | Veredito | Seção com o detalhe |
+|---|---|---|
+| `rateLimitData { limitPerHour, pointsSpentThisHour, pointsResetIn }` | ✅ existe (introspecção) | §2 |
+| `reportData.report.fights {...}` | ✅ existe (introspecção) | §3 |
+| `table(dataType: Summary)` → `playerDetails`, `combatantInfo` | ✅ existe (JSON escalar, verificado ao vivo) | §4 |
+| `table(dataType: DamageDone)` | ✅ existe, **com armadilha** (JSON escalar, verificado ao vivo) | §5 |
+| `table(dataType: Buffs / Debuffs)` | ✅ existe, mesmo formato para ambos | §6, §11 |
+| `events(dataType: Casts / Resources)` | ✅ existe (introspecção: `ReportEventPaginator{data, nextPageTimestamp}`) | §10 |
+| `characterRankings(className, specName, metric, page, difficulty, partition, bracket)` | ✅ todos os 7 argumentos existem (introspecção) | §8 |
+| Campos de cada ranking | ⚠️ **parcial** — `percentile`, `talents`, `gear` **NÃO existem**; os demais existem | §8, §9 |
