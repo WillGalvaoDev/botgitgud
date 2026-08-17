@@ -1,8 +1,15 @@
 {
   "method": "POST",
   "request_headers": {
-    "Authorization": "<redacted>",
-    "Content-Type": "application/json"
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "392",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
   },
   "request_payload": {
     "query": "\n    query GetRankingsCDs($encounterID: Int!, $className: String!, $specName: String!, $page: Int!) {\n      worldData {\n        encounter(id: $encounterID) {\n          characterRankings(className: $className, specName: $specName, metric: dps, page: $page)\n        }\n      }\n    }\n    ",

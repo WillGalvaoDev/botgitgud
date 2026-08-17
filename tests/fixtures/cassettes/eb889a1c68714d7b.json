@@ -1,12 +1,18 @@
 {
   "method": "POST",
   "request_headers": {
-    "Accept-Language": "en-US",
-    "Authorization": "<redacted>",
-    "Content-Type": "application/json"
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "492",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
   },
   "request_payload": {
-    "query": "\n    query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {\n      reportData {\n        report(code: $code) {\n          fights(fightIDs: $fightIDs) {\n            id encounterID name startTime endTime kill\n          }\n          table(fightIDs: $fightIDs, dataType: Summary, translate: true)\n          castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)\n        }\n      }\n    }\n    ",
+    "query": "\n    query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {\n      reportData {\n        report(code: $code) {\n          fights(fightIDs: $fightIDs) {\n            id encounterID name startTime endTime kill difficulty\n          }\n          table(fightIDs: $fightIDs, dataType: Summary, translate: true)\n          castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)\n        }\n      }\n    }\n    ",
     "variables": {
       "code": "PtfBbQKRY9d6zAMC",
       "fightIDs": [
@@ -7516,6 +7522,7 @@
           },
           "fights": [
             {
+              "difficulty": 5,
               "encounterID": 3179,
               "endTime": 1371183,
               "id": 1,

@@ -1,6 +1,15 @@
 {
   "method": "POST",
-  "request_headers": {},
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "29",
+    "content-type": "application/x-www-form-urlencoded",
+    "host": "oauth.battle.net",
+    "user-agent": "python-httpx/0.28.1"
+  },
   "request_payload": {
     "grant_type": "client_credentials"
   },

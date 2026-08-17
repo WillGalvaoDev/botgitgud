@@ -56,7 +56,7 @@ class BlizzardClient:
         self._sleep = sleep
         self._client = httpx.Client(
             transport=transport,
-            timeout=httpx.Timeout(connect=config.connect_timeout, read=config.read_timeout),
+            timeout=httpx.Timeout(config.read_timeout, connect=config.connect_timeout),
         )
         self._token: str | None = None
         self._token_expires_at: float = 0.0

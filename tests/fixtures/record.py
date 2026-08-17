@@ -17,13 +17,15 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from http_cassette import Cassette, redact_headers, save_cassette
+from httpx_cassette_transport import RecordingTransport
 from legacy_runner import isolated_legacy_bot
+from new_bot_runner import isolated_new_bot
 
 FIXTURE_REPORT_CODE = "PtfBbQKRY9d6zAMC"
 FIXTURE_FIGHT_ID = 1
@@ -31,6 +33,7 @@ FIXTURE_CHARACTER = "Zarad"
 MAX_REFERENCE_LOGS = 5  # keep cassette count small; see T0.2 instructions
 
 RECORDING_SCRATCH_DIR = Path(__file__).resolve().parent / "_record_scratch"
+RECORDING_SCRATCH_DIR_NEW = Path(__file__).resolve().parent / "_record_scratch_new"
 
 
 class _RecordingHooks:
@@ -105,6 +108,77 @@ class _RecordingHooks:
         return response
 
 
+def _record_new_pipeline() -> int:
+    """T0.7: bot.py (root, not legacy) uses httpx (WclClient/BlizzardClient),
+    so it needs its own recording pass with an httpx-flavored transport
+    (see httpx_cassette_transport.py) — the requests-based _RecordingHooks
+    above is blind to httpx traffic. Its query_meta also gained a
+    `difficulty` field the legacy one never had, and fetch_player_percentile
+    is an entirely new query — new cassette keys either way.
+    """
+    with isolated_new_bot(RECORDING_SCRATCH_DIR_NEW) as _new_bot:
+        new_bot = cast(Any, _new_bot)
+        wcl_transport = RecordingTransport()
+        new_bot._wcl_client = new_bot.WclClient(
+            new_bot.WclClientConfig(
+                client_id=new_bot.WCL_CLIENT_ID or "", client_secret=new_bot.WCL_CLIENT_SECRET or ""
+            ),
+            transport=wcl_transport,
+        )
+        blizzard_transport = RecordingTransport()
+        new_bot._blizzard_client = new_bot.BlizzardClient(
+            new_bot.BlizzardClientConfig(
+                client_id=new_bot.BLIZZARD_CLIENT_ID or "",
+                client_secret=new_bot.BLIZZARD_CLIENT_SECRET or "",
+            ),
+            transport=blizzard_transport,
+        )
+        # SpellCatalog captured the pre-injection blizzard client at import
+        # time; rebuild it so Blizzard fallback lookups go through the
+        # recording transport too.
+        new_bot._spell_catalog = new_bot.SpellCatalog(
+            Path("spells.json"), blizzard=new_bot._blizzard_client
+        )
+
+        user_data = new_bot.fetch_player_timeline_data(
+            FIXTURE_REPORT_CODE, FIXTURE_FIGHT_ID, FIXTURE_CHARACTER
+        )
+        if not user_data:
+            print("ERRO: pipeline novo (bot.py) não encontrou o jogador de fixture")
+            return 1
+
+        references, _matched, _min_d, _max_d, _cohort_median_dps = new_bot.fetch_top_logs_for_cds(
+            user_data["fight"]["encounter_id"],
+            user_data["build"]["class"],
+            user_data["build"]["spec"],
+            user_data["fight"]["duration_sec"],
+        )
+        if not references:
+            print("ERRO: pipeline novo (bot.py) não encontrou referências")
+            return 1
+
+        profile = new_bot.build_cd_reference_profile(references)
+        eligible = new_bot.discover_eligible_spell_ids(profile)
+        new_bot.compare_all_spells(user_data, profile, eligible, reference_n=len(references))
+
+        new_bot.fetch_player_percentile(
+            FIXTURE_REPORT_CODE,
+            FIXTURE_FIGHT_ID,
+            FIXTURE_CHARACTER,
+            user_data["build"].get("server"),
+            user_data["build"].get("region"),
+            user_data["fight"]["encounter_id"],
+            user_data["fight"].get("difficulty"),
+        )
+
+        new_bot._spell_catalog.flush()
+
+        total = wcl_transport.recorded + blizzard_transport.recorded
+        print(f"\nPipeline novo (bot.py): {total} cassetes adicionais gravados/confirmados.")
+
+    return 0
+
+
 def main() -> int:
     hooks = _RecordingHooks()
     with isolated_legacy_bot(RECORDING_SCRATCH_DIR) as legacy_bot:
@@ -155,6 +229,10 @@ def main() -> int:
             hooks.uninstall()
 
     print(f"\n{hooks.recorded} cassetes gravados em tests/fixtures/cassettes/")
+
+    new_pipeline_result = _record_new_pipeline()
+    if new_pipeline_result != 0:
+        return new_pipeline_result
 
     cassettes_dir = Path(__file__).resolve().parent / "cassettes"
     # "Bearer " catches leaked request headers; "eyJ" catches a raw JWT access_token

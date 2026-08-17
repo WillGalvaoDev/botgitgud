@@ -1,9 +1,15 @@
 {
   "method": "POST",
   "request_headers": {
-    "Accept-Language": "en-US",
-    "Authorization": "<redacted>",
-    "Content-Type": "application/json"
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "527",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
   },
   "request_payload": {
     "query": "\n        query GetPlayerEvents($code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!) {\n          reportData {\n            report(code: $code) {\n              events(fightIDs: $fightIDs, dataType: Casts, startTime: $startTime, endTime: $endTime, limit: 5000, translate: true) {\n                data\n                nextPageTimestamp\n              }\n            }\n          }\n        }\n        ",
