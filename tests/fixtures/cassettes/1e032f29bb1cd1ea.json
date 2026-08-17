@@ -1,0 +1,28 @@
+{
+  "method": "GET",
+  "request_headers": {
+    "Authorization": "<redacted>"
+  },
+  "request_payload": {
+    "locale": "en_US",
+    "namespace": "static-us"
+  },
+  "response_json": {
+    "_links": {
+      "self": {
+        "href": "https://us.api.blizzard.com/data/wow/spell/265187?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "description": "Summon a Demonic Tyrant that damages your target for 15 sec. \r\n\r\nDamage dealt by Demonic Tyrant is increased by 10% for each Wild Imp and Dreadstalker active.",
+    "id": 265187,
+    "media": {
+      "id": 265187,
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/spell/265187?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "name": "Summon Demonic Tyrant"
+  },
+  "status_code": 200,
+  "url": "https://us.api.blizzard.com/data/wow/spell/265187"
+}

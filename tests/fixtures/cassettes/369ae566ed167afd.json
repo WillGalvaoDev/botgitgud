@@ -1,0 +1,17 @@
+{
+  "method": "GET",
+  "request_headers": {
+    "Authorization": "<redacted>"
+  },
+  "request_payload": {
+    "locale": "en_US",
+    "namespace": "static-us"
+  },
+  "response_json": {
+    "code": 404,
+    "detail": "Not Found",
+    "type": "BLZWEBAPI00000404"
+  },
+  "status_code": 404,
+  "url": "https://us.api.blizzard.com/data/wow/spell/452930"
+}

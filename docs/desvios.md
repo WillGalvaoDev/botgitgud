@@ -59,3 +59,60 @@
   `ruff format --check .` continuam sendo executados literalmente como o DoD pede, na raiz do
   repo, sem argumentos adicionais — apenas ignoram uma pasta que nunca foi código do projeto.
 - **Impacto:** nenhum no conteúdo técnico. Configuração de lint em `pyproject.toml`.
+
+## D-4 — Isolar o `spells.json` ao rodar `legacy/bot.py` em testes/gravação
+
+- **Tarefa:** T0.2
+- **Documento diz:** o golden test (T0.2) deve rodar o pipeline do `legacy/bot.py` contra os
+  cassetes gravados e comparar a saída com um snapshot.
+- **Realidade:** `legacy/bot.py` usa `SPELLS_FILE = "spells.json"` — caminho **relativo ao CWD**.
+  Como `legacy/bot.py` está congelado (não pode ser editado), rodar o pipeline a partir da raiz do
+  repositório (onde pytest normalmente executa) faria o processo ler e **escrever** no
+  `spells.json` **rastreado pelo git** a cada execução de teste, toda vez que uma spell nova fosse
+  descoberta — poluindo o working tree e tornando os testes não-herméticos (uma segunda execução
+  parte de um estado diferente da primeira, mesmo que a saída final continue estável).
+- **Ação tomada:** aplicado alternativo óbvio, sem tocar `legacy/bot.py` — tanto `record.py`
+  quanto o golden test executam o módulo legado com o **CWD redirecionado** (`monkeypatch.chdir` /
+  equivalente) para um diretório isolado contendo uma **cópia** do `spells.json` da raiz (para
+  refletir o cache real de produção e minimizar chamadas desnecessárias à API da Blizzard durante
+  a gravação). Nenhuma escrita atinge o arquivo rastreado pelo git.
+- **Impacto:** nenhum na metodologia. `tests/fixtures/record.py` e `tests/golden/test_legacy_output.py`
+  isolam o CWD; `legacy/bot.py` permanece byte-a-byte idêntico ao original.
+
+## D-5 — `requests` precisa ser dependência de teste para exercitar `legacy/bot.py`
+
+- **Tarefa:** T0.2
+- **Documento diz:** §1.2 define `httpx` como a escolha normativa de cliente HTTP para o projeto;
+  não menciona `requests`.
+- **Realidade:** `legacy/bot.py` (congelado, não pode ser editado) faz `import requests` e usa
+  `requests.post`/`requests.get` diretamente. Tanto `record.py` quanto o golden test precisam
+  importar e executar esse módulo de verdade — sem `requests` instalado, `import legacy_bot` falha
+  antes mesmo de chegar a qualquer lógica de teste.
+- **Ação tomada:** aplicado alternativo óbvio — adicionado `requests>=2.31` ao extra `dev` do
+  `pyproject.toml` (não a `dependencies`, já que o código novo em `src/botgitgud` nunca deve
+  importar `requests` — só `httpx`, conforme §1.2). É uma dependência de teste para dirigir o
+  fixture legado, não uma mudança na stack de produção.
+- **Impacto:** nenhum na metodologia. Uma linha em `pyproject.toml`.
+
+## D-6 — [SEGURANÇA] Redação de header não é suficiente: o corpo da resposta do OAuth carrega o token real
+
+- **Tarefa:** T0.2
+- **Documento diz:** "Redija segredos: nunca grave headers `Authorization` nos cassetes."
+- **Realidade:** o endpoint `POST https://www.warcraftlogs.com/oauth/token` retorna o **access
+  token de verdade dentro do corpo da resposta** (`{"access_token": "eyJ...", "expires_in":
+  31104000, ...}`), não em um header. `expires_in` = 31.104.000 segundos (~1 ano). A primeira
+  gravação produziu um cassete (`b94fd3acafa22ae9.json`) com esse JWT completo e utilizável — um
+  vazamento real de credencial que, se commitado, teria dado a qualquer leitor do repositório
+  acesso de API por ~1 ano com os mesmos escopos do projeto (`view-user-profile`,
+  `view-private-reports`).
+- **Ação tomada:** não é um desvio de interpretação, é uma correção de segurança — tratada como tal
+  e corrigida antes de qualquer commit. Adicionada `redact_response_body()` em
+  `tests/fixtures/http_cassette.py`, aplicada a **todo** cassete salvo (não só aos de OAuth),
+  substituindo `access_token`/`refresh_token`/`id_token` por um placeholder fixo. Isso não quebra o
+  replay: o `mock_http` casa cassetes por `(method, url, request_payload)`, nunca por conteúdo de
+  header/token, então o placeholder circula corretamente pelo resto do pipeline durante os testes.
+  `record.py` ganhou uma segunda verificação de vazamento (substring `"eyJ"`, prefixo de JWT) além
+  da checagem de `"Bearer "` já prevista no documento. Os cassetes originais (com o token real)
+  foram apagados e regravados do zero.
+- **Impacto:** nenhuma credencial real chega a ser commitada. Reforça a checagem de segurança que
+  já fazia parte do critério de aceite da T0.2, sem alterar seu escopo.

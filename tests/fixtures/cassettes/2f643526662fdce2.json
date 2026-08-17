@@ -1,0 +1,28 @@
+{
+  "method": "GET",
+  "request_headers": {
+    "Authorization": "<redacted>"
+  },
+  "request_payload": {
+    "locale": "en_US",
+    "namespace": "static-us"
+  },
+  "response_json": {
+    "_links": {
+      "self": {
+        "href": "https://us.api.blizzard.com/data/wow/spell/104773?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "description": "Hardens your skin, reducing all damage you take by 25% and granting immunity to interrupt, silence, and pushback effects for 8 sec.",
+    "id": 104773,
+    "media": {
+      "id": 104773,
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/spell/104773?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "name": "Unending Resolve"
+  },
+  "status_code": 200,
+  "url": "https://us.api.blizzard.com/data/wow/spell/104773"
+}
