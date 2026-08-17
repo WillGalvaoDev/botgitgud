@@ -147,19 +147,27 @@ def _record_new_pipeline() -> int:
             print("ERRO: pipeline novo (bot.py) não encontrou o jogador de fixture")
             return 1
 
-        references, _matched, _min_d, _max_d, _cohort_median_dps = new_bot.fetch_top_logs_for_cds(
-            user_data["fight"]["encounter_id"],
-            user_data["build"]["class"],
-            user_data["build"]["spec"],
-            user_data["fight"]["duration_sec"],
-        )
+        try:
+            references, _matched, _min_d, _max_d, _cohort_median_dps = (
+                new_bot.fetch_top_logs_for_cds(
+                    user_data["fight"]["encounter_id"],
+                    user_data["build"]["class"],
+                    user_data["build"]["spec"],
+                    user_data["fight"]["duration_sec"],
+                )
+            )
+        except new_bot.InsufficientCohort as e:
+            print(f"ERRO: pipeline novo (bot.py) — coorte insuficiente: {e}")
+            return 1
         if not references:
             print("ERRO: pipeline novo (bot.py) não encontrou referências")
             return 1
 
-        profile = new_bot.build_cd_reference_profile(references)
+        profile, num_positional = new_bot.build_cd_reference_profile(
+            references, user_data["fight"]["duration_sec"]
+        )
         eligible = new_bot.discover_eligible_spell_ids(profile)
-        new_bot.compare_all_spells(user_data, profile, eligible, reference_n=len(references))
+        new_bot.compare_all_spells(user_data, profile, eligible, reference_n=num_positional)
 
         new_bot.fetch_player_percentile(
             FIXTURE_REPORT_CODE,

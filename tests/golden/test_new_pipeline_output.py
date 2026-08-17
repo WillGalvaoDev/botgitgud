@@ -49,11 +49,24 @@ def _run_new_pipeline(new_bot: Any) -> str:
     )
     assert matched > 0, "nenhuma referência encontrada nos dados gravados"
 
-    profile = new_bot.build_cd_reference_profile(references)
+    profile, num_positional = new_bot.build_cd_reference_profile(
+        references, user_data["fight"]["duration_sec"]
+    )
     eligible = new_bot.discover_eligible_spell_ids(profile)
     comparisons = new_bot.compare_all_spells(
-        user_data, profile, eligible, reference_n=len(references)
+        user_data, profile, eligible, reference_n=num_positional
     )
+
+    warnings = []
+    if new_bot.classify_cohort_size(matched) == "warn":
+        warnings.append(
+            f"Amostra pequena ({matched} logs). Trate os desvios como indicativos, não conclusivos."
+        )
+    if 0 < num_positional < new_bot.POSITIONAL_MIN_N:
+        warnings.append(
+            f"Apenas {num_positional} logs com duração próxima à sua (±12%) para comparar "
+            "o timing dos cooldowns — os valores 'Ideal' têm confiança baixa."
+        )
 
     percentile = new_bot.fetch_player_percentile(
         FIXTURE_REPORT_CODE,
@@ -70,12 +83,13 @@ def _run_new_pipeline(new_bot: Any) -> str:
         boss_name=user_data["fight"]["boss_name"],
         class_name=user_data["build"]["class"],
         spec=user_data["build"]["spec"],
-        reference_n=len(references),
+        reference_n=num_positional,
         duration_min_s=min_d,
         duration_max_s=max_d,
         player_dps=user_data.get("dps"),
         player_percentile=percentile,
         cohort_median_dps=cohort_median_dps,
+        cohort_warnings=tuple(warnings),
     )
     return new_bot.render_report(header, comparisons)
 

@@ -44,6 +44,7 @@ class ReportHeader:
     player_dps: float | None = None
     player_percentile: float | None = None
     cohort_median_dps: float | None = None
+    cohort_warnings: tuple[str, ...] = ()
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -85,8 +86,10 @@ def _render_header(header: ReportHeader) -> list[str]:
             f"| Duração: {_fmt_duration(header.duration_min_s)} - "
             f"{_fmt_duration(header.duration_max_s)}"
         ),
-        _SEPARATOR,
     ]
+    for warning in header.cohort_warnings:
+        lines.append(f"⚠️ {warning}")
+    lines.append(_SEPARATOR)
     return lines
 
 

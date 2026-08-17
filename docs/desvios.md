@@ -162,3 +162,19 @@
   assinatura realmente exige o tipo.
 - **Impacto:** nenhum na T0.3. A T0.4 deve construir `BlizzardClient` como pré-requisito implícito
   antes de finalizar `SpellCatalog`.
+
+## D-9 — T0.8 referencia `src/botgitgud/ingest/rankings.py`, que é layout da Fase 1
+
+- **Tarefa:** T0.8
+- **Documento diz:** critério de aceite `grep -n '"hps"\|healing' src/botgitgud/ingest/rankings.py`
+  retorna vazio.
+- **Realidade:** o pacote `src/botgitgud/ingest/` (com `rankings.py`, `log_fetcher.py`, `store.py`
+  em DuckDB) só é construído na **T1.3/T1.4** (Fase 1). Não existe na Fase 0, e construí-lo agora
+  seria adiantar arquitetura inteira de outra fase — o mesmo padrão de gap já visto no D-8.
+- **Ação tomada:** aplicado o mesmo padrão das T0.5–T0.7 — a lógica de coorte (bandas de duração,
+  limiares de tamanho, normalização por taxa) vive em `src/botgitgud/analysis/cohort.py`, e é
+  fiada em `bot.py` (a única "camada de ingestão" que existe na Fase 0). O critério de aceite é
+  verificado contra os arquivos que realmente existem: `grep -rn '"hps"\|healing'
+  src/botgitgud/analysis/cohort.py bot.py` — vazio, checado por teste dedicado.
+- **Impacto:** nenhum na metodologia. Quando a T1.3/T1.4 criar `ingest/rankings.py`, a lógica de
+  `cohort.py` deve ser movida/reaproveitada para lá; nenhuma reescrita de lógica, só de localização.

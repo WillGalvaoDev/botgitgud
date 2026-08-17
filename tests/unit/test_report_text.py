@@ -108,6 +108,22 @@ def test_header_falls_back_to_nd_never_fabricates() -> None:
     assert "99" not in text  # the legacy fabricated-99.0 value must never appear
 
 
+def test_cohort_warning_banner_rendered_when_present() -> None:
+    header = _header(
+        cohort_warnings=(
+            "Amostra pequena (10 logs). Trate os desvios como indicativos, não conclusivos.",
+        )
+    )
+    text = render_report(header, [])
+    assert "⚠️ Amostra pequena (10 logs)" in text
+
+
+def test_no_warning_banner_when_absent() -> None:
+    header = _header(cohort_warnings=())
+    text = render_report(header, [])
+    assert "⚠️" not in text
+
+
 def test_no_parse_med_field_anywhere() -> None:
     """achado 3.10: characterRankings não tem `percentile`; o campo antigo some de vez."""
     header = _header(player_dps=1000.0, player_percentile=50.0, cohort_median_dps=2000.0)

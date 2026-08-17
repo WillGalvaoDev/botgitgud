@@ -10,11 +10,23 @@ import discord
 from discord.ext import commands
 
 from botgitgud.analysis.cadence import compute_cadence, is_eligible
+from botgitgud.analysis.cohort import (
+    COHORT_MAX,
+    COHORT_MIN_HARD,
+    MAX_RANKING_PAGES,
+    POSITIONAL_MIN_N,
+    SANITY_BAND_PCT,
+    classify_cohort_size,
+    usage_count_at_duration,
+    usage_rate_per_minute,
+    within_positional_band,
+    within_sanity_band,
+)
 from botgitgud.analysis.comparison import compare_spell_usage
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import ApiError
+from botgitgud.errors import ApiError, InsufficientCohort
 from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
@@ -240,12 +252,9 @@ def fetch_top_logs_for_cds(encounter_id, user_class, user_spec, target_duration_
 
     valid_refs, durations = [], []
     page = 1
-    max_pages = (
-        5  # Tenta buscar até 5 páginas (várias centenas de parses) para achar os 100 válidos
-    )
 
     try:
-        while page <= max_pages and len(valid_refs) < 100:
+        while page <= MAX_RANKING_PAGES and len(valid_refs) < COHORT_MAX:
             variables = {
                 "encounterID": encounter_id,
                 "className": user_class.strip(),
@@ -280,8 +289,11 @@ def fetch_top_logs_for_cds(encounter_id, user_class, user_spec, target_duration_
             for r in rankings_list:
                 dur_sec = r.get("duration", 0) / 1000.0
 
-                # Filtro de duração (Margem de ±30s ou a que você preferir)
-                if abs(dur_sec - target_duration_sec) <= 30.0:
+                # T0.8: banda de sanidade relativa (±35%) em vez do filtro
+                # absoluto antigo (±30s), que descartava a maior parte de
+                # pools pequenos de rankings reais (docs/schema_confirmado.md
+                # §8) — achado 3.9.
+                if within_sanity_band(dur_sec, target_duration_sec):
                     rep_info = r.get("report", {})
                     if rep_info.get("code") and rep_info.get("fightID"):
                         valid_refs.append(r)
@@ -298,11 +310,21 @@ def fetch_top_logs_for_cds(encounter_id, user_class, user_spec, target_duration_
                 f"🔎 [DEBUG RANKINGS] Total de logs válidos acumulados nas páginas: {len(valid_refs)}"
             )
 
-        if not valid_refs:
-            return [], 0, 0, 0, None
+        # T0.8: recusa a análise explicitamente abaixo do piso mínimo, em vez
+        # de silenciosamente produzir um relatório com poucas referências
+        # (achado 3.10 / guarda de tamanho amostral ausente).
+        cohort_status = classify_cohort_size(len(valid_refs))
+        if cohort_status == "insufficient":
+            msg = (
+                f"apenas {len(valid_refs)} logs de referência dentro da banda de "
+                f"±{int(SANITY_BAND_PCT * 100)}% de duração (mínimo: {COHORT_MIN_HARD})"
+            )
+            raise InsufficientCohort(
+                msg, n_members=len(valid_refs), minimum_required=COHORT_MIN_HARD
+            )
 
-        # Pega até 100 referências válidas coletadas
-        top_refs = valid_refs[:100]
+        # Pega até COHORT_MAX referências válidas coletadas
+        top_refs = valid_refs[:COHORT_MAX]
 
         if DEBUG:
             print(
@@ -340,27 +362,50 @@ def fetch_top_logs_for_cds(encounter_id, user_class, user_spec, target_duration_
         cohort_median_dps = statistics.median(ref_dps_values) if ref_dps_values else None
 
         return reference_players, len(reference_players), min_d, max_d, cohort_median_dps
+    except InsufficientCohort:
+        raise
     except Exception as e:
         print(f"❌ [ERRO RANKINGS CDS]: {e}")
         return [], 0, 0, 0, None
 
 
-def build_cd_reference_profile(reference_players):
-    """T0.7: substitui a lógica antiga de avg_cd_duration/type (achado 3.3) —
-    o perfil agora só acumula os dados brutos (presença, medianas de slot
-    como ref_times, contagem de usos por jogador incluindo 0). Classificação
-    MAJOR/MINOR e cooldown observado passam a viver em cadence.py, calculados
-    sob demanda em discover_eligible_spell_ids/compare_all_spells.
+def build_cd_reference_profile(reference_players, target_duration_sec):
+    """T0.7/T0.8: substitui a lógica antiga de avg_cd_duration/type (achado
+    3.3) — o perfil só acumula dados brutos (presença, medianas de slot como
+    ref_times, contagem de usos incluindo 0). Classificação MAJOR/MINOR vive
+    em cadence.py.
+
+    T0.8: duas classes de métrica são tratadas de forma diferente (tabela de
+    normalização do documento):
+    - `presence` é quase-invariante à duração → usa TODO o pool dentro da
+      banda de sanidade (±35%, já aplicada em fetch_top_logs_for_cds).
+    - `ref_times` (timing posicional) e `n_usages_median` (conta de casts,
+      escala com a duração) exigem duração comparável → restritos ao
+      subconjunto dentro da banda posicional (±12%), com a contagem
+      normalizada por taxa/minuto e reescalada para target_duration_sec
+      antes de alimentar cadence.py (que foi calibrado/testado em T0.6 para
+      contagens absolutas, não taxas).
+
+    Retorna (profile, n_positional) — n_positional é reportado ao usuário
+    quando pequeno (< POSITIONAL_MIN_N).
     """
     num_logs = len(reference_players)
     if num_logs == 0:
         if DEBUG:
             print("⚠️ [DEBUG PROFILE] Nenhum jogador de referência para construir o perfil.")
-        return {}
+        return {}, 0
+
+    positional_players = [
+        ref
+        for ref in reference_players
+        if within_positional_band(ref["fight"]["duration_sec"], target_duration_sec)
+    ]
+    num_positional = len(positional_players)
 
     if DEBUG:
         print(
-            f"🔎 [DEBUG PROFILE] Construindo perfil estatístico com base em {num_logs} logs de referência..."
+            f"🔎 [DEBUG PROFILE] Construindo perfil com base em {num_logs} logs (banda de "
+            f"sanidade) | {num_positional} logs na banda posicional (±12%) para timing/contagem..."
         )
 
     spell_accumulator = defaultdict(
@@ -368,14 +413,13 @@ def build_cd_reference_profile(reference_players):
     )
 
     for ref in reference_players:
-        seen_spells = set()
+        for s_id in ref["timeline"]:
+            spell_accumulator[s_id]["presence_count"] += 1
+
+    for ref in positional_players:
         for s_id, times in ref["timeline"].items():
-            seen_spells.add(s_id)
             for idx, t in enumerate(times):
                 spell_accumulator[s_id]["slots_timings"][idx].append(t)
-
-        for s_id in seen_spells:
-            spell_accumulator[s_id]["presence_count"] += 1
 
     profile = {}
     for s_id, data in spell_accumulator.items():
@@ -387,11 +431,20 @@ def build_cd_reference_profile(reference_players):
                 # Mediana em vez de média para evitar distorção por outliers.
                 all_slot_medians.append(statistics.median(times))
 
-        # Quantas vezes cada jogador de referência usou esta spell,
-        # incluindo 0 para quem não usou — insumo do fallback de
-        # classificação de cadence.py para spells de uso único.
-        usage_counts = [len(ref["timeline"].get(s_id, [])) for ref in reference_players]
-        n_usages_median = statistics.median(usage_counts) if usage_counts else 0.0
+        # Contagem de usos por jogador (banda posicional), normalizada por
+        # taxa/minuto para comparar jogadores com durações levemente
+        # diferentes, depois reescalada para a duração do jogador analisado.
+        if positional_players:
+            rates = [
+                usage_rate_per_minute(
+                    len(ref["timeline"].get(s_id, [])), ref["fight"]["duration_sec"]
+                )
+                for ref in positional_players
+            ]
+            median_rate = statistics.median(rates)
+            n_usages_median = usage_count_at_duration(median_rate, target_duration_sec)
+        else:
+            n_usages_median = 0.0
 
         profile[s_id] = {
             "presence": presence,
@@ -401,7 +454,7 @@ def build_cd_reference_profile(reference_players):
 
     if DEBUG:
         print(f"🔎 [DEBUG PROFILE] Perfil construído com {len(profile)} spells mapeadas.")
-    return profile
+    return profile, num_positional
 
 
 ################################################################################
@@ -545,20 +598,25 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
         if not user_data:
             return {"user_data": None}
 
-        references, matched, min_d, max_d, cohort_median_dps = fetch_top_logs_for_cds(
-            user_data["fight"]["encounter_id"],
-            user_data["build"]["class"],
-            user_data["build"]["spec"],
-            user_data["fight"]["duration_sec"],
-        )
+        try:
+            references, matched, min_d, max_d, cohort_median_dps = fetch_top_logs_for_cds(
+                user_data["fight"]["encounter_id"],
+                user_data["build"]["class"],
+                user_data["build"]["spec"],
+                user_data["fight"]["duration_sec"],
+            )
+        except InsufficientCohort as e:
+            return {"user_data": user_data, "matched": 0, "insufficient_cohort": e}
 
         if not references:
             return {"user_data": user_data, "matched": 0}
 
-        profile = build_cd_reference_profile(references)
+        profile, num_positional = build_cd_reference_profile(
+            references, user_data["fight"]["duration_sec"]
+        )
         eligible_ids = discover_eligible_spell_ids(profile)
         comparisons = compare_all_spells(
-            user_data, profile, eligible_ids, reference_n=len(references)
+            user_data, profile, eligible_ids, reference_n=num_positional
         )
 
         percentile = fetch_player_percentile(
@@ -570,6 +628,19 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
             user_data["fight"]["encounter_id"],
             user_data["fight"].get("difficulty"),
         )
+
+        # T0.8: avisos honestos sobre o tamanho da amostra, em vez de
+        # apresentar poucos logs como se fossem uma coorte robusta.
+        warnings = []
+        if classify_cohort_size(matched) == "warn":
+            warnings.append(
+                f"Amostra pequena ({matched} logs). Trate os desvios como indicativos, não conclusivos."
+            )
+        if 0 < num_positional < POSITIONAL_MIN_N:
+            warnings.append(
+                f"Apenas {num_positional} logs com duração próxima à sua (±12%) para "
+                "comparar o timing dos cooldowns — os valores 'Ideal' têm confiança baixa."
+            )
 
         # T0.4/T0.7: persiste o catálogo de spells uma única vez, ao fim da
         # análise, na thread principal — nunca durante a coleta concorrente
@@ -584,7 +655,8 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
             "cohort_median_dps": cohort_median_dps,
             "comparisons": comparisons,
             "percentile": percentile,
-            "reference_n": len(references),
+            "reference_n": num_positional,
+            "warnings": warnings,
         }
 
     result = await loop.run_in_executor(None, process_analysis)
@@ -592,6 +664,15 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
     if not result.get("user_data"):
         await ctx.send(
             f"❌ Jogador `{char_name}` não foi encontrado neste fight ou ocorreu um erro na busca."
+        )
+        return
+
+    insufficient = result.get("insufficient_cohort")
+    if insufficient is not None:
+        await ctx.send(
+            f"❌ Não há kills comparáveis suficientes para uma análise confiável "
+            f"({insufficient.n_members} logs, mínimo {insufficient.minimum_required}). "
+            "Isso costuma acontecer em encontros pouco populares ou com duração de kill atípica."
         )
         return
 
@@ -613,6 +694,7 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
         player_dps=user_data.get("dps"),
         player_percentile=result["percentile"],
         cohort_median_dps=result["cohort_median_dps"],
+        cohort_warnings=tuple(result.get("warnings", [])),
     )
     report_text = render_report(header, result["comparisons"])
 
