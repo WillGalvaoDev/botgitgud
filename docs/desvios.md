@@ -145,7 +145,7 @@
   real: a saída do `bot.py` atualizado é **byte-idêntica** ao snapshot golden da T0.2 para a
   fixture (mesmo `matched=2`, mesmos deltas). `legacy/bot.py` permanece intocado.
 
-## D-8 — Nenhuma tarefa constrói `src/botgitgud/blizzard/client.py`, mas a T0.4 já exige `BlizzardClient`
+## D-8 — ✅ RESOLVIDO NA T0.4 — Nenhuma tarefa constrói `src/botgitgud/blizzard/client.py`, mas a T0.4 já exige `BlizzardClient`
 
 - **Tarefa:** T0.3 (achado durante o trabalho; afeta T0.4)
 - **Documento diz:** a árvore de diretórios (§1.1) lista `src/botgitgud/blizzard/client.py`, e a
