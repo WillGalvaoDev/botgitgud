@@ -1,0 +1,247 @@
+# Schema WCL v2 — fatos verificados contra a API real
+
+**Verificado em:** 2026-08-17
+**Log de referência:** `PtfBbQKRY9d6zAMC` fight 1 — Zarad (Warlock Demonology, Azralon-US)
+**Método:** queries diretas à API v2 com as credenciais do projeto.
+
+> Este arquivo é **entrada** para a T0.1, não saída. Os itens marcados ✅ já estão confirmados e
+> **não precisam ser re-verificados**. Os marcados ❓ continuam sendo tarefa da T0.1.
+
+---
+
+## 1. Log de fixture (T0.2 / T3.1)
+
+| Propriedade | Valor |
+|---|---|
+| `reportCode` | `PtfBbQKRY9d6zAMC` |
+| `fightID` | `1` |
+| Personagem | `Zarad` — Warlock / **Demonology** (grupo `dps`) |
+| Servidor / região | `Azralon` / `US` |
+| `encounterID` | `3179` — *Fallen-King Salhadaar* |
+| `difficulty` | `5` (Mythic) · `size` 20 |
+| `gameZone` | `2912` — The Voidspire · `zone` 46 |
+| Duração | `1026037 → 1371183` = **345.146 s** |
+| Dano total | `37.378.119` |
+| Item level | `283` |
+| `activeTime` | `344.303 ms` (**99,76%**) |
+| Nº de pets | **20** (`masterData`) / 14 com dano > 0 |
+| Augmentation no raid | **não** (nenhum Ebon Might / Prescience nos buffs) |
+
+**Este único log satisfaz simultaneamente os itens 1 e 2 do Apêndice C** (log real + spec com pet).
+Demonology deriva **70,4%** do dano de pets (26,3M de 37,4M) — é o caso de teste ideal para a
+reconciliação de atribuição de pet exigida na T3.1.
+
+---
+
+## 2. Rate limit ✅
+
+```graphql
+{ rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }
+```
+
+✅ Existe. **`limitPerHour = 3600`** para esta conta. `pointsResetIn` em segundos.
+
+⚠️ **O orçamento é da conta inteira, não por usuário.** Com o bot em servidor multiusuário
+(decisão #9), todos os usuários compartilham os mesmos 3600 pontos/hora. Ver T1.8.
+
+---
+
+## 3. `reportData.report`
+
+| Campo | Status | Observação |
+|---|---|---|
+| `revision`, `zone { id name }` | ✅ | |
+| `gameVersion` **no Report** | ❌ **não existe** | está em `table(...).data.gameVersion` |
+| `masterData { actors { id name type subType petOwner } }` | ✅ | **`petOwner` é o mapeamento pet→dono** |
+| `fights { id encounterID name startTime endTime kill difficulty size gameZone }` | ✅ | |
+| `fights { phaseTransitions { id startTime } }` | ✅ | ver §7 — **fases se repetem** |
+| `phases { encounterID separatesWipes phases { id name isIntermission } }` | ✅ | retorna **todos** os encontros do report; filtrar por `encounterID` |
+| `events(dataType: Casts \| DamageDone \| Resources, ...)` | ✅ | paginação por `nextPageTimestamp` |
+| `table(dataType: Summary \| DamageDone \| Buffs \| Debuffs)` | ✅ | |
+| `table(..., sourceID: Int)` | ✅ | funciona em `Buffs`; em `DamageDone` **muda o formato da resposta** — ver §5 |
+
+---
+
+## 4. `table(dataType: Summary)` ✅
+
+Chaves de `data`: `composition, damageDone, damageTaken, deathEvents, exploitDetails,
+gameVersion, healingDone, itemLevel, logFileDetails, logVersion, playerDetails, totalTime`
+
+- `playerDetails` tem os grupos `dps`, `healers`, `tanks` ✅ (base do portão da T0.9).
+- Chaves de cada jogador: `combatantInfo, guid, healthstoneUse, icon, id, maxItemLevel,
+  minItemLevel, name, potionUse, region, server, specs, type`.
+  - `type` = classe (`"Warlock"`), `specs` = lista (`["Demonology"]`).
+  - **Item level do jogador vem de `maxItemLevel`/`minItemLevel`**, não de `combatantInfo.stats`.
+- `combatantInfo`: `artifact, factionID, gear, heartOfAzeroth, specIDs, stats, talentTree, talents`
+  - ⚠️ **`talents` vem VAZIO (`[]`)**. Os talentos reais estão em **`talentTree`**:
+    `[{id, rank, nodeID}, ...]`. Use `talentTree` para o hash de build da T2.2.
+  - `specIDs`: `[266]` (id numérico da spec — mais robusto que o nome).
+  - `gear`: lista com `id, slot, quality, itemLevel, name, permanentEnchant, bonusIDs` — fonte
+    para contagem de peças de tier.
+- `damageDone` traz `{name, id, guid, type, icon, total}` por jogador — **o `total` é autoritativo**.
+
+---
+
+## 5. `table(dataType: DamageDone)` — ⚠️ ARMADILHA CONFIRMADA
+
+Chaves de `data`: `entries, exploitDetails, gameVersion, logVersion, totalTime`.
+
+Chaves de cada `entry`: `abilities, activeTime, activeTimeReduced, damageAbilities, gear, guid,
+icon, id, itemLevel, name, pets, talents, targets, total, totalReduced, type`
+
+Medições reais para Zarad:
+
+| Item | Valor |
+|---|---|
+| `entry.total` | **37.378.119** ← autoritativo, **já inclui pets** |
+| `sum(entry.abilities)` | 19.315.924 — **apenas 5 habilidades** |
+| `sum(entry.pets)` | 26.297.092 — 14 pets |
+| Agregação por **eventos** (jogador + 20 pets) | **37.378.119** — 29 habilidades, **erro 0,00%** |
+
+**Conclusões normativas:**
+
+1. ✅ `entry.total` **já inclui o dano de pets**. Não some pets ao total — isso causaria dupla contagem.
+2. ❌ **`entry.abilities` é TRUNCADO** (5 de 29 habilidades reais). **Não use para a decomposição
+   por habilidade da T3.2** — o resultado seria silenciosamente errado.
+3. ✅ `entry.abilities` é uma visão **por habilidade**, atravessando jogador e pets (ex.: `Fel Firebolt`,
+   guid 104318, é habilidade de Wild Imp e aparece ali). `entry.pets` é uma visão **por fonte**.
+   As duas cobrem o mesmo total e **não devem ser somadas**.
+4. ✅ **Método correto para o detalhamento por habilidade:** agregar eventos brutos
+   `events(dataType: DamageDone)` por `abilityGameID`, somando `amount + absorbed`, onde
+   `sourceID ∈ {player_id} ∪ {actors com petOwner == player_id}`. Verificado: bate exatamente.
+5. ✅ `entry.activeTime` e `entry.itemLevel` disponíveis direto na tabela — não requerem query extra.
+6. ⚠️ `table(dataType: DamageDone, sourceID: N)` retorna um formato **diferente** (mistura alvos e
+   fontes). Não use esse atalho.
+
+**Custo medido:** os eventos de dano deste log (345 s, 20 pets) consumiram **7 páginas**
+com `limit: 10000`. Contabilize isso no orçamento da T1.8.
+
+---
+
+## 6. `table(dataType: Buffs)` ✅
+
+Chaves de `data`: `auras, endTime, gameVersion, logVersion, startTime, totalTime, useTargets`.
+
+- `auras[]`: `{guid, name, type, abilityIcon, totalUptime, totalUses, bands}`.
+- ✅ `sourceID` funciona e filtra corretamente: 77 auras para Zarad.
+- Uptime % = `totalUptime / data.totalTime`.
+- ✅ Detecção de Augmentation (T2.1): buscar Ebon Might / Prescience na lista de auras do jogador.
+  Neste log: **ausentes**, confirmando que a detecção por ausência funciona.
+  ❓ Confirmar os `guid` exatos de Ebon Might / Prescience na versão atual do jogo.
+
+---
+
+## 7. Fases ⚠️ CORREÇÃO IMPORTANTE
+
+`fights.phaseTransitions` para o fight 1:
+
+```json
+[{"id":1,"startTime":1026037},{"id":2,"startTime":1128366},{"id":1,"startTime":1148363},
+ {"id":2,"startTime":1249977},{"id":1,"startTime":1269978}]
+```
+
+⚠️ **As fases se repetem em ciclo (1 → 2 → 1 → 2 → 1).** `phaseTransitions[].id` **não** é um
+índice sequencial; é o identificador da fase, que reaparece.
+
+**Consequência para a T2.4:** não é possível chavear o perfil por `phase_id` apenas. Use
+**`(phase_id, ocorrência)`** — ex.: `(1,0), (2,0), (1,1), (2,1), (1,2)` — e alinhe dentro de cada
+intervalo. Chavear só por `phase_id` misturaria a primeira e a terceira ocorrência da fase 1.
+
+---
+
+## 8. `worldData.encounter.characterRankings` ⚠️ DESCOBERTAS CRÍTICAS
+
+Chaves do objeto: `count, hasMorePages, page, rankings` ✅
+Argumentos aceitos: `className, specName, metric, page, difficulty, partition, bracket` ✅
+
+Chaves de cada ranking:
+`amount, bracketData, class, duration, faction, guild, hardModeLevel, name, report{code,fightID,startTime}, server{id,name,region}, spec, startTime`
+
+| Descoberta | Impacto |
+|---|---|
+| ❌ **NÃO existe campo `percentile`** | `legacy/bot.py:361` faz `r.get("percentile", 99.0)` → retorna **99.0 sempre**. O cabeçalho "Parse méd: 99 (min 99 - max 99)" é **ficção em 100% dos relatórios já gerados**. Ver §9 para a fonte real. |
+| ❌ **NÃO existem `talents` nem `gear`** no ranking | O clustering de build (T2.2) exige buscar o `combatantInfo` de cada log de referência — não há atalho. |
+| ✅ `amount` = DPS | Métrica direta, sem query extra. |
+| ✅ `bracketData` = bracket de item level (ex. `292`) | Permite pareamento de ilvl **sem** fetch adicional. Zarad = ilvl 283, top ranker = bracket 292. |
+
+### ⚠️⚠️ Tamanho real do pool — invalida os limiares atuais
+
+Pool total de rankings para Warlock/Demonology no encounter 3179:
+
+| Dificuldade | `count` | `hasMorePages` | Faixa de duração |
+|---|---|---|---|
+| (default) | 26 | **false** | 146–356 s |
+| 3 (Normal) | 38 | false | 104–372 s |
+| 4 (Heroic) | 20 | false | 144–281 s |
+| 5 (Mythic) | 26 | false | 146–356 s |
+
+Aplicando o filtro de duração da T0.8 ao kill de Zarad (345 s), sobre os 26 logs Mythic:
+
+| Tolerância | Logs restantes |
+|---|---|
+| ±7% (24 s) | **2** |
+| ±12% (41 s) | **3** |
+| ±20% (69 s) | **3** |
+
+**O `COHORT_MAX = 100` é inalcançável, e `COHORT_MIN_HARD = 10` recusaria esta análise.**
+`characterRankings` não é uma amostra da população — é o **leaderboard**, e para conteúdo recente
+ou specs menos populares ele tem dezenas de entradas, não centenas.
+
+Note também que o kill de Zarad (345 s) está no **extremo lento** da faixa (146–356 s): parear por
+duração empurra a referência para o fundo do leaderboard.
+
+**Isto força a mudança de metodologia descrita na T2.1 revisada: duração vira covariável de
+ajuste, não filtro.** Descartar 24 de 26 observações para ficar com 2 é estatisticamente pior do
+que usar as 26 e normalizar.
+
+---
+
+## 9. `characterData.character.encounterRankings` ✅ — fonte real do percentil
+
+```graphql
+characterData { character(name:"Zarad", serverSlug:"azralon", serverRegion:"US") {
+  encounterRankings(encounterID: 3179, metric: dps, difficulty: 5) } }
+```
+
+Chaves: `averagePerformance, bestAmount, difficulty, fastestKill, medianPerformance, metric,
+partition, ranks, totalKills, zone` ✅
+
+Chaves de cada `ranks[]`: `amount, bestSpec, bracketData, class, duration, faction, guild,
+historicalPercent, historicalTotalParses, lockedIn, rankPercent, rankTotalParses, report, spec,
+startTime, todayPercent, todayTotalParses`
+
+- ✅ **`rankPercent` é o parse do jogador** (exemplo observado: `71.08`).
+- Para achar o parse **daquele kill específico**, casar `ranks[].report.code` + `fightID` com a
+  análise em curso.
+- `medianPerformance` / `averagePerformance` do personagem servem de contexto histórico.
+
+**Ação para a T0.7:** o parse do jogador vem daqui. O "parse médio da coorte" **não é obtenível**
+do leaderboard (§8) — remova esse campo do cabeçalho em vez de inventá-lo.
+
+---
+
+## 10. `events(dataType: Resources)` ✅
+
+Formato confirmado:
+
+```json
+{"timestamp":1026209,"type":"resourcechange","sourceID":13,"targetID":13,
+ "abilityGameID":194192,"fight":1,"resourceChange":1,"resourceChangeType":7,
+ "otherResourceChange":0,"maxResourceAmount":50,"waste":0}
+```
+
+✅ `waste` disponível diretamente. `resourceChangeType` identifica o tipo de recurso.
+
+---
+
+## 11. Itens ainda a verificar (permanecem na T0.1)
+
+| Item | Por quê |
+|---|---|
+| ❓ `guid` de Ebon Might / Prescience | detecção de Augmentation (T2.1) |
+| ❓ `table(dataType: Debuffs)` tem o mesmo formato de `Buffs`? | uptimes de DoT (T3.1) |
+| ❓ Existe `viewBy: Ability` ou `filterExpression` que evite paginar eventos de dano? | custo de API (T1.8) — impacto alto |
+| ❓ Custo em **pontos** por tipo de query | orçamento (T1.8); medir com `pointsSpentThisHour` antes/depois |
+| ❓ Cooldown base na API da Blizzard | T2.5 |
+| ❓ Valores literais de `class`/`spec` para as 25 specs | normalização do allowlist (T0.9) |
+| ❓ Como obter `partition` atual programaticamente | T1.7 |

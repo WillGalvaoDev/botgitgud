@@ -1,0 +1,13 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+data/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.duckdb
+*.duckdb.wal
+.DS_Store
