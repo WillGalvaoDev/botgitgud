@@ -279,6 +279,21 @@ Todos os itens abaixo foram fechados durante a execução formal da T0.1
 | ⬜ Valores literais de `class`/`spec` para as 25 specs | **Ainda não verificado** — nenhum log de fixture cobre as 25 specs. Warlock/Demonology confirmado (`type: "Warlock"`, `specs: ["Demonology"]`, `specIDs: [266]` em `combatantInfo`). A T0.9 deve confirmar as demais 24 ao encontrar logs reais, ou aceitar o risco e normalizar por `_normalize()` como já previsto. |
 | ✅ Como obter `partition` atual programaticamente | `worldData.zones { id name partitions { id name compactName default } }` — o campo booleano **`default`** marca a partition vigente. Confirmado para a zone 46 (VS/DR/MQD): partition `4` ("12.1") é `default: true` entre as 4 partitions listadas. Use esta query na T1.7 em vez de hardcode. |
 
+---
+
+## 12. Fatos verificados na T3.1 (features além de casts)
+
+| Item | Valor |
+|---|---|
+| `table(dataType: Summary)`'s `deathEvents[].deathTime` | **Relativo ao início da luta** (0-based), ao contrário de `phaseTransitions[].startTime` (absoluto). Verificado: para o fixture de Zarad, valores caem dentro de `[0, duration_ms]` (ex.: `178884` para uma luta de `345146` ms). |
+| Timestamp de revive/ressurreição | **Não existe em nenhuma tabela/evento.** `table(dataType: Deaths)` só tem o instante da morte e o dano/cura que levou a ela. Uma varredura de `events(dataType: All)` na janela pós-morte do fixture de Zarad não achou `type: "resurrect"` (o pull é um wipe). Ver D-29. |
+| `table(dataType: DamageDone)`'s `entries[].activeTime` | Disponível direto, sem query extra — já vem junto com `total`, `itemLevel`, `pets`, `abilities` (§5). `active_time_pct = activeTime / (endTime - startTime)`. Verificado: `344303 / 345146 = 99,76%`, batendo com o valor documentado em §1. |
+| `masterData.actors[].petOwner` | Confirmado como o mapeamento pet → dono (já citado em §3) — usado para filtrar `events(dataType: DamageDone)` por `sourceID ∈ {player_id} ∪ {pet_ids}`. |
+| `events(dataType: Resources)`'s `resourceChangeType` | Seguem o `Enum.PowerType` padrão da Blizzard (constante pública, estável entre expansões — não é o mesmo tipo de dado instável que os cooldowns de D-28). Verificado ao vivo: os eventos de Zarad (Warlock/Demonology) usam `resourceChangeType: 7`, e `maxResourceAmount: 50` bate com 5 Fragmentos de Alma × 10 (WCL reporta fragmentos fracionados ×10) — confirma `7 = SoulShards`. |
+| `events(...)`'s argumento `sourceID` | Aceito (confirmado por introspecção de `Report.events`), mas não usado para os eventos de dano (múltiplas fontes — jogador + pets — não cabem num único `sourceID`); usado nos eventos de recurso (uma fonte só, o próprio jogador) só como filtro client-side, igual ao padrão já usado para `Casts`. |
+
+---
+
 ## 0. Tabela de veredito — cobertura da T0.1
 
 > Ver `docs/desvios.md` D-2: esta seção satisfaz "todo campo da tabela da T0.1 tem veredito

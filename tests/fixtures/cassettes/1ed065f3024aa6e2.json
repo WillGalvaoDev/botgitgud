@@ -1,0 +1,158 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "310",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "CDnMdAwmJ4VpHXYB",
+      "fightIDs": [
+        10
+      ],
+      "sourceID": 4
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "bands": [
+                    {
+                      "endTime": 904297,
+                      "startTime": 868295
+                    },
+                    {
+                      "endTime": 950467,
+                      "startTime": 914436
+                    },
+                    {
+                      "endTime": 1026917,
+                      "startTime": 990905
+                    },
+                    {
+                      "endTime": 1073063,
+                      "startTime": 1037058
+                    }
+                  ],
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "totalUptime": 144050,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "bands": [
+                    {
+                      "endTime": 887004,
+                      "startTime": 878996
+                    },
+                    {
+                      "endTime": 899869,
+                      "startTime": 891870
+                    },
+                    {
+                      "endTime": 936625,
+                      "startTime": 928624
+                    },
+                    {
+                      "endTime": 947857,
+                      "startTime": 939853
+                    },
+                    {
+                      "endTime": 1012080,
+                      "startTime": 1004086
+                    },
+                    {
+                      "endTime": 1025947,
+                      "startTime": 1017952
+                    },
+                    {
+                      "endTime": 1059063,
+                      "startTime": 1051063
+                    },
+                    {
+                      "endTime": 1072188,
+                      "startTime": 1064170
+                    }
+                  ],
+                  "guid": 1250991,
+                  "name": "Dark Radiation",
+                  "totalUptime": 64019,
+                  "totalUses": 8,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "bands": [
+                    {
+                      "endTime": 909808,
+                      "startTime": 868295
+                    },
+                    {
+                      "endTime": 978943,
+                      "startTime": 914436
+                    },
+                    {
+                      "endTime": 1032904,
+                      "startTime": 990905
+                    },
+                    {
+                      "endTime": 1033418,
+                      "startTime": 1032904
+                    },
+                    {
+                      "endTime": 1077556,
+                      "startTime": 1037058
+                    }
+                  ],
+                  "guid": 387847,
+                  "name": "Fel Armor",
+                  "totalUptime": 189031,
+                  "totalUses": 5,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_icon_feather06e.jpg",
+                  "bands": [
+                    {
+                      "endTime": 993473,
+                      "startTime": 983476
+                    }
+                  ],
+                  "guid": 1255857,
+                  "name": "Emberwing Burn",
+                  "totalUptime": 9997,
+                  "totalUses": 1,
+                  "type": 1
+                }
+              ],
+              "endTime": 5968318,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 225413,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

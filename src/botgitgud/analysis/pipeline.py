@@ -40,6 +40,10 @@ from botgitgud.analysis.cohort import (
 )
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
+from botgitgud.analysis.performance_features import (
+    PerformanceFindings,
+    analyze_performance_features,
+)
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
 from botgitgud.analysis.talent_cluster import BuildDivergence, analyze_build_divergence
 from botgitgud.config import Settings
@@ -83,6 +87,7 @@ class AnalysisResult:
     comparisons: tuple[SpellComparison, ...]
     manifest: RunManifest
     build_divergence: BuildDivergence | None = None
+    performance: PerformanceFindings | None = None
 
 
 def run_analysis(
@@ -158,6 +163,9 @@ def run_analysis(
     # any timing analysis below.
     build_divergence = analyze_build_divergence(player_log, matched_logs)
 
+    # T3.1: same already-covariate-matched cohort, independent of CD timing.
+    performance = analyze_performance_features(player_log, matched_logs, deps.catalog)
+
     profile, num_positional = build_cd_reference_profile(matched_logs, player_log.fight.duration_s)
     durations = [rl.fight.duration_s for rl in matched_logs]
     dps_values = [rl.dps for rl in matched_logs if rl.dps is not None]
@@ -220,4 +228,5 @@ def run_analysis(
         comparisons=tuple(comparisons),
         manifest=manifest,
         build_divergence=build_divergence,
+        performance=performance,
     )

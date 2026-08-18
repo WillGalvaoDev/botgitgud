@@ -1,0 +1,187 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "311",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "3C9VATxX1kMz8wnj",
+      "fightIDs": [
+        21
+      ],
+      "sourceID": 12
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4408032,
+                      "startTime": 4372023
+                    },
+                    {
+                      "endTime": 4454184,
+                      "startTime": 4418161
+                    },
+                    {
+                      "endTime": 4530738,
+                      "startTime": 4494731
+                    },
+                    {
+                      "endTime": 4576953,
+                      "startTime": 4540953
+                    }
+                  ],
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "totalUptime": 144039,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4392711,
+                      "startTime": 4384771
+                    },
+                    {
+                      "endTime": 4411767,
+                      "startTime": 4403761
+                    },
+                    {
+                      "endTime": 4443797,
+                      "startTime": 4435804
+                    },
+                    {
+                      "endTime": 4460324,
+                      "startTime": 4452306
+                    },
+                    {
+                      "endTime": 4523595,
+                      "startTime": 4515580
+                    },
+                    {
+                      "endTime": 4533930,
+                      "startTime": 4525903
+                    },
+                    {
+                      "endTime": 4574741,
+                      "startTime": 4559057
+                    }
+                  ],
+                  "guid": 1250991,
+                  "name": "Dark Radiation",
+                  "stackUptime": [
+                    190612,
+                    55698,
+                    7985
+                  ],
+                  "totalUptime": 63683,
+                  "totalUses": 8,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_icon_feather06e.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4610236,
+                      "startTime": 4603779
+                    }
+                  ],
+                  "guid": 1255857,
+                  "name": "Emberwing Burn",
+                  "totalUptime": 6457,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_groundsate.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4608746,
+                      "startTime": 4608449
+                    }
+                  ],
+                  "guid": 1245592,
+                  "name": "Torturous Extract",
+                  "totalUptime": 297,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4417507,
+                      "startTime": 4372023
+                    },
+                    {
+                      "endTime": 4482694,
+                      "startTime": 4418160
+                    },
+                    {
+                      "endTime": 4539748,
+                      "startTime": 4494731
+                    },
+                    {
+                      "endTime": 4605462,
+                      "startTime": 4540953
+                    },
+                    {
+                      "endTime": 4610236,
+                      "startTime": 4608449
+                    }
+                  ],
+                  "guid": 387847,
+                  "name": "Fel Armor",
+                  "totalUptime": 221331,
+                  "totalUses": 5,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_nature_sleep.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4610236,
+                      "startTime": 4357143
+                    }
+                  ],
+                  "guid": 390435,
+                  "name": "Exhaustion",
+                  "totalUptime": 253093,
+                  "totalUses": 1,
+                  "type": 1
+                }
+              ],
+              "endTime": 7297158,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 254295,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

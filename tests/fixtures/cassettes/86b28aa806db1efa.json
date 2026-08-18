@@ -1,0 +1,369 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "486",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerResourceEvents(\n  $code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!\n) {\n  reportData {\n    report(code: $code) {\n      events(\n        fightIDs: $fightIDs, dataType: Resources, startTime: $startTime,\n        endTime: $endTime, limit: 10000, translate: true\n      ) {\n        data\n        nextPageTimestamp\n      }\n    }\n  }\n}\n",
+    "variables": {
+      "code": "MwGvrByVq3tDmxKg",
+      "endTime": 1652782,
+      "fightIDs": [
+        12
+      ],
+      "startTime": 1307732
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "events": {
+            "data": [
+              {
+                "abilityGameID": 473671,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": -1000,
+                "resourceChangeType": 17,
+                "sourceID": 1,
+                "targetID": 1,
+                "timestamp": 1307833,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1242475,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 6,
+                "resourceChangeType": 17,
+                "sourceID": 22,
+                "targetID": 22,
+                "timestamp": 1308062,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1282660,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 25,
+                "resourceChangeType": 2,
+                "sourceID": 17,
+                "targetID": 17,
+                "timestamp": 1308161,
+                "type": "resourcechange",
+                "waste": 25
+              },
+              {
+                "abilityGameID": 280127,
+                "fight": 12,
+                "maxResourceAmount": 50,
+                "otherResourceChange": 0,
+                "resourceChange": 2,
+                "resourceChangeType": 7,
+                "sourceID": 18,
+                "targetID": 18,
+                "timestamp": 1308189,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 85948,
+                "fight": 12,
+                "maxResourceAmount": 1000,
+                "otherResourceChange": 0,
+                "resourceChange": 20,
+                "resourceChangeType": 6,
+                "sourceID": 3,
+                "targetID": 3,
+                "timestamp": 1308342,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 100,
+                "fight": 12,
+                "maxResourceAmount": 1300,
+                "otherResourceChange": 0,
+                "resourceChange": 20,
+                "resourceChangeType": 1,
+                "sourceID": 10,
+                "targetID": 10,
+                "timestamp": 1308342,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 703,
+                "fight": 12,
+                "maxResourceAmount": 7,
+                "otherResourceChange": 0,
+                "resourceChange": 1,
+                "resourceChangeType": 4,
+                "sourceID": 16,
+                "targetID": 16,
+                "timestamp": 1308432,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 185438,
+                "fight": 12,
+                "maxResourceAmount": 7,
+                "otherResourceChange": 0,
+                "resourceChange": 2,
+                "resourceChangeType": 4,
+                "sourceID": 21,
+                "targetID": 21,
+                "timestamp": 1308602,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 77575,
+                "fight": 12,
+                "maxResourceAmount": 1000,
+                "otherResourceChange": 0,
+                "resourceChange": 10,
+                "resourceChangeType": 6,
+                "sourceID": 13,
+                "targetID": 13,
+                "timestamp": 1308602,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 343170,
+                "fight": 12,
+                "maxResourceAmount": 7,
+                "otherResourceChange": 0,
+                "resourceChange": 7,
+                "resourceChangeType": 4,
+                "sourceID": 21,
+                "targetID": 21,
+                "timestamp": 1308643,
+                "type": "resourcechange",
+                "waste": 2
+              },
+              {
+                "abilityGameID": 1264783,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 1,
+                "resourceChangeType": 2,
+                "sourceID": 17,
+                "targetID": 39,
+                "timestamp": 1308647,
+                "type": "resourcechange",
+                "waste": 1
+              },
+              {
+                "abilityGameID": 1264783,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 1,
+                "resourceChangeType": 2,
+                "sourceID": 17,
+                "targetID": 40,
+                "timestamp": 1308647,
+                "type": "resourcechange",
+                "waste": 1
+              },
+              {
+                "abilityGameID": 1264783,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 1,
+                "resourceChangeType": 2,
+                "sourceID": 17,
+                "targetID": 17,
+                "timestamp": 1308647,
+                "type": "resourcechange",
+                "waste": 1
+              },
+              {
+                "abilityGameID": 196911,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 4,
+                "resourceChangeType": 3,
+                "sourceID": 21,
+                "targetID": 21,
+                "timestamp": 1308671,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 43265,
+                "fight": 12,
+                "maxResourceAmount": 1250,
+                "otherResourceChange": 0,
+                "resourceChange": 10,
+                "resourceChangeType": 6,
+                "sourceID": 15,
+                "sourceMarker": 2,
+                "targetID": 15,
+                "targetMarker": 2,
+                "timestamp": 1308792,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1242475,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 6,
+                "resourceChangeType": 17,
+                "sourceID": 22,
+                "targetID": 22,
+                "timestamp": 1309071,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1261710,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 10,
+                "resourceChangeType": 17,
+                "sourceID": 1,
+                "targetID": 1,
+                "timestamp": 1309071,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1242475,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 6,
+                "resourceChangeType": 17,
+                "sourceID": 1,
+                "targetID": 1,
+                "timestamp": 1309073,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1263774,
+                "fight": 12,
+                "maxResourceAmount": 1250,
+                "otherResourceChange": 0,
+                "resourceChange": 2,
+                "resourceChangeType": 6,
+                "sourceID": 15,
+                "sourceMarker": 2,
+                "targetID": 15,
+                "targetMarker": 2,
+                "timestamp": 1309660,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1261710,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 10,
+                "resourceChangeType": 17,
+                "sourceID": 22,
+                "targetID": 22,
+                "timestamp": 1309705,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 98440,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 35,
+                "resourceChangeType": 3,
+                "sourceID": 21,
+                "targetID": 21,
+                "timestamp": 1309706,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 196911,
+                "fight": 12,
+                "maxResourceAmount": 100,
+                "otherResourceChange": 0,
+                "resourceChange": 4,
+                "resourceChangeType": 3,
+                "sourceID": 21,
+                "targetID": 21,
+                "timestamp": 1309996,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1242475,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 6,
+                "resourceChangeType": 17,
+                "sourceID": 22,
+                "targetID": 22,
+                "timestamp": 1310066,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 1242475,
+                "fight": 12,
+                "maxResourceAmount": 120,
+                "otherResourceChange": 0,
+                "resourceChange": 6,
+                "resourceChangeType": 17,
+                "sourceID": 1,
+                "targetID": 1,
+                "timestamp": 1310078,
+                "type": "resourcechange",
+                "waste": 0
+              },
+              {
+                "abilityGameID": 51637,
+                "fight": 12,
+                "maxResourceAmount": 250,
+                "otherResourceChange": 0,
+                "resourceChange": 3,
+                "resourceChangeType": 3,
+                "sourceID": 16,
+                "targetID": 16,
+                "timestamp": 1310150,
+                "type": "resourcechange",
+                "waste": 0
+              }
+            ],
+            "nextPageTimestamp": null
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

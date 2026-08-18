@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from botgitgud.analysis.alignment import AlignmentKind
 from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
+from botgitgud.analysis.performance_features import PerformanceFindings
 from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
 from botgitgud.report.build_divergence_text import render_build_divergence
@@ -36,6 +37,12 @@ from botgitgud.report.grading_text import (
     compute_minor_deviation_keys,
     render_match_step_line,
     render_minor_deviations_section,
+)
+from botgitgud.report.performance_text import (
+    render_active_time_section,
+    render_deaths_downtime_section,
+    render_resource_waste_section,
+    render_uptimes_section,
 )
 
 _SEPARATOR = "=" * 42
@@ -208,12 +215,26 @@ def render_report(
     comparisons: Sequence[SpellComparison],
     manifest: RunManifest | None = None,
     build_divergence: BuildDivergence | None = None,
+    performance: PerformanceFindings | None = None,
 ) -> str:
+    """T3.1: section order is normative (docs/implementacao.md T3.1) — 1.
+    Build (`build_divergence`, above the header) 2. Mortes/downtime 3.
+    Active time 4. Uptimes 5. Waste de recurso 6. Usos perdidos de CD 7.
+    Timing de CD (the two CD sections below, unchanged since T0.7/T2.3).
+    Items 2-5 render even when there are no CD comparisons at all — they
+    are independent features, not contingent on eligible cooldowns.
+    """
     lines: list[str] = []
     if build_divergence is not None:
         lines.extend(render_build_divergence(build_divergence))
         lines.append("")
     lines.extend(_render_header(header))
+
+    if performance is not None:
+        lines.extend(render_deaths_downtime_section(performance.deaths, performance.downtime))
+        lines.extend(render_active_time_section(performance.active_time))
+        lines.extend(render_uptimes_section(performance.uptimes))
+        lines.extend(render_resource_waste_section(performance.resource_waste))
 
     if not comparisons:
         lines.append("")

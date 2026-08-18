@@ -72,7 +72,11 @@ def _run_analyze(job: Job, deps: Deps) -> str:
     # do the full cohort fetch if the fast warm-profile lookup missed.
     result = run_analysis(req, deps, allow_cold_build=True)
     return render_report(
-        result.header, result.comparisons, result.manifest, result.build_divergence
+        result.header,
+        result.comparisons,
+        result.manifest,
+        result.build_divergence,
+        result.performance,
     )
 
 

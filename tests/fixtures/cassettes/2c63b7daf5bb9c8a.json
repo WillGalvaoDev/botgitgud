@@ -1,0 +1,241 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "313",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "hnTbKFt9aLcXypkB",
+      "fightIDs": [
+        164
+      ],
+      "sourceID": 696
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "inv_artifact_powerofthedarkside.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27909247,
+                      "startTime": 27906873
+                    }
+                  ],
+                  "guid": 1248709,
+                  "name": "Oppressive Darkness",
+                  "totalUptime": 2374,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_shadowmend.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27915086,
+                      "startTime": 27911793
+                    }
+                  ],
+                  "guid": 187464,
+                  "name": "Shadow Mend",
+                  "totalUptime": 3293,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_groundsate.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27909004,
+                      "startTime": 27907442
+                    }
+                  ],
+                  "guid": 1245592,
+                  "name": "Torturous Extract",
+                  "totalUptime": 1562,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27863090,
+                      "startTime": 27855056
+                    },
+                    {
+                      "endTime": 27873885,
+                      "startTime": 27865899
+                    },
+                    {
+                      "endTime": 27910495,
+                      "startTime": 27902479
+                    },
+                    {
+                      "endTime": 27928181,
+                      "startTime": 27920166
+                    },
+                    {
+                      "endTime": 27988117,
+                      "startTime": 27980116
+                    },
+                    {
+                      "endTime": 28005004,
+                      "startTime": 27997001
+                    },
+                    {
+                      "endTime": 28046174,
+                      "startTime": 28034987
+                    }
+                  ],
+                  "guid": 1250991,
+                  "name": "Dark Radiation",
+                  "stackUptime": [
+                    212475,
+                    51234,
+                    8008
+                  ],
+                  "totalUptime": 59242,
+                  "totalUses": 8,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27878058,
+                      "startTime": 27842041
+                    },
+                    {
+                      "endTime": 27923111,
+                      "startTime": 27887070
+                    },
+                    {
+                      "endTime": 28000710,
+                      "startTime": 27964722
+                    },
+                    {
+                      "endTime": 28046888,
+                      "startTime": 28010875
+                    },
+                    {
+                      "endTime": 28097983,
+                      "startTime": 28087381
+                    }
+                  ],
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "totalUptime": 154661,
+                  "totalUses": 5,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27883550,
+                      "startTime": 27842041
+                    },
+                    {
+                      "endTime": 27953569,
+                      "startTime": 27887069
+                    },
+                    {
+                      "endTime": 27954067,
+                      "startTime": 27953569
+                    },
+                    {
+                      "endTime": 28010705,
+                      "startTime": 27964722
+                    },
+                    {
+                      "endTime": 28076393,
+                      "startTime": 28010875
+                    },
+                    {
+                      "endTime": 28097983,
+                      "startTime": 28087381
+                    }
+                  ],
+                  "guid": 387847,
+                  "name": "Fel Armor",
+                  "totalUptime": 230610,
+                  "totalUses": 6,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_debuff.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27906871,
+                      "startTime": 27894869
+                    }
+                  ],
+                  "guid": 1248697,
+                  "name": "Despotic Command",
+                  "totalUptime": 12002,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_mage_timewarp.jpg",
+                  "bands": [
+                    {
+                      "endTime": 28097983,
+                      "startTime": 27826841
+                    }
+                  ],
+                  "guid": 80354,
+                  "name": "Temporal Displacement",
+                  "totalUptime": 271142,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "inv_112_raiddimensius_blackhole.jpg",
+                  "bands": [
+                    {
+                      "endTime": 27933724,
+                      "startTime": 27933632
+                    },
+                    {
+                      "endTime": 27977391,
+                      "startTime": 27976926
+                    }
+                  ],
+                  "guid": 1250828,
+                  "name": "Void Exposure",
+                  "totalUptime": 557,
+                  "totalUses": 2,
+                  "type": 32
+                }
+              ],
+              "endTime": 36718956,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 271717,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

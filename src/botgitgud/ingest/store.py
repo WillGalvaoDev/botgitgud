@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS logs (
     class_name    VARCHAR, spec_name VARCHAR, role VARCHAR,
     duration_s    DOUBLE,  dps DOUBLE, percentile DOUBLE,
     item_level    DOUBLE,  talent_hash VARCHAR, tier_pieces INTEGER,
-    active_time_pct DOUBLE, deaths INTEGER,
+    active_time_pct DOUBLE, deaths INTEGER, downtime_s DOUBLE,
     parquet_path  VARCHAR, ingested_at TIMESTAMP
 )
 """
@@ -184,9 +184,9 @@ class Store:
                 INSERT INTO logs (
                     report_code, fight_id, player_name, server, encounter_id, difficulty,
                     partition, class_name, spec_name, role, duration_s, dps, percentile,
-                    item_level, talent_hash, tier_pieces, active_time_pct, deaths,
+                    item_level, talent_hash, tier_pieces, active_time_pct, deaths, downtime_s,
                     parquet_path, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     fight.report_code,
@@ -207,6 +207,7 @@ class Store:
                     build.tier_pieces,
                     log.active_time_pct,
                     log.deaths,
+                    log.downtime_s,
                     str(parquet_path),
                     datetime.fromtimestamp(ingested_at_ms / 1000.0, tz=UTC),
                 ],

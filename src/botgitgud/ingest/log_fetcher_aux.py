@@ -15,14 +15,21 @@ import structlog
 
 from botgitgud.domain.external_buffs import AUGMENTATION_BUFF_IDS, EXTERNAL_BUFF_IDS
 from botgitgud.domain.models import PhaseInterval, PhaseKey
+from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError
+from botgitgud.ingest.performance_parsing import parse_aura_uptimes
 from botgitgud.ingest.wcl_parsing import (
     find_matching_rank_percent,
     parse_aura_ids,
     parse_cast_events,
     parse_cast_events_by_phase,
 )
-from botgitgud.wcl.queries import QUERY_PLAYER_BUFFS, QUERY_PLAYER_EVENTS, QUERY_PLAYER_PERCENTILE
+from botgitgud.wcl.queries import (
+    QUERY_PLAYER_BUFFS,
+    QUERY_PLAYER_DEBUFFS,
+    QUERY_PLAYER_EVENTS,
+    QUERY_PLAYER_PERCENTILE,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -67,29 +74,68 @@ def fetch_percentile(
     return find_matching_rank_percent(character, report_code, fight_id)
 
 
-def fetch_augmentation_and_external_buffs(
-    query_fn: QueryFn, *, report_code: str, fight_id: int, player_id: int
-) -> tuple[bool, frozenset[int]]:
-    """T2.1: (False, frozenset()) on any failure — buff data is best-effort
-    and never blocks the whole log fetch (has_augmentation/external_buffs
-    are covariates that already degrade gracefully in the match cascade).
+def fetch_buffs_and_debuffs(
+    query_fn: QueryFn,
+    *,
+    report_code: str,
+    fight_id: int,
+    player_id: int,
+    catalog: SpellCatalog,
+) -> tuple[bool, frozenset[int], dict[int, float]]:
+    """T2.1 (has_augmentation/external_buffs) + T3.1 (uptimes): one query
+    each to the Buffs and Debuffs tables — a single Buffs fetch serves
+    both purposes rather than querying it twice. (False, frozenset(), {})
+    contribution on any failure — buff/debuff data is best-effort and
+    never blocks the whole log fetch (has_augmentation/external_buffs
+    already degrade gracefully in the match cascade; a missing uptime is
+    just absent from the report, not fabricated as 0).
     """
+    has_augmentation = False
+    external_buffs: frozenset[int] = frozenset()
+    uptimes: dict[int, float] = {}
+
     try:
         res_json = query_fn(
             QUERY_PLAYER_BUFFS,
             {"code": report_code, "fightIDs": [fight_id], "sourceID": player_id},
             op_name="fetch_player_buffs",
         )
+        buffs_data = (
+            res_json.get("data", {})
+            .get("reportData", {})
+            .get("report", {})
+            .get("table", {})
+            .get("data", {})
+        )
+        aura_ids = parse_aura_ids(buffs_data)
+        has_augmentation = bool(aura_ids & AUGMENTATION_BUFF_IDS)
+        external_buffs = aura_ids & EXTERNAL_BUFF_IDS
+        for aura in parse_aura_uptimes(buffs_data):
+            catalog.learn(aura.spell_id, aura.name, "wcl")
+            uptimes[aura.spell_id] = aura.uptime_frac
     except ApiError as e:
         log.warning("log_fetcher.buffs_failed", error=str(e))
-        return False, frozenset()
 
-    report = res_json.get("data", {}).get("reportData", {}).get("report", {})
-    buffs_data = report.get("table", {}).get("data", {})
-    aura_ids = parse_aura_ids(buffs_data)
-    has_augmentation = bool(aura_ids & AUGMENTATION_BUFF_IDS)
-    external_buffs = aura_ids & EXTERNAL_BUFF_IDS
-    return has_augmentation, external_buffs
+    try:
+        res_json = query_fn(
+            QUERY_PLAYER_DEBUFFS,
+            {"code": report_code, "fightIDs": [fight_id], "sourceID": player_id},
+            op_name="fetch_player_debuffs",
+        )
+        debuffs_data = (
+            res_json.get("data", {})
+            .get("reportData", {})
+            .get("report", {})
+            .get("table", {})
+            .get("data", {})
+        )
+        for aura in parse_aura_uptimes(debuffs_data):
+            catalog.learn(aura.spell_id, aura.name, "wcl")
+            uptimes[aura.spell_id] = aura.uptime_frac
+    except ApiError as e:
+        log.warning("log_fetcher.debuffs_failed", error=str(e))
+
+    return has_augmentation, external_buffs, uptimes
 
 
 def fetch_cast_timelines(

@@ -93,6 +93,15 @@ class PlayerLog:
     uptimes: Mapping[int, float] = field(default_factory=dict)
     resource_waste: Mapping[str, float] = field(default_factory=dict)
     deaths: int = 0
+    # T3.1: seconds spent dead — from each Summary.deathEvents entry to
+    # whichever comes first, this player's next own cast or fight end (no
+    # API exposes an explicit revive timestamp; see ingest/wcl_parsing.py's
+    # compute_downtime_s).
+    downtime_s: float = 0.0
+    # T3.1: spell_id -> distinct targets hit / that spell's own cast count
+    # (0.0 when casts == 0, e.g. a pure pet-cast ability never in this
+    # player's own cast_timeline) — feeds T3.2's "few targets hit" diagnosis.
+    avg_targets_per_cast: Mapping[int, float] = field(default_factory=dict)
     # T2.4: spell_id -> {(phase_id, occurrence): sorted times relative to
     # THAT interval's own start} — cast_timeline above stays flat/relative
     # to fight start, unchanged, for every pre-T2.4 consumer.

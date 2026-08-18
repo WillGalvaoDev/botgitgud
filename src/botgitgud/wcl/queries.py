@@ -14,8 +14,10 @@ query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {
         id encounterID name startTime endTime kill difficulty
         phaseTransitions { id startTime }
       }
+      masterData { actors { id name type subType petOwner } }
       table(fightIDs: $fightIDs, dataType: Summary, translate: true)
       castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)
+      damageTable: table(fightIDs: $fightIDs, dataType: DamageDone, translate: true)
     }
   }
 }
@@ -30,6 +32,51 @@ query GetPlayerEvents(
       events(
         fightIDs: $fightIDs, dataType: Casts, startTime: $startTime,
         endTime: $endTime, limit: 5000, translate: true
+      ) {
+        data
+        nextPageTimestamp
+      }
+    }
+  }
+}
+"""
+
+# T3.1 (docs/schema_confirmado.md §5): NOT filtered by sourceID — a
+# player's real damage includes their pets (many distinct source IDs), so
+# the whole fight's events are fetched once and filtered client-side by
+# sourceID in {player_id} union {pet_ids} (ingest/damage_aggregation.py).
+# Same 10000 page size the live measurement (7 pages for a 345s/20-pet
+# fight) used.
+QUERY_PLAYER_DAMAGE_EVENTS = """
+query GetPlayerDamageEvents(
+  $code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!
+) {
+  reportData {
+    report(code: $code) {
+      events(
+        fightIDs: $fightIDs, dataType: DamageDone, startTime: $startTime,
+        endTime: $endTime, limit: 10000, translate: true
+      ) {
+        data
+        nextPageTimestamp
+      }
+    }
+  }
+}
+"""
+
+# T3.1: resourcechange events, filtered client-side by sourceID == player
+# (mirrors QUERY_PLAYER_EVENTS' own pattern) — resource_waste is the
+# player's own only, never pets'.
+QUERY_PLAYER_RESOURCE_EVENTS = """
+query GetPlayerResourceEvents(
+  $code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!
+) {
+  reportData {
+    report(code: $code) {
+      events(
+        fightIDs: $fightIDs, dataType: Resources, startTime: $startTime,
+        endTime: $endTime, limit: 10000, translate: true
       ) {
         data
         nextPageTimestamp
@@ -91,6 +138,19 @@ query GetPlayerBuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {
   reportData {
     report(code: $code) {
       table(fightIDs: $fightIDs, dataType: Buffs, sourceID: $sourceID, translate: true)
+    }
+  }
+}
+"""
+
+# T3.1: same sourceID semantics as QUERY_PLAYER_BUFFS (docs/schema_confirmado.md
+# §6) — the player's own debuff list (self-DoTs and anything applied to
+# them), feeding uptimes[spell_id] alongside the Buffs table.
+QUERY_PLAYER_DEBUFFS = """
+query GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {
+  reportData {
+    report(code: $code) {
+      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)
     }
   }
 }

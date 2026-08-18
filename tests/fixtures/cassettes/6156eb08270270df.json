@@ -1,0 +1,369 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "485",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDamageEvents(\n  $code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!\n) {\n  reportData {\n    report(code: $code) {\n      events(\n        fightIDs: $fightIDs, dataType: DamageDone, startTime: $startTime,\n        endTime: $endTime, limit: 10000, translate: true\n      ) {\n        data\n        nextPageTimestamp\n      }\n    }\n  }\n}\n",
+    "variables": {
+      "code": "xNbFwPz4WG9DCYvr",
+      "endTime": 3364483,
+      "fightIDs": [
+        17
+      ],
+      "startTime": 3028114
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "events": {
+            "data": [
+              {
+                "abilityGameID": 195292,
+                "amount": 2048,
+                "buffs": "391477.391458.391398.434143.1277389.434260.434261.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 17,
+                "sourceMarker": 2,
+                "targetID": 271,
+                "timestamp": 3028402,
+                "type": "damage",
+                "unmitigatedAmount": 1988
+              },
+              {
+                "abilityGameID": 105771,
+                "amount": 0,
+                "buffs": "1236994.1233724.1277389.",
+                "fight": 17,
+                "hitType": 10,
+                "isAoE": false,
+                "sourceID": 229,
+                "targetID": 271,
+                "timestamp": 3028404,
+                "type": "damage"
+              },
+              {
+                "abilityGameID": 105771,
+                "amount": 0,
+                "buffs": "386196.1232585.1235108.",
+                "fight": 17,
+                "hitType": 10,
+                "isAoE": false,
+                "sourceID": 72,
+                "targetID": 271,
+                "timestamp": 3028591,
+                "type": "damage"
+              },
+              {
+                "abilityGameID": 105771,
+                "amount": 0,
+                "buffs": "386196.1235108.1236616.",
+                "fight": 17,
+                "hitType": 10,
+                "isAoE": false,
+                "sourceID": 233,
+                "targetID": 271,
+                "timestamp": 3028591,
+                "type": "damage"
+              },
+              {
+                "abilityGameID": 30153,
+                "amount": 1724,
+                "buffs": "1235111.431944.1281559.1277389.1232585.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": false,
+                "sourceID": 49,
+                "targetID": 271,
+                "timestamp": 3028694,
+                "type": "damage",
+                "unmitigatedAmount": 884
+              },
+              {
+                "abilityGameID": 1,
+                "amount": 0,
+                "buffs": "1236994.1233724.1277389.",
+                "fight": 17,
+                "hitType": 8,
+                "isAoE": false,
+                "sourceID": 229,
+                "targetID": 271,
+                "timestamp": 3028715,
+                "type": "damage"
+              },
+              {
+                "abilityGameID": 589,
+                "amount": 3906,
+                "buffs": "1235111.1232585.373456.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 11,
+                "targetID": 271,
+                "timestamp": 3028749,
+                "type": "damage",
+                "unmitigatedAmount": 3792
+              },
+              {
+                "abilityGameID": 258922,
+                "amount": 3925,
+                "buffs": "1235111.258920.427912.1232585.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": true,
+                "sourceID": 13,
+                "targetID": 271,
+                "timestamp": 3028764,
+                "type": "damage",
+                "unmitigatedAmount": 1595
+              },
+              {
+                "abilityGameID": 1,
+                "amount": 4599,
+                "buffs": "1235111.258920.427912.390192.1232585.391215.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "mitigated": 1780,
+                "sourceID": 13,
+                "targetID": 271,
+                "timestamp": 3028787,
+                "type": "damage",
+                "unmitigatedAmount": 6379
+              },
+              {
+                "abilityGameID": 394354,
+                "amount": 38321,
+                "buffs": "1236994.1233724.1277389.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 229,
+                "targetID": 271,
+                "timestamp": 3028810,
+                "type": "damage",
+                "unmitigatedAmount": 37204
+              },
+              {
+                "abilityGameID": 100780,
+                "amount": 3982,
+                "buffs": "129914.392993.196741.1261724.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "mitigated": 1341,
+                "sourceID": 70,
+                "targetID": 271,
+                "timestamp": 3028810,
+                "type": "damage",
+                "unmitigatedAmount": 5323
+              },
+              {
+                "abilityGameID": 203796,
+                "amount": 2037,
+                "buffs": "1235111.258920.427912.390192.1232585.391215.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 13,
+                "targetID": 271,
+                "timestamp": 3028826,
+                "type": "damage",
+                "unmitigatedAmount": 1920
+              },
+              {
+                "abilityGameID": 228354,
+                "amount": 13212,
+                "buffs": "1235111.1247730.1277389.1232585.461531.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 8,
+                "targetID": 271,
+                "timestamp": 3028826,
+                "type": "damage",
+                "unmitigatedAmount": 12453
+              },
+              {
+                "abilityGameID": 188389,
+                "amount": 3074,
+                "buffs": "1250508.1272101.1235111.454015.1277389.33697.1236616.1219480.192106.260734.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 216,
+                "targetID": 271,
+                "timestamp": 3028826,
+                "type": "damage",
+                "unmitigatedAmount": 2897
+              },
+              {
+                "abilityGameID": 285452,
+                "amount": 59034,
+                "buffs": "1250508.1272101.80353.1235111.454015.1277389.33697.1236616.1219480.192106.260734.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": false,
+                "sourceID": 216,
+                "targetID": 271,
+                "timestamp": 3028914,
+                "type": "damage",
+                "unmitigatedAmount": 17121
+              },
+              {
+                "abilityGameID": 52212,
+                "amount": 780,
+                "buffs": "391477.80353.391458.391398.434143.1277389.434260.434261.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": true,
+                "sourceID": 17,
+                "sourceMarker": 2,
+                "targetID": 271,
+                "timestamp": 3028930,
+                "type": "damage",
+                "unmitigatedAmount": 700
+              },
+              {
+                "abilityGameID": 385060,
+                "amount": 17979,
+                "buffs": "386196.435615.274741.80353.1235108.184362.1236616.107574.1719.1269349.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": true,
+                "mitigated": 5769,
+                "sourceID": 233,
+                "targetID": 271,
+                "timestamp": 3028944,
+                "type": "damage",
+                "unmitigatedAmount": 23748
+              },
+              {
+                "abilityGameID": 81297,
+                "amount": 281,
+                "buffs": "80353.1235111.1232585.383781.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": true,
+                "sourceID": 227,
+                "targetID": 271,
+                "timestamp": 3028972,
+                "type": "damage",
+                "unmitigatedAmount": 264
+              },
+              {
+                "abilityGameID": 184575,
+                "amount": 9611,
+                "buffs": "80353.1235111.1232585.383781.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 227,
+                "targetID": 271,
+                "timestamp": 3028972,
+                "type": "damage",
+                "unmitigatedAmount": 9059
+              },
+              {
+                "abilityGameID": 81297,
+                "amount": 667,
+                "buffs": "80353.1235111.1232585.383781.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": true,
+                "sourceID": 227,
+                "targetID": 271,
+                "timestamp": 3028989,
+                "type": "damage",
+                "unmitigatedAmount": 302
+              },
+              {
+                "abilityGameID": 1,
+                "amount": 8103,
+                "buffs": "392993.80353.196741.202090.1261724.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": false,
+                "sourceID": 70,
+                "targetID": 271,
+                "timestamp": 3029011,
+                "type": "damage",
+                "unmitigatedAmount": 5158
+              },
+              {
+                "abilityGameID": 1,
+                "amount": 3764,
+                "buffs": "383785.80353.1235111.1277389.383697.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "mitigated": 1028,
+                "sourceID": 19,
+                "sourceMarker": 1,
+                "targetID": 271,
+                "timestamp": 3029033,
+                "type": "damage",
+                "unmitigatedAmount": 4792
+              },
+              {
+                "abilityGameID": 385061,
+                "amount": 18100,
+                "buffs": "386196.435615.274741.80353.1235108.184362.1236616.107574.1719.1269349.",
+                "fight": 17,
+                "hitType": 2,
+                "isAoE": true,
+                "sourceID": 233,
+                "targetID": 271,
+                "timestamp": 3029054,
+                "type": "damage",
+                "unmitigatedAmount": 11719
+              },
+              {
+                "abilityGameID": 228597,
+                "amount": 16223,
+                "buffs": "80353.1235111.1247730.1277389.1232585.461531.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "sourceID": 8,
+                "targetID": 271,
+                "timestamp": 3029115,
+                "type": "damage",
+                "unmitigatedAmount": 15292
+              },
+              {
+                "abilityGameID": 1,
+                "amount": 4844,
+                "buffs": "386196.80353.1232585.1235108.1719.1269349.",
+                "fight": 17,
+                "hitType": 1,
+                "isAoE": false,
+                "mitigated": 1554,
+                "sourceID": 72,
+                "targetID": 271,
+                "timestamp": 3029115,
+                "type": "damage",
+                "unmitigatedAmount": 6398
+              }
+            ],
+            "nextPageTimestamp": null
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

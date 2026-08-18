@@ -55,6 +55,9 @@ def _meta_response(
     no_player: bool = False,
     no_fight: bool = False,
     phase_transitions: list[dict[str, Any]] | None = None,
+    active_time_ms: float | None = None,
+    death_events: list[dict[str, Any]] | None = None,
+    actors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if no_fight:
         fights: list[Any] = []
@@ -87,20 +90,28 @@ def _meta_response(
     abilities = (
         abilities if abilities is not None else [{"guid": 104316, "name": "Call Dreadstalkers"}]
     )
+    # T3.1: full uptime by default so pre-existing tests that don't care
+    # about active_time_pct still get a deterministic, non-None value.
+    active_time_ms = end - start if active_time_ms is None else active_time_ms
 
     return {
         "data": {
             "reportData": {
                 "report": {
                     "fights": fights,
+                    "masterData": {"actors": actors or []},
                     "table": {
                         "data": {
                             "playerDetails": {"dps": dps_group, "healers": [], "tanks": []},
                             "damageDone": [{"id": player_id, "total": damage_total}],
+                            "deathEvents": death_events or [],
                         }
                     },
                     "castsTable": {
                         "data": {"entries": [{"id": player_id, "abilities": abilities}]}
+                    },
+                    "damageTable": {
+                        "data": {"entries": [{"id": player_id, "activeTime": active_time_ms}]}
                     },
                 }
             }
@@ -108,12 +119,18 @@ def _meta_response(
     }
 
 
-def _buffs_response(aura_guids: list[int] | None = None) -> dict[str, Any]:
+def _buffs_response(
+    aura_guids: list[int] | None = None, *, total_time: float = 1000.0
+) -> dict[str, Any]:
     auras = [
         {"guid": g, "name": f"Aura{g}", "totalUptime": 1000, "totalUses": 1}
         for g in (aura_guids or [])
     ]
-    return {"data": {"reportData": {"report": {"table": {"data": {"auras": auras}}}}}}
+    return {
+        "data": {
+            "reportData": {"report": {"table": {"data": {"auras": auras, "totalTime": total_time}}}}
+        }
+    }
 
 
 def _events_response(
@@ -169,18 +186,32 @@ class _DispatchTransport(httpx.BaseTransport):
             return _rate_limit_response()
         if "GetPlayerMeta" in query:
             op = "meta"
+        elif "GetPlayerDamageEvents" in query:
+            op = "damage_events"
+        elif "GetPlayerResourceEvents" in query:
+            op = "resource_events"
         elif "GetPlayerEvents" in query:
             op = "events"
         elif "GetPercentile" in query:
             op = "percentile"
+        elif "GetPlayerDebuffs" in query:
+            op = "debuffs"
         elif "GetPlayerBuffs" in query:
             op = "buffs"
         else:
             pytest.fail(f"query GraphQL não reconhecida: {query[:80]}")
 
         self.calls.append(op)
-        if op == "buffs" and op not in self._responses:
-            return httpx.Response(200, json=_buffs_response())  # T2.1: default empty buffs
+        # T2.1/T3.1: ops with a safe empty default don't need to be spelled
+        # out by every test's response dict.
+        _EMPTY_DEFAULTS = {
+            "buffs": lambda: _buffs_response(),
+            "debuffs": lambda: _buffs_response(),
+            "damage_events": lambda: _events_response([]),
+            "resource_events": lambda: _events_response([]),
+        }
+        if op in _EMPTY_DEFAULTS and op not in self._responses:
+            return httpx.Response(200, json=_EMPTY_DEFAULTS[op]())
         payload = self._responses[op]
         item = payload.pop(0) if isinstance(payload, list) else payload
         return httpx.Response(200, json=item)
@@ -296,6 +327,114 @@ def test_fetch_populates_talent_hash_and_tier_pieces_from_combatant_info(tmp_pat
 
     assert result.build.talent_hash is not None
     assert result.build.tier_pieces == 1
+
+
+# -- T3.1: performance features beyond casts -----------------------------------
+
+
+def test_fetch_populates_active_time_pct_from_damage_table(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["meta"] = [_meta_response(active_time_ms=90_000.0)]  # 90% of a 100_000ms fight
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.active_time_pct == 0.9
+
+
+def test_fetch_populates_deaths_and_downtime_from_summary_death_events(tmp_path: Path) -> None:
+    responses = _default_responses()
+    # deathTime is fight-relative ms (docs/schema_confirmado.md §7);
+    # player's only cast in this fixture is at 1300ms == 1.3s.
+    responses["meta"] = [_meta_response(death_events=[{"id": 6, "deathTime": 500.0}])]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.deaths == 1
+    assert result.downtime_s == 1.3 - 0.5  # dies at 0.5s, next own cast at 1.3s
+
+
+def test_fetch_ignores_other_players_deaths(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["meta"] = [_meta_response(death_events=[{"id": 999, "deathTime": 500.0}])]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.deaths == 0
+    assert result.downtime_s == 0.0
+
+
+def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["meta"] = [_meta_response(actors=[{"id": 16, "petOwner": 6}])]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": 100,
+                    "abilityGameID": 104316,
+                    "amount": 500,
+                },
+                {
+                    "type": "damage",
+                    "sourceID": 16,  # pet of player 6
+                    "targetID": 100,
+                    "abilityGameID": 104318,
+                    "amount": 200,
+                },
+                {
+                    "type": "damage",
+                    "sourceID": 7,  # unrelated player — must be excluded
+                    "targetID": 100,
+                    "abilityGameID": 999,
+                    "amount": 10_000,
+                },
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_by_ability[104316].total == 500
+    assert result.damage_by_ability[104316].casts == 1  # matches cast_timeline
+    assert result.damage_by_ability[104318].total == 200
+    assert result.damage_by_ability[104318].casts == 0  # player never cast the pet's ability
+    assert 999 not in result.damage_by_ability
+    assert result.avg_targets_per_cast[104316] == 1.0  # 1 distinct target / 1 cast
+
+
+def test_fetch_populates_uptimes_from_buffs_and_debuffs(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["buffs"] = [_buffs_response([395152], total_time=1000.0)]
+    responses["debuffs"] = [_buffs_response([777], total_time=500.0)]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.uptimes[395152] == 1.0  # totalUptime=1000 / totalTime=1000
+    assert result.uptimes[777] == 2.0  # totalUptime=1000 / totalTime=500 (fixture default)
+
+
+def test_fetch_populates_resource_waste_for_the_player_only(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["resource_events"] = [
+        _events_response(
+            [
+                {"type": "resourcechange", "sourceID": 6, "resourceChangeType": 7, "waste": 5},
+                {"type": "resourcechange", "sourceID": 999, "resourceChangeType": 7, "waste": 100},
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.resource_waste == {"Fragmentos de Alma": 5.0}
 
 
 # -- T2.4: phase-aware fetching --------------------------------------------------

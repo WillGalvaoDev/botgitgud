@@ -72,7 +72,11 @@ def _buffs_response(aura_guids: list[int] | None = None) -> dict[str, Any]:
         {"guid": g, "name": f"Aura{g}", "totalUptime": 1000, "totalUses": 1}
         for g in (aura_guids or [])
     ]
-    return {"data": {"reportData": {"report": {"table": {"data": {"auras": auras}}}}}}
+    return {
+        "data": {
+            "reportData": {"report": {"table": {"data": {"auras": auras, "totalTime": 1000.0}}}}
+        }
+    }
 
 
 def _zone_partitions_response(*, default_partition: int = 3) -> dict[str, Any]:
@@ -108,6 +112,10 @@ class _DispatchTransport(httpx.BaseTransport):
             return _rate_limit_response()
         if "GetPlayerMeta" in query:
             op = "meta"
+        elif "GetPlayerDamageEvents" in query:
+            op = "damage_events"
+        elif "GetPlayerResourceEvents" in query:
+            op = "resource_events"
         elif "GetPlayerEvents" in query:
             op = "events"
         elif "GetPercentile" in query:
@@ -116,14 +124,27 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "rankings"
         elif "GetZonePartitions" in query:
             op = "partition"
+        elif "GetPlayerDebuffs" in query:
+            op = "debuffs"
         elif "GetPlayerBuffs" in query:
             op = "buffs"
         else:
             pytest.fail(f"query GraphQL não reconhecida: {query[:80]}")
 
         self.calls.append(op)
-        if op == "buffs" and op not in self._responses:
-            return httpx.Response(200, json=_buffs_response())  # T2.1: default empty buffs
+        # T2.1/T3.1: ops with a safe empty default don't need to be spelled
+        # out by every test's response dict.
+        _empty_events: dict[str, Any] = {
+            "data": {"reportData": {"report": {"events": {"data": [], "nextPageTimestamp": None}}}}
+        }
+        _empty_defaults: dict[str, dict[str, Any]] = {
+            "buffs": _buffs_response(),
+            "debuffs": _buffs_response(),
+            "damage_events": _empty_events,
+            "resource_events": _empty_events,
+        }
+        if op in _empty_defaults and op not in self._responses:
+            return httpx.Response(200, json=_empty_defaults[op])
         if op not in self._responses:
             pytest.fail(f"operação '{op}' inesperada — nenhuma resposta canned para ela")
 

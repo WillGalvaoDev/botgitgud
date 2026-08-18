@@ -20,9 +20,18 @@ from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher_aux import (
-    fetch_augmentation_and_external_buffs,
+    fetch_buffs_and_debuffs,
     fetch_cast_timelines,
     fetch_percentile,
+)
+from botgitgud.ingest.performance_fetch import fetch_damage_and_targets, fetch_resource_waste
+from botgitgud.ingest.performance_parsing import (
+    compute_active_time_pct,
+    compute_downtime_s,
+    extract_pet_owner_map,
+    find_damage_table_entry,
+    parse_death_events,
+    pet_ids_for_owner,
 )
 from botgitgud.ingest.store import Store
 from botgitgud.ingest.wcl_parsing import (
@@ -206,9 +215,44 @@ class LogFetcher:
             encounter_id=raw_fight["encounterID"],
             difficulty=raw_fight.get("difficulty"),
         )
-        has_augmentation, external_buffs = fetch_augmentation_and_external_buffs(
-            self._query, report_code=report_code, fight_id=fight_id, player_id=match.player_id
+        has_augmentation, external_buffs, uptimes = fetch_buffs_and_debuffs(
+            self._query,
+            report_code=report_code,
+            fight_id=fight_id,
+            player_id=match.player_id,
+            catalog=self._catalog,
         )
+
+        # T3.1 — features beyond casts.
+        damage_entry = find_damage_table_entry(
+            report.get("damageTable", {}).get("data", {}).get("entries", []), match.player_id
+        )
+        active_time_pct = compute_active_time_pct(damage_entry, end_time_ms - start_time_ms)
+
+        pet_owner_map = extract_pet_owner_map(report.get("masterData", {}).get("actors", []))
+        pet_ids = pet_ids_for_owner(pet_owner_map, match.player_id)
+        cast_counts = {spell_id: len(times) for spell_id, times in cast_timeline.items()}
+        damage_by_ability, avg_targets_per_cast = fetch_damage_and_targets(
+            self._query,
+            report_code=report_code,
+            fight_id=fight_id,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            source_ids=frozenset({match.player_id}) | pet_ids,
+            cast_counts=cast_counts,
+        )
+        resource_waste = fetch_resource_waste(
+            self._query,
+            report_code=report_code,
+            fight_id=fight_id,
+            player_id=match.player_id,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+        )
+
+        death_times_ms = parse_death_events(summary_data.get("deathEvents", []), match.player_id)
+        all_cast_times_s = [t for times in cast_timeline.values() for t in times]
+        downtime_s = compute_downtime_s(death_times_ms, all_cast_times_s, duration_s)
 
         fight = FightRef(
             report_code=report_code,
@@ -239,5 +283,12 @@ class LogFetcher:
             dps=dps,
             percentile=percentile,
             cast_timeline=cast_timeline,
+            active_time_pct=active_time_pct,
+            damage_by_ability=damage_by_ability,
+            uptimes=uptimes,
+            resource_waste=resource_waste,
+            deaths=len(death_times_ms),
+            downtime_s=downtime_s,
+            avg_targets_per_cast=avg_targets_per_cast,
             phase_cast_timeline=phase_cast_timeline,
         )

@@ -72,7 +72,13 @@ def _run_new_pipeline(tmp_path: Path) -> str:
         report_code=FIXTURE_REPORT_CODE, fight_id=FIXTURE_FIGHT_ID, character_name=FIXTURE_CHARACTER
     )
     result = run_analysis(req, deps)
-    return render_report(result.header, result.comparisons)
+    # manifest is deliberately omitted (None): RunManifest.generated_at/
+    # code_version are wall-clock/git-HEAD dependent — including it would
+    # make this a flaky snapshot, not a golden one. It has its own
+    # dedicated (non-snapshot) coverage in test_runmanifest.py.
+    return render_report(
+        result.header, result.comparisons, None, result.build_divergence, result.performance
+    )
 
 
 def test_new_pipeline_report_matches_golden_snapshot(tmp_path: Path, snapshot: Any) -> None:
@@ -119,3 +125,30 @@ def test_zarad_fixture_produces_exactly_five_phase_intervals(tmp_path: Path) -> 
         (2, 1),
         (1, 2),
     ]
+
+
+def test_zarad_fixture_damage_by_ability_reconciles_with_authoritative_total(
+    tmp_path: Path,
+) -> None:
+    """T3.1's mandated reconciliation test: aggregating raw DamageDone
+    events by ability, restricted to {player} union {pets}
+    (ingest/damage_aggregation.py), must reproduce the authoritative total
+    within 1% — docs/schema_confirmado.md §5, live-verified for this exact
+    fixture at 37.378.119 (player + 20 pets), 0.00% error. `damage_total`
+    is reconstructed from `dps * duration_s` (PlayerLog carries no raw
+    total field of its own) — the same Summary.damageDone.total §5 already
+    confirms is identical to the DamageDone table's `entry.total`.
+    """
+    deps = _build_deps(tmp_path)
+    player_log = deps.fetcher.fetch(FIXTURE_REPORT_CODE, FIXTURE_FIGHT_ID, FIXTURE_CHARACTER)
+
+    assert player_log.dps is not None
+    authoritative_total = player_log.dps * player_log.fight.duration_s
+    aggregated_total = sum(ab.total for ab in player_log.damage_by_ability.values())
+
+    assert authoritative_total > 0
+    relative_error = abs(aggregated_total - authoritative_total) / authoritative_total
+    assert relative_error < 0.01, (
+        f"aggregated={aggregated_total} authoritative={authoritative_total} "
+        f"error={relative_error:.4%}"
+    )

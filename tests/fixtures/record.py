@@ -234,6 +234,54 @@ def _fetch_and_truncate_rankings(
     return candidates
 
 
+_MAX_RECORDED_EVENTS_PER_PAGE = 25  # T3.1: see _truncate_non_fixture_event_cassettes' docstring
+
+
+def _truncate_non_fixture_event_cassettes() -> int:
+    """T3.1: `events(dataType: DamageDone)` pages at limit:10000 — full
+    fidelity for every one of ~24 reference logs (many pet-heavy, same
+    class/spec as the fixture) would balloon the cassette directory by
+    hundreds of MB for data no test actually asserts on (the mandated
+    reconciliation test — damage_by_ability summing to entry.total within
+    1% — only needs FIXTURE_CHARACTER's own log to be exact). Same
+    truncate-after-recording precedent as
+    _fetch_and_truncate_rankings: overwrite each non-fixture
+    DamageDone/Resources events cassette in place (same request => same
+    key) with its first `_MAX_RECORDED_EVENTS_PER_PAGE` events and
+    `nextPageTimestamp: null`, so replay stops pagination immediately
+    without erroring. Only touches cassettes for a *different*
+    report_code/fightID than the fixture's own — Zarad's own damage/
+    resource event cassettes are left byte-for-byte as recorded.
+    """
+    from http_cassette import CASSETTES_DIR, load_cassette, save_cassette
+
+    truncated = 0
+    for path in CASSETTES_DIR.glob("*.json"):
+        cassette = load_cassette(path.stem)
+        if cassette is None:
+            continue
+        query = (cassette.request_payload or {}).get("query", "")
+        if "GetPlayerDamageEvents" not in query and "GetPlayerResourceEvents" not in query:
+            continue
+        variables = (cassette.request_payload or {}).get("variables", {})
+        if variables.get("code") == FIXTURE_REPORT_CODE and variables.get("fightIDs") == [
+            FIXTURE_FIGHT_ID
+        ]:
+            continue  # the fixture's own log stays exact, for the reconciliation test
+
+        report = (
+            (cassette.response_json or {}).get("data", {}).get("reportData", {}).get("report", {})
+        )
+        events = report.get("events")
+        if not isinstance(events, dict) or not events.get("data"):
+            continue
+        events["data"] = events["data"][:_MAX_RECORDED_EVENTS_PER_PAGE]
+        events["nextPageTimestamp"] = None
+        save_cassette(cassette)
+        truncated += 1
+    return truncated
+
+
 def _record_new_pipeline() -> int:
     """T1.6: the new pipeline (analysis/pipeline.py) uses httpx
     (WclClient/BlizzardClient), so it needs its own recording pass with an
@@ -252,6 +300,12 @@ def _record_new_pipeline() -> int:
     recording pass and that replay would disagree on which spells need a
     Blizzard fallback call.
     """
+    # T3.1: a stale Store from a previous recording pass makes fetcher.fetch()
+    # a cache hit for every reference log — zero new network calls, so a
+    # query-shape change (e.g. this task's new QUERY_PLAYER_META fields)
+    # would silently record NOTHING for them. Wipe it every run.
+    if (RECORDING_SCRATCH_DIR_NEW / "data").exists():
+        shutil.rmtree(RECORDING_SCRATCH_DIR_NEW / "data")
     RECORDING_SCRATCH_DIR_NEW.mkdir(parents=True, exist_ok=True)
     isolated_spells = RECORDING_SCRATCH_DIR_NEW / "spells.json"
     if REPO_SPELLS_JSON.exists():
@@ -320,6 +374,9 @@ def _record_new_pipeline() -> int:
 
     total = wcl_transport.recorded + blizzard_transport.recorded
     print(f"\nPipeline novo: {total} cassetes adicionais gravados/confirmados.")
+
+    n_truncated = _truncate_non_fixture_event_cassettes()
+    print(f"T3.1: {n_truncated} cassete(s) de eventos de referência truncados pós-gravação.")
     return 0
 
 

@@ -29,6 +29,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
     )
     uptimes_json = json.dumps({str(k): v for k, v in log.uptimes.items()})
     resource_waste_json = json.dumps(dict(log.resource_waste))
+    avg_targets_per_cast_json = json.dumps({str(k): v for k, v in log.avg_targets_per_cast.items()})
     talent_pairs_json = json.dumps([list(p) for p in sorted(build.talent_pairs)])
     phase_intervals_json = json.dumps(
         [[iv.phase_id, iv.occurrence, iv.start_ms, iv.end_ms] for iv in fight.phase_intervals]
@@ -67,10 +68,12 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
             "percentile": [log.percentile],
             "active_time_pct": [log.active_time_pct],
             "deaths": [log.deaths],
+            "downtime_s": [log.downtime_s],
             "cast_timeline_json": [cast_timeline_json],
             "damage_by_ability_json": [damage_by_ability_json],
             "uptimes_json": [uptimes_json],
             "resource_waste_json": [resource_waste_json],
+            "avg_targets_per_cast_json": [avg_targets_per_cast_json],
             "talent_pairs_json": [talent_pairs_json],
             "phase_intervals_json": [phase_intervals_json],
             "phase_cast_timeline_json": [phase_cast_timeline_json],
@@ -118,6 +121,9 @@ def read_parquet_log(path: Path) -> PlayerLog:
     }
     uptimes = {int(k): v for k, v in json.loads(row["uptimes_json"]).items()}
     resource_waste = json.loads(row["resource_waste_json"])
+    avg_targets_per_cast = {
+        int(k): v for k, v in json.loads(row.get("avg_targets_per_cast_json") or "{}").items()
+    }
     phase_cast_timeline = {
         int(spell_id): {(p[0], p[1]): tuple(p[2]) for p in entries}
         for spell_id, entries in json.loads(row.get("phase_cast_timeline_json") or "{}").items()
@@ -134,5 +140,7 @@ def read_parquet_log(path: Path) -> PlayerLog:
         uptimes=uptimes,
         resource_waste=resource_waste,
         deaths=row["deaths"],
+        downtime_s=row.get("downtime_s") or 0.0,
+        avg_targets_per_cast=avg_targets_per_cast,
         phase_cast_timeline=phase_cast_timeline,
     )

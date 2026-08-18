@@ -74,7 +74,11 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         deps.client.close()
 
     report_text = render_report(
-        result.header, result.comparisons, result.manifest, result.build_divergence
+        result.header,
+        result.comparisons,
+        result.manifest,
+        result.build_divergence,
+        result.performance,
     )
     sys.stdout.write(report_text + "\n")
     return 0

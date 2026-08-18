@@ -604,3 +604,38 @@ de um projeto pessoal/comunidade pequena).
   provam que um valor curado presente vence — primeiro ramo — e que a ausência degrada para os
   ramos seguintes sem erro); popular a tabela com dados reais fica para quando houver uma fonte
   verificável (tooltip in-game, nota de patch oficial, ou uma API futura).
+
+## D-29 — `downtime_s` sem timestamp de revive; `avg_targets_per_cast` sem agrupamento por instância de cast
+
+- **Tarefa:** T3.1
+- **Documento diz:** `deaths, downtime_s` vêm da "tabela `Deaths`"; `avg_targets_per_cast` é
+  "alvos únicos atingidos por cast, por habilidade" a partir de eventos de dano. Nenhuma fórmula
+  exata é dada para nenhum dos dois (diferente da T3.2, que define cada termo precisamente).
+- **Realidade (verificado ao vivo antes de escrever qualquer código):**
+  1. `table(dataType: Deaths)` traz `timestamp` da morte e o dano/cura que levou a ela, mas
+     **nenhum timestamp de revive/ressurreição**. `table(dataType: Summary)`'s `deathEvents`
+     (já buscado, sem query extra) tem a mesma lacuna, mas seu `deathTime` é **relativo ao início
+     da luta** (não absoluto como `phaseTransitions[].startTime` — verificado: valores caem dentro
+     de `[0, duration_ms]`). Uma varredura de `events(dataType: All)` na janela após uma morte real
+     do fixture de Zarad não achou nenhum evento `type: "resurrect"` (o pull termina em wipe, sem
+     revive) — não há sinal de "voltou a agir" além dos próprios eventos do jogador.
+  2. Nenhuma API agrupa eventos de dano por instância individual de cast (só por `abilityGameID`
+     agregado no fight inteiro).
+- **Ação tomada:**
+  1. `downtime_s` = soma, por morte, de (o próximo `cast` do próprio jogador, ou o fim da luta,
+     o que vier primeiro) menos o instante da morte — um personagem morto não pode conjurar, então
+     o próximo cast dele é a prova observável mais cedo de que voltou a agir. Implementado em
+     `ingest/performance_parsing.py`'s `compute_downtime_s`, usando dados já buscados (nenhuma
+     query nova). Nunca fabrica um revive: um jogador que nunca conjura de novo (wipe) corretamente
+     fica com downtime até o fim da luta.
+  2. `avg_targets_per_cast(a)` = alvos distintos atingidos por `a` no fight inteiro / total de
+     casts próprios de `a` — uma média por fight, não uma média estrita por instância de cast.
+     Implementado em `ingest/damage_aggregation.py`'s `aggregate_damage_by_ability`. Omitido (não
+     `0.0`) para uma habilidade com zero casts próprios (ex.: habilidade só de pet) — "média por
+     cast" é indefinida ali, não zero.
+- **Impacto:** ambas as heurísticas são construídas só a partir de dados já buscados por outras
+  necessidades da T3.1 (sem custo de API extra) e documentadas como aproximações no docstring de
+  cada função — nenhuma delas pode silenciosamente inflar ou esconder um achado (downtime nunca
+  fica negativo nem subestima um wipe; avg_targets_per_cast nunca finge um valor para uma
+  habilidade sem casts). Testado em `tests/unit/test_performance_parsing.py` e
+  `tests/unit/test_damage_aggregation.py`, incluindo o caso do wipe sem revive.

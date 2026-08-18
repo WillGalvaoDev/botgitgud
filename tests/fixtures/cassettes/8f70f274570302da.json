@@ -1,0 +1,169 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "312",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "69bwQ27m8BAjxPZg",
+      "fightIDs": [
+        33
+      ],
+      "sourceID": 324
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "spell_nature_sleep.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281909
+                    }
+                  ],
+                  "guid": 57724,
+                  "name": "Sated",
+                  "totalUptime": 224944,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "inv_112_raiddimensius_blackhole.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5444892,
+                      "startTime": 5443740
+                    }
+                  ],
+                  "guid": 1250828,
+                  "name": "Void Exposure",
+                  "totalUptime": 1152,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5333688,
+                      "startTime": 5297681
+                    },
+                    {
+                      "endTime": 5378690,
+                      "startTime": 5342682
+                    },
+                    {
+                      "endTime": 5456564,
+                      "startTime": 5420564
+                    },
+                    {
+                      "endTime": 5501632,
+                      "startTime": 5465618
+                    }
+                  ],
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "totalUptime": 144029,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5316153,
+                      "startTime": 5308160
+                    },
+                    {
+                      "endTime": 5324944,
+                      "startTime": 5316928
+                    },
+                    {
+                      "endTime": 5367873,
+                      "startTime": 5359879
+                    },
+                    {
+                      "endTime": 5378764,
+                      "startTime": 5370740
+                    },
+                    {
+                      "endTime": 5441859,
+                      "startTime": 5433862
+                    },
+                    {
+                      "endTime": 5456081,
+                      "startTime": 5448100
+                    },
+                    {
+                      "endTime": 5499720,
+                      "startTime": 5487668
+                    }
+                  ],
+                  "guid": 1250991,
+                  "name": "Dark Radiation",
+                  "stackUptime": [
+                    165354,
+                    52068,
+                    7989
+                  ],
+                  "totalUptime": 60057,
+                  "totalUses": 8,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5339708,
+                      "startTime": 5297681
+                    },
+                    {
+                      "endTime": 5408702,
+                      "startTime": 5342682
+                    },
+                    {
+                      "endTime": 5462557,
+                      "startTime": 5420547
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5465618
+                    }
+                  ],
+                  "guid": 387847,
+                  "name": "Fel Armor",
+                  "totalUptime": 191292,
+                  "totalUses": 4,
+                  "type": 32
+                }
+              ],
+              "endTime": 14805794,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 225411,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}
