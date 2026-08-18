@@ -7,8 +7,9 @@ from typing import Any
 import httpx
 import pytest
 
+from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import FightNotFound, PlayerNotFound
+from botgitgud.errors import FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
 from botgitgud.ingest.store import Store
 from botgitgud.wcl.client import WclClient, WclClientConfig
@@ -354,6 +355,60 @@ def test_fetch_many_tolerates_one_failed_ref_without_aborting_batch(tmp_path: Pa
 
     assert len(results) == 1
     assert results[0].build.character_name == "Other"
+
+
+def _player_log_for(player_name: str, report_code: str) -> PlayerLog:
+    fight = FightRef(
+        report_code=report_code,
+        fight_id=1,
+        encounter_id=3179,
+        boss_name="Fallen-King Salhadaar",
+        difficulty=5,
+        duration_s=100.0,
+        kill=True,
+    )
+    build = PlayerBuild(
+        character_name=player_name,
+        server="Azralon",
+        class_name="Warlock",
+        spec_name="Demonology",
+        role="dps",
+        item_level=283.0,
+        talent_hash=None,
+        tier_pieces=None,
+    )
+    return PlayerLog(fight=fight, build=build, dps=10000.0, percentile=None, cast_timeline={})
+
+
+def test_fetch_many_propagates_rate_limit_budget_exceeded_after_saving_partial_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T1.7: unlike a per-ref failure, RateLimitBudgetExceeded is a global
+    condition — it must propagate out of fetch_many (so build-cohort can
+    exit 75), but whatever succeeded before it fired must still be saved.
+    """
+    fetcher, _transport, store = _make_fetcher(tmp_path, _default_responses())
+
+    def _fake_fetch(report_code: str, _fight_id: int, player: str) -> PlayerLog:
+        if player == "Bad":
+            raise RateLimitBudgetExceeded(
+                "orçamento excedido", points_remaining=10.0, reset_in_seconds=60.0
+            )
+        return _player_log_for(player, report_code)
+
+    monkeypatch.setattr(fetcher, "_fetch_from_api", _fake_fetch)
+
+    refs = [
+        LogRequest("CODE1", 1, "Good1"),
+        LogRequest("CODE2", 1, "Bad"),
+        LogRequest("CODE3", 1, "Good2"),
+    ]
+    with pytest.raises(RateLimitBudgetExceeded):
+        fetcher.fetch_many(refs, max_workers=1)
+
+    assert store.has_log("CODE1", 1, "Good1")
+    assert store.has_log("CODE3", 1, "Good2")
+    assert store.has_log("CODE2", 1, "Bad") is False
 
 
 def test_fetch_many_all_cache_hits_makes_zero_new_requests(tmp_path: Path) -> None:

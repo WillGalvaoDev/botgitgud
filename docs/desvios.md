@@ -313,3 +313,55 @@ de um projeto pessoal/comunidade pequena).
   inalterada; só a *fixture de teste* está limitada). O golden test da T1.6 (`test_new_pipeline_
   output.py`) passa a rodar contra 10 referências em vez de ~99 — suficiente para exercitar toda a
   lógica de perfil/elegibilidade/alinhamento sem inflar o repositório.
+
+## D-16 — `build-cohort` precisa de `--class`, que a especificação da T1.7 não lista
+
+- **Tarefa:** T1.7
+- **Documento diz:** `python -m botgitgud.cli build-cohort --encounter <E> --spec <S> --difficulty
+  <D> [--duration-bucket <B>]` — sem nenhuma flag de classe.
+- **Realidade:** `characterRankings` (e toda a lógica de coorte já construída em T0.9/T1.6) exige
+  **className e specName juntos** — `specName` isolado não desambigua entre classes que
+  compartilham nome de spec (ex.: "Frost" existe para Death Knight e Mage, ambos no allowlist de
+  25 specs suportadas). Sem `--class`, não há como montar a query nem o `CohortCriteria`.
+- **Ação tomada:** adicionada `--class` (obrigatória) ao subcomando, com `dest="klass"` (`class` é
+  palavra reservada em Python). Documentado no `--help` da própria flag.
+- **Impacto:** nenhum na metodologia. Apenas completa uma flag que a especificação esqueceu, pelo
+  mesmo padrão de todo outro argumento obrigatório de `characterRankings` já resolvido antes.
+
+## D-17 — "nunca baixa 100 logs de forma síncrona" pressupõe a fila da T1.8, que ainda não existe
+
+- **Tarefa:** T1.7
+- **Documento diz:** "Se o perfil não existir, o bot informa que a coorte está sendo construída e
+  enfileira o job — nunca baixa 100 logs de forma síncrona" (caminho interativo).
+- **Realidade:** "enfileira o job" pressupõe a fila persistente de jobs que só a **T1.8** constrói.
+  Na T1.7, não há fila para enfileirar nada ainda.
+- **Ação tomada:** `run_analysis` ganhou `allow_cold_build: bool = True`. O caminho Discord
+  (`bot/discord_bot.py`) chama com `allow_cold_build=False`: um cache miss levanta `CohortNotReady`
+  (nova exceção, `AnalysisError`), traduzida numa mensagem honesta ("ainda não temos uma coorte
+  pronta... rode build-cohort ou aguarde a fila automática") — sem baixar nada síncrono, exatamente
+  como o texto exige, mesmo sem uma fila real atrás da mensagem ainda. `cli.py`'s `analyze` (uma
+  ferramenta de debug, não o caminho multiusuário que a T1.8 protege) mantém `allow_cold_build=True`
+  por padrão, preservando a conveniência de rodar uma análise completa sem pré-construir nada.
+- **Impacto:** nenhum na metodologia. Quando a T1.8 construir a fila real, o `except CohortNotReady`
+  do Discord vira o gatilho natural para efetivamente enfileirar o job em vez de só avisar.
+
+## D-18 — `RateLimitBudgetExceeded` era engolido como falha pontual em dois lugares
+
+- **Tarefa:** T1.7
+- **Realidade:** a T1.7 exige que `build-cohort` detecte `RateLimitBudgetExceeded` e saia com
+  código 75 (`EX_TEMPFAIL`), "salvando o progresso parcial". Ao implementar isso, dois pontos já
+  existentes (T1.4 e T1.6) capturavam **qualquer** `ApiError` — incluindo `RateLimitBudgetExceeded`,
+  que é subclasse — como se fosse uma falha isolada de item/página, e simplesmente seguiam adiante:
+  `LogFetcher.fetch_many` (T1.4) tratava um orçamento esgotado como "essa referência falhou, tenta
+  a próxima" (e cada tentativa subsequente falharia de novo, silenciosamente); `fetch_ranking_
+  candidates` (T1.6) tratava como "essa página falhou, para de paginar", devolvendo os candidatos
+  parciais como se fosse um resultado normal. Em nenhum dos dois casos a condição — órçamento da
+  conta inteira esgotado, não um defeito de um item específico — chegava a se propagar para fora.
+- **Ação tomada:** ambos os pontos agora capturam `RateLimitBudgetExceeded` **antes** do `except
+  ApiError` genérico e a relançam. Em `fetch_many`, o progresso já obtido continua sendo persistido
+  antes de relançar (drena os futures já em voo, depois relança) — "salva o progresso parcial" fica
+  garantido na camada mais baixa, não só em `build-cohort`.
+- **Impacto:** nenhum na metodologia; corrige um bug de robustez real que só a implementação da
+  T1.7 expôs (nenhuma tarefa anterior precisava distinguir esgotamento de orçamento de uma falha
+  pontual). Testado com regressões dedicadas em `test_log_fetcher.py`, `test_rankings.py` e
+  `test_cohort_builder.py`.

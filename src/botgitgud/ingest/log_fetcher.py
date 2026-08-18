@@ -1,15 +1,8 @@
-"""T1.4 — cached log ingestion, the fix for achado 4.2 (the project's
-biggest architectural flaw): Fase 0's fetch_player_timeline_data() hit the
-live API on every call, even for reference players whose logs never
-change. LogFetcher checks the Store first; a finished fight's log is
-immutable forever (Store's own principle, T1.3), so a cache hit costs zero
-API points. Raises PlayerNotFound/FightNotFound instead of Fase 0's legacy
-None-returning pattern — fetch() always returns a PlayerLog or raises.
-JSON parsing itself lives in ingest/wcl_parsing.py (T1.6 split).
-
-Fields Fase 0 never resolved (talent_hash, tier_pieces, external_buffs,
-damage_by_ability, uptimes, resource_waste, active_time_pct, deaths,
-partition) default on PlayerLog/PlayerBuild/FightRef — T2.1/T2.2/T3.1/T1.7.
+"""T1.4 — cached log ingestion (achado 4.2): the Store is checked before
+any network call, since a finished fight's log is immutable (T1.3), so a
+cache hit costs zero API points. fetch() raises PlayerNotFound/
+FightNotFound rather than returning None. JSON parsing lives in
+ingest/wcl_parsing.py (T1.6 split).
 """
 
 from __future__ import annotations
@@ -24,7 +17,7 @@ import structlog
 
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound
+from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.store import Store
 from botgitgud.ingest.wcl_parsing import (
     extract_damage_total,
@@ -38,12 +31,10 @@ from botgitgud.wcl.queries import QUERY_PLAYER_EVENTS, QUERY_PLAYER_META, QUERY_
 
 log = structlog.get_logger(__name__)
 
-# Measured live against the real API (docs/schema_confirmado.md §2/§11):
-# every query costs ~2.0 points regardless of complexity. Used to estimate
-# api_points_spent from a counted number of queries, since WclClient's own
-# points_remaining is a periodically-cached snapshot (T0.3), not a live
-# running counter, and can't reliably produce an accurate before/after delta
-# for a batch that completes faster than its cache TTL.
+# Measured live (docs/schema_confirmado.md §2/§11): every query costs ~2.0
+# points regardless of complexity. Estimates api_points_spent from a query
+# count, since WclClient.points_remaining is a periodically-cached
+# snapshot (T0.3), not a reliable before/after delta for a fast batch.
 _POINTS_PER_QUERY = 2.0
 
 
@@ -76,11 +67,9 @@ class LogFetcher:
 
     def fetch_many(self, refs: Sequence[LogRequest], *, max_workers: int) -> list[PlayerLog]:
         """Best-effort: a ref that fails (PlayerNotFound/FightNotFound/
-        ApiError) is logged and skipped rather than aborting the whole
-        batch — a reference-cohort fetch expects some fraction of ranked
-        logs to 404 or error out, unlike fetch()'s single-ref call, which
-        still raises. Returned list preserves the relative order of `refs`
-        but may be shorter than it when some refs failed.
+        ApiError) is skipped rather than aborting the batch (some ranked
+        logs are expected to 404). RateLimitBudgetExceeded is different —
+        see below. Result preserves `refs` order, may be shorter.
         """
         start = time.monotonic()
         with self._query_count_lock:
@@ -102,6 +91,7 @@ class LogFetcher:
 
         fetched_logs: list[PlayerLog] = []
         failures = 0
+        budget_exceeded: RateLimitBudgetExceeded | None = None
         if to_fetch:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
@@ -114,6 +104,11 @@ class LogFetcher:
                     i = futures[future]
                     try:
                         player_log = future.result()
+                    except RateLimitBudgetExceeded as e:
+                        # Global, not per-item — re-raised below, never
+                        # swallowed as a per-ref failure (T1.7).
+                        budget_exceeded = budget_exceeded or e
+                        continue
                     except (PlayerNotFound, FightNotFound, ApiError) as e:
                         failures += 1
                         log.warning("log_fetcher.fetch_many_ref_failed", index=i, error=str(e))
@@ -121,8 +116,8 @@ class LogFetcher:
                     results[i] = player_log
                     fetched_logs.append(player_log)
 
-        # T1.4's own rule: no disk writes inside worker threads — persist
-        # here, on the calling thread, after every future has resolved.
+        # No disk writes inside worker threads (T1.4). Runs even on
+        # budget_exceeded (T1.7: "salva o progresso parcial").
         for player_log in fetched_logs:
             self._store.write_log(player_log)
 
@@ -135,9 +130,13 @@ class LogFetcher:
             cache_hits=cache_hits,
             cache_misses=len(fetched_logs),
             failures=failures,
+            budget_exceeded=budget_exceeded is not None,
             api_points_spent=queries_made * _POINTS_PER_QUERY,
             wall_time_s=round(wall_time_s, 3),
         )
+
+        if budget_exceeded is not None:
+            raise budget_exceeded
 
         return [results[i] for i in range(len(refs)) if i in results]
 

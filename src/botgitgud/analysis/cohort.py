@@ -25,6 +25,7 @@ Duration stops being a hard filter and becomes an adjustment covariate:
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 SANITY_BAND_PCT = 0.35
@@ -36,7 +37,30 @@ COHORT_MIN_WARN = 20
 COHORT_MAX = 100
 MAX_RANKING_PAGES = 10
 
+# T1.7: geometric duration buckets, 5% wide, so a persisted CohortProfile can
+# be reused across players whose kills land in the same relative band
+# ("Um jogador é servido pelo bucket que contém sua duração").
+DURATION_BUCKET_PCT = 0.05
+_BUCKET_RATIO = 1.0 + DURATION_BUCKET_PCT
+
 CohortSizeStatus = Literal["insufficient", "warn", "ok"]
+
+
+def duration_bucket_id(duration_s: float) -> int:
+    """A fixed, deterministic grid (not "nearest cluster of kills seen so
+    far") — any two durations within ~5% of each other almost always land
+    in the same bucket, and the same duration always maps to the same
+    bucket regardless of when/how it's computed.
+    """
+    if duration_s <= 0:
+        return 0
+    return math.floor(math.log(duration_s) / math.log(_BUCKET_RATIO))
+
+
+def duration_bucket_bounds(bucket_id: int) -> tuple[float, float]:
+    lo = _BUCKET_RATIO**bucket_id
+    hi = _BUCKET_RATIO ** (bucket_id + 1)
+    return lo, hi
 
 
 def within_sanity_band(candidate_duration_s: float, target_duration_s: float) -> bool:

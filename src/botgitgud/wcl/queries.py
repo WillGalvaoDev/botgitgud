@@ -52,10 +52,30 @@ query GetPercentile(
 """
 
 QUERY_RANKINGS_PAGE = """
-query GetRankingsCDs($encounterID: Int!, $className: String!, $specName: String!, $page: Int!) {
+query GetRankingsCDs(
+  $encounterID: Int!, $className: String!, $specName: String!, $page: Int!, $partition: Int!
+) {
   worldData {
     encounter(id: $encounterID) {
-      characterRankings(className: $className, specName: $specName, metric: dps, page: $page)
+      characterRankings(
+        className: $className, specName: $specName, metric: dps, page: $page, partition: $partition
+      )
+    }
+  }
+}
+"""
+
+# T1.7 (docs/schema_confirmado.md §11): the current partition must be passed
+# explicitly to characterRankings (§1.5 — never mix partitions in a cohort),
+# never hardcoded — it changes as new content patches ship.
+QUERY_ZONE_PARTITIONS = """
+query GetZonePartitions($encounterID: Int!) {
+  worldData {
+    encounter(id: $encounterID) {
+      zone {
+        id
+        partitions { id default }
+      }
     }
   }
 }

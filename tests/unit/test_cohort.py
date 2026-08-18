@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from botgitgud.analysis.cohort import (
     COHORT_MIN_HARD,
     COHORT_MIN_WARN,
     classify_cohort_size,
+    duration_bucket_bounds,
+    duration_bucket_id,
     usage_count_at_duration,
     usage_rate_per_minute,
     within_positional_band,
@@ -108,3 +112,43 @@ def test_no_lexical_metric_branching_in_wired_files() -> None:
         if '"hps"' in text or "healing" in text:
             offenders.append(path)
     assert offenders == []
+
+
+# -- T1.7: duration buckets -----------------------------------------------------
+
+
+def test_duration_bucket_id_is_deterministic() -> None:
+    assert duration_bucket_id(345.1) == duration_bucket_id(345.1)
+
+
+def test_durations_within_5pct_usually_share_a_bucket() -> None:
+    base = 100.0  # comfortably inside a bucket's interior, not near a boundary
+    assert duration_bucket_id(base) == duration_bucket_id(base * 1.02)
+
+
+def test_durations_a_bucket_apart_get_different_ids() -> None:
+    base = 100.0
+    assert duration_bucket_id(base) != duration_bucket_id(base * 1.20)
+
+
+def test_bucket_bounds_contain_every_duration_that_maps_to_that_bucket() -> None:
+    for duration_s in (10.0, 60.0, 300.0, 345.1, 900.0, 3600.0):
+        bucket_id = duration_bucket_id(duration_s)
+        lo, hi = duration_bucket_bounds(bucket_id)
+        assert lo <= duration_s < hi
+
+
+def test_bucket_bounds_are_contiguous_across_neighbors() -> None:
+    _lo, hi = duration_bucket_bounds(5)
+    next_lo, _next_hi = duration_bucket_bounds(6)
+    assert hi == next_lo
+
+
+def test_bucket_width_is_five_percent_of_its_lower_bound() -> None:
+    lo, hi = duration_bucket_bounds(10)
+    assert (hi - lo) / lo == pytest.approx(0.05)
+
+
+def test_zero_or_negative_duration_maps_to_bucket_zero() -> None:
+    assert duration_bucket_id(0.0) == 0
+    assert duration_bucket_id(-5.0) == 0

@@ -5,9 +5,14 @@ from typing import Any, cast
 import pytest
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, MAX_RANKING_PAGES
-from botgitgud.errors import InsufficientCohort
+from botgitgud.errors import DataError, InsufficientCohort, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogRequest
-from botgitgud.ingest.rankings import RankingCandidate, fetch_cohort_logs, fetch_ranking_candidates
+from botgitgud.ingest.rankings import (
+    RankingCandidate,
+    fetch_cohort_logs,
+    fetch_ranking_candidates,
+    get_current_partition,
+)
 
 
 def _ranking(
@@ -49,6 +54,7 @@ def _fetch(client: Any, **overrides: Any) -> list[RankingCandidate]:
         "encounter_id": 3179,
         "class_name": "Warlock",
         "spec_name": "Demonology",
+        "partition": 3,
         "target_duration_s": 300.0,
     }
     defaults.update(overrides)
@@ -112,6 +118,67 @@ def test_spec_name_left_alone_when_it_does_not_contain_class_name() -> None:
     client = _FakeClient([_page([_ranking(f"P{i}", 300.0) for i in range(8)], has_more=False)])
     _fetch(client, class_name="Hunter", spec_name="Beast Mastery")
     assert client.last_variables["specName"] == "Beast Mastery"
+
+
+def test_partition_is_passed_through_to_the_query() -> None:
+    client = _FakeClient([_page([_ranking(f"P{i}", 300.0) for i in range(8)], has_more=False)])
+    _fetch(client, partition=7)
+    assert client.last_variables["partition"] == 7
+
+
+def test_rate_limit_budget_exceeded_propagates_not_swallowed_as_page_failure() -> None:
+    """T1.7: unlike a transient page error, RateLimitBudgetExceeded must
+    propagate out (so build-cohort can exit 75), never be treated as
+    'this page failed, use what we have so far'.
+    """
+
+    class _BudgetExceededClient:
+        def query(self, _query: str, _variables: dict[str, Any], *, op_name: str) -> dict[str, Any]:
+            del op_name
+            raise RateLimitBudgetExceeded(
+                "orçamento excedido", points_remaining=10.0, reset_in_seconds=60.0
+            )
+
+    with pytest.raises(RateLimitBudgetExceeded):
+        _fetch(cast(Any, _BudgetExceededClient()))
+
+
+def test_target_duration_none_keeps_every_candidate_regardless_of_duration() -> None:
+    """T1.7's batch build-cohort mode: no sanity-band filter at all."""
+    rankings = [_ranking(f"P{i}", 300.0) for i in range(4)] + [
+        _ranking(f"Q{i}", 5000.0) for i in range(4)
+    ]
+    client = _FakeClient([_page(rankings, has_more=False)])
+    candidates = _fetch(client, target_duration_s=None)
+    assert len(candidates) == 8
+
+
+# -- get_current_partition -------------------------------------------------------
+
+
+def _zone_page(partitions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"data": {"worldData": {"encounter": {"zone": {"id": 46, "partitions": partitions}}}}}
+
+
+def test_get_current_partition_returns_the_default_one() -> None:
+    client = _FakeClient(
+        [
+            _zone_page(
+                [
+                    {"id": 1, "default": False},
+                    {"id": 3, "default": True},
+                    {"id": 4, "default": False},
+                ]
+            )
+        ]
+    )
+    assert get_current_partition(cast(Any, client), 3179) == 3
+
+
+def test_get_current_partition_raises_when_no_default_marked() -> None:
+    client = _FakeClient([_zone_page([{"id": 1, "default": False}])])
+    with pytest.raises(DataError):
+        get_current_partition(cast(Any, client), 3179)
 
 
 # -- fetch_cohort_logs -----------------------------------------------------------

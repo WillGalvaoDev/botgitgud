@@ -1,0 +1,51 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "229",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetZonePartitions($encounterID: Int!) {\n  worldData {\n    encounter(id: $encounterID) {\n      zone {\n        id\n        partitions { id default }\n      }\n    }\n  }\n}\n",
+    "variables": {
+      "encounterID": 3179
+    }
+  },
+  "response_json": {
+    "data": {
+      "worldData": {
+        "encounter": {
+          "zone": {
+            "id": 46,
+            "partitions": [
+              {
+                "default": false,
+                "id": 1
+              },
+              {
+                "default": false,
+                "id": 2
+              },
+              {
+                "default": true,
+                "id": 3
+              },
+              {
+                "default": false,
+                "id": 4
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -24,10 +24,10 @@ from botgitgud.analysis.cohort import (
     within_sanity_band,
 )
 from botgitgud.domain.models import PlayerLog
-from botgitgud.errors import ApiError, InsufficientCohort
+from botgitgud.errors import ApiError, DataError, InsufficientCohort, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
 from botgitgud.wcl.client import WclClient
-from botgitgud.wcl.queries import QUERY_RANKINGS_PAGE
+from botgitgud.wcl.queries import QUERY_RANKINGS_PAGE, QUERY_ZONE_PARTITIONS
 
 log = structlog.get_logger(__name__)
 
@@ -40,17 +40,50 @@ class RankingCandidate:
     duration_s: float
 
 
+def get_current_partition(client: WclClient, encounter_id: int) -> int:
+    """T1.7 (docs/schema_confirmado.md §11): resolves the live `default`
+    partition for the zone this encounter belongs to. Never hardcode a
+    partition number — it changes as new content patches ship (observed
+    live: the fixture zone's default moved from partition 4 to 3 between
+    T0.1 and T1.7).
+    """
+    res_json = client.query(
+        QUERY_ZONE_PARTITIONS, {"encounterID": encounter_id}, op_name="fetch_zone_partitions"
+    )
+    partitions = (
+        res_json.get("data", {})
+        .get("worldData", {})
+        .get("encounter", {})
+        .get("zone", {})
+        .get("partitions", [])
+    )
+    for p in partitions:
+        if p.get("default"):
+            return p["id"]
+    msg = f"nenhuma partition default encontrada para o encontro {encounter_id}"
+    raise DataError(msg)
+
+
 def fetch_ranking_candidates(
     client: WclClient,
     *,
     encounter_id: int,
     class_name: str,
     spec_name: str,
-    target_duration_s: float,
+    partition: int,
+    target_duration_s: float | None,
 ) -> list[RankingCandidate]:
-    """Pages through characterRankings, keeping only entries within the
+    """Pages through characterRankings for the given (current) partition.
+
+    When `target_duration_s` is given, keeps only entries within the
     sanity band (T0.8: ±35%, an adjustment covariate, not a hard "similar
-    kill" filter). Raises InsufficientCohort if too few survive.
+    kill" filter) — the normal per-analysis path. When None, keeps every
+    candidate found (up to COHORT_MAX) regardless of duration — used by
+    T1.7's batch `build-cohort` to discover every duration bucket present
+    in the live pool in one pass, instead of one sanity-band-filtered
+    fetch per bucket.
+
+    Raises InsufficientCohort if too few candidates survive overall.
     """
     clean_spec = (
         spec_name.replace(class_name, "").strip() if class_name in spec_name else spec_name.strip()
@@ -64,9 +97,14 @@ def fetch_ranking_candidates(
             "className": class_name.strip(),
             "specName": clean_spec,
             "page": page,
+            "partition": partition,
         }
         try:
             res_json = client.query(QUERY_RANKINGS_PAGE, variables, op_name="fetch_rankings_page")
+        except RateLimitBudgetExceeded:
+            # Global condition, not a per-page defect — never swallowed as
+            # "this page failed" (T1.7, same fix as LogFetcher.fetch_many).
+            raise
         except ApiError as e:
             log.warning("rankings.page_failed", page=page, error=str(e))
             break
@@ -83,7 +121,7 @@ def fetch_ranking_candidates(
 
         for r in rankings_list:
             dur_s = r.get("duration", 0) / 1000.0
-            if not within_sanity_band(dur_s, target_duration_s):
+            if target_duration_s is not None and not within_sanity_band(dur_s, target_duration_s):
                 continue
             rep = r.get("report", {})
             if rep.get("code") and rep.get("fightID") is not None:
@@ -101,10 +139,12 @@ def fetch_ranking_candidates(
         page += 1
 
     if classify_cohort_size(len(candidates)) == "insufficient":
-        msg = (
-            f"apenas {len(candidates)} logs de referência dentro da banda de "
-            f"±{int(SANITY_BAND_PCT * 100)}% de duração (mínimo: {COHORT_MIN_HARD})"
-        )
+        msg = f"apenas {len(candidates)} logs de referência encontrados (mínimo: {COHORT_MIN_HARD})"
+        if target_duration_s is not None:
+            msg = (
+                f"apenas {len(candidates)} logs de referência dentro da banda de "
+                f"±{int(SANITY_BAND_PCT * 100)}% de duração (mínimo: {COHORT_MIN_HARD})"
+            )
         raise InsufficientCohort(msg, n_members=len(candidates), minimum_required=COHORT_MIN_HARD)
 
     return candidates[:COHORT_MAX]

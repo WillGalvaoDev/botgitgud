@@ -37,7 +37,7 @@ from botgitgud.domain.specs import SpecId, classify_spec
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import BotGitGudError
 from botgitgud.ingest.log_fetcher import LogFetcher
-from botgitgud.ingest.rankings import RankingCandidate, fetch_cohort_logs
+from botgitgud.ingest.rankings import RankingCandidate, fetch_cohort_logs, get_current_partition
 from botgitgud.ingest.store import Store
 from botgitgud.wcl.client import API_URL, WclClient, WclClientConfig
 from botgitgud.wcl.queries import QUERY_RANKINGS_PAGE
@@ -141,6 +141,7 @@ def _fetch_and_truncate_rankings(
     encounter_id: int,
     class_name: str,
     spec_name: str,
+    partition: int,
     target_duration_s: float,
 ) -> list[RankingCandidate]:
     """Makes the real page-1 characterRankings call (which RecordingTransport
@@ -154,6 +155,7 @@ def _fetch_and_truncate_rankings(
         "className": class_name,
         "specName": spec_name,
         "page": 1,
+        "partition": partition,
     }
     res_json = client.query(QUERY_RANKINGS_PAGE, variables, op_name="fetch_rankings_page")
     rankings_list = (
@@ -255,11 +257,13 @@ def _record_new_pipeline() -> int:
             print(f"ERRO: personagem de fixture fora de escopo ({spec_id})")
             return 1
 
+        partition = get_current_partition(client, player_log.fight.encounter_id)
         candidates = _fetch_and_truncate_rankings(
             client,
             encounter_id=player_log.fight.encounter_id,
             class_name=player_log.build.class_name,
             spec_name=player_log.build.spec_name,
+            partition=partition,
             target_duration_s=player_log.fight.duration_s,
         )
         reference_logs = fetch_cohort_logs(fetcher, candidates, max_workers=5)

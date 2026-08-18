@@ -23,7 +23,7 @@ from test_log_fetcher import _events_response, _meta_response, _percentile_respo
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.config import Settings
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import InsufficientCohort, PlayerNotFound, ScopeRejected
+from botgitgud.errors import CohortNotReady, InsufficientCohort, PlayerNotFound, ScopeRejected
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
 from botgitgud.wcl.client import WclClient, WclClientConfig
@@ -66,6 +66,24 @@ def _rankings_response(n: int, *, has_more: bool = False) -> dict[str, Any]:
     }
 
 
+def _zone_partitions_response(*, default_partition: int = 3) -> dict[str, Any]:
+    return {
+        "data": {
+            "worldData": {
+                "encounter": {
+                    "zone": {
+                        "id": 46,
+                        "partitions": [
+                            {"id": 1, "default": False},
+                            {"id": default_partition, "default": True},
+                        ],
+                    }
+                }
+            }
+        }
+    }
+
+
 class _DispatchTransport(httpx.BaseTransport):
     def __init__(self, responses: dict[str, list[dict[str, Any]] | dict[str, Any]]) -> None:
         self._responses = responses
@@ -87,6 +105,8 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "percentile"
         elif "GetRankingsCDs" in query:
             op = "rankings"
+        elif "GetZonePartitions" in query:
+            op = "partition"
         else:
             pytest.fail(f"query GraphQL não reconhecida: {query[:80]}")
 
@@ -159,6 +179,7 @@ def _happy_path_responses(
         "events": events,
         "percentile": percentile,
         "rankings": [_rankings_response(N_REFS)],
+        "partition": _zone_partitions_response(),  # dict, not list: reusable across calls
     }
 
 
@@ -176,6 +197,61 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.header.player_dps == pytest.approx(10000.0)  # 1_000_000 / 100s
     assert len(result.comparisons) >= 1
     assert any(c.spell.spell_id == 104316 for c in result.comparisons)
+    assert result.manifest.cohort_id
+    assert result.manifest.wcl_partition == 3
+
+
+def test_cold_build_persists_a_cohort_profile_for_reuse(tmp_path: Path) -> None:
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    profile = deps.store.read_profile(result.manifest.cohort_id)
+    assert profile is not None
+    assert profile.n_members == N_REFS
+
+
+def test_second_call_with_a_warm_profile_makes_zero_ranking_queries(tmp_path: Path) -> None:
+    """T1.7's own acceptance criterion, in spirit: once a CohortProfile is
+    cached, a second analysis for the same criteria never re-queries
+    characterRankings — the warm path is fetch-the-user's-log +
+    lookup-a-profile, not a fresh 100-log fetch.
+    """
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+    run_analysis(_req(), deps)  # cold build, populates the cache
+    assert "rankings" in transport.calls
+    transport.calls.clear()
+
+    result = run_analysis(_req(), deps)
+
+    assert "rankings" not in transport.calls
+    assert result.header.reference_n == N_REFS
+
+
+def test_cohort_not_ready_when_cold_build_disallowed_and_nothing_cached(tmp_path: Path) -> None:
+    responses = _happy_path_responses()
+    del responses["rankings"]  # must never be needed — allow_cold_build=False
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    with pytest.raises(CohortNotReady):
+        run_analysis(_req(), deps, allow_cold_build=False)
+
+    assert "rankings" not in transport.calls
+
+
+def test_allow_cold_build_false_still_uses_an_existing_warm_profile(tmp_path: Path) -> None:
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+    run_analysis(_req(), deps)  # cold build (allowed), populates the cache
+    transport.calls.clear()
+
+    result = run_analysis(_req(), deps, allow_cold_build=False)
+
+    assert "rankings" not in transport.calls
+    assert result.header.reference_n == N_REFS
 
 
 def test_scope_rejection_triggers_zero_ranking_queries(tmp_path: Path) -> None:

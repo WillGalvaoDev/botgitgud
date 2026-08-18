@@ -12,7 +12,8 @@ BotGitGudError
 │   ├── FightNotFound
 │   └── InsufficientCohort
 └── AnalysisError
-    └── ScopeRejected
+    ├── ScopeRejected
+    └── CohortNotReady
 """
 
 from __future__ import annotations
@@ -82,4 +83,11 @@ class ScopeRejected(AnalysisError):
     """T1.6: raised by analysis/pipeline.py's scope gate (T0.9, §1.4) for a
     tank/healer/Augmentation/unrecognized spec — str(e) is already the
     user-facing message from domain.specs.rejection_message().
+    """
+
+
+class CohortNotReady(AnalysisError):
+    """T1.7: raised by run_analysis(..., allow_cold_build=False) when no
+    CohortProfile exists yet for the request's criteria — the interactive
+    (Discord) path must never build a 100-log cohort synchronously.
     """

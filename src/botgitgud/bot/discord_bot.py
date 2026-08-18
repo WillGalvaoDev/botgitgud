@@ -9,6 +9,7 @@ one place allowed to do that broad a translation (§1.3).
 from __future__ import annotations
 
 import asyncio
+import functools
 import re
 
 import discord
@@ -18,6 +19,7 @@ from discord.ext import commands
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.errors import (
     ApiError,
+    CohortNotReady,
     FightNotFound,
     InsufficientCohort,
     PlayerNotFound,
@@ -72,8 +74,11 @@ def build_bot(deps: Deps) -> commands.Bot:
 
         req = AnalysisRequest(report_code=code, fight_id=fight_id, character_name=char_name)
         loop = asyncio.get_running_loop()
+        # T1.7: allow_cold_build=False — the interactive path never builds
+        # a 100-log cohort synchronously; a cache miss becomes CohortNotReady.
+        call = functools.partial(run_analysis, req, deps, allow_cold_build=False)
         try:
-            result = await loop.run_in_executor(None, run_analysis, req, deps)
+            result = await loop.run_in_executor(None, call)
         except (PlayerNotFound, FightNotFound):
             await ctx.send(
                 f"❌ Jogador `{char_name}` não foi encontrado neste fight "
@@ -82,6 +87,13 @@ def build_bot(deps: Deps) -> commands.Bot:
             return
         except ScopeRejected as e:
             await ctx.send(f"❌ {e}")
+            return
+        except CohortNotReady:
+            await ctx.send(
+                "🔧 Ainda não temos uma coorte de referência pronta para esse encontro/spec/"
+                "duração de kill. Rode `build-cohort` (ou aguarde a fila automática) e tente "
+                "novamente em breve."
+            )
             return
         except InsufficientCohort as e:
             await ctx.send(
@@ -95,7 +107,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
             return
 
-        report_text = render_report(result.header, result.comparisons)
+        report_text = render_report(result.header, result.comparisons, result.manifest)
         chunk_max = deps.settings.discord_chunk_max_len
         for chunk in chunk_report_for_discord(report_text, max_len=chunk_max):
             await ctx.send(f"```markdown\n{chunk}\n```")
