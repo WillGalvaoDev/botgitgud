@@ -41,6 +41,7 @@ from botgitgud.analysis.cohort import (
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
+from botgitgud.analysis.talent_cluster import BuildDivergence, analyze_build_divergence
 from botgitgud.config import Settings
 from botgitgud.domain.models import CohortCriteria, RunManifest
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
@@ -81,6 +82,7 @@ class AnalysisResult:
     header: ReportHeader
     comparisons: tuple[SpellComparison, ...]
     manifest: RunManifest
+    build_divergence: BuildDivergence | None = None
 
 
 def run_analysis(
@@ -151,6 +153,11 @@ def run_analysis(
         )
         raise InsufficientCohort(msg, n_members=len(matched_logs), minimum_required=COHORT_MIN_HARD)
 
+    # T2.2: clustered against the SAME already-covariate-matched cohort
+    # match_cohort just produced — a minority build finding must precede
+    # any timing analysis below.
+    build_divergence = analyze_build_divergence(player_log, matched_logs)
+
     profile, num_positional = build_cd_reference_profile(matched_logs, player_log.fight.duration_s)
     durations = [rl.fight.duration_s for rl in matched_logs]
     dps_values = [rl.dps for rl in matched_logs if rl.dps is not None]
@@ -203,4 +210,9 @@ def run_analysis(
     )
     deps.store.write_run(manifest)
 
-    return AnalysisResult(header=header, comparisons=tuple(comparisons), manifest=manifest)
+    return AnalysisResult(
+        header=header,
+        comparisons=tuple(comparisons),
+        manifest=manifest,
+        build_divergence=build_divergence,
+    )

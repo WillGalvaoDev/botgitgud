@@ -29,6 +29,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
     )
     uptimes_json = json.dumps({str(k): v for k, v in log.uptimes.items()})
     resource_waste_json = json.dumps(dict(log.resource_waste))
+    talent_pairs_json = json.dumps([list(p) for p in sorted(build.talent_pairs)])
 
     table = pa.table(
         {
@@ -58,6 +59,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
             "damage_by_ability_json": [damage_by_ability_json],
             "uptimes_json": [uptimes_json],
             "resource_waste_json": [resource_waste_json],
+            "talent_pairs_json": [talent_pairs_json],
         }
     )
     pq.write_table(table, path)
@@ -87,6 +89,9 @@ def read_parquet_log(path: Path) -> PlayerLog:
         tier_pieces=row["tier_pieces"],
         external_buffs=frozenset(row["external_buffs"] or []),
         has_augmentation=row.get("has_augmentation", False),
+        talent_pairs=frozenset(
+            (p[0], p[1]) for p in json.loads(row.get("talent_pairs_json") or "[]")
+        ),
     )
     cast_timeline = {int(k): tuple(v) for k, v in json.loads(row["cast_timeline_json"]).items()}
     damage_by_ability = {

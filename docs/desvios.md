@@ -470,6 +470,13 @@ de um projeto pessoal/comunidade pequena).
   ordem `tier_pieces → external_buffs → item_level → talent_cluster → has_augmentation →
   duração`, com `talent_cluster` no meio). Todo relatório até a T2.2 mostra o aviso genérico
   "talentos: mesma build não pareado" — esperado e documentado, não um bug.
+- **Resolvido pela T2.2:** `analysis/talent_cluster.py`'s `jaccard_similarity`/
+  `JACCARD_THRESHOLD` (0.85) agora alimentam um `_same_talent_cluster(candidate, target)` real em
+  `cohort_match.py` — pareamento par-a-par contra o alvo, na mesma forma de
+  `item_level`/`tier_pieces` (não o clustering completo da coorte, que é uma preocupação separada
+  do achado "BUILD DIVERGENTE"). `talent_cluster` saiu de `relaxed` (fixo, D-24) e entrou em
+  `_ALL_COVARIATES` como qualquer outra covariável — pode aparecer em `matched` ou `relaxed`
+  dependendo dos dados reais.
 
 ## D-25 — Cache de coorte agregada (T1.7) incompatível com matching por jogador (T2.1)
 
@@ -517,3 +524,27 @@ de um projeto pessoal/comunidade pequena).
   cassetes legados também, e o pool ao vivo cresceu desde a última gravação — deriva de dados
   ao vivo já prevista pela própria D-15, não uma mudança de comportamento do código legado (que
   segue intocado).
+
+## D-26 — Não há resolução de nome para os nós de talento da nova árvore
+
+- **Tarefa:** T2.2
+- **Documento diz:** o achado "BUILD DIVERGENTE" deve citar os talentos que distinguem a build do
+  jogador da build dominante por nome (ex.: "<talento A> em vez de <talento B>").
+- **Realidade (verificado ao vivo antes de implementar):** `combatantInfo.talentTree[].id` **não**
+  resolve via `gameData.ability(id)` — testado ao vivo com IDs reais de `talentTree` (91425,
+  91430): ambos retornam `null`, enquanto um spell ID genuíno (104316, Call Dreadstalkers) resolve
+  normalmente. Testado também `gameData.__type("GameData").fields` — não há campo `talent` nem
+  equivalente. Do lado da Blizzard, `/data/wow/talent/{id}` e `/data/wow/spell-tree-node/{id}`
+  retornam 404 ao vivo para o mesmo ID. Não existe nenhum catálogo de nomes de talento neste
+  projeto (diferente de `SpellCatalog`, que resolve spell IDs via WCL castsTable + fallback
+  Blizzard) — construir um do zero exigiria descobrir um endpoint que não foi localizado nesta
+  sessão, escopo bem além do que a T2.2 pede (clustering).
+- **Ação tomada:** as diferenças de talento são exibidas por `(nodeID, rank)` em vez de nome —
+  `report/build_divergence_text.py`'s `_render_talent_difference` produz
+  `"nó 71918 (dominante: rank 2 / você: rank 1)"`. `analysis/talent_cluster.py`'s
+  `TalentDifference` carrega `node_id`/`dominant_rank`/`player_rank` (nunca um nome), documentado
+  no docstring do módulo para que a ausência de nomes não pareça um bug ao ler o código depois.
+- **Impacto:** o achado continua acionável (o jogador consegue localizar o nó pela posição na
+  árvore no jogo), só menos legível do que o texto de exemplo do documento. Se a resolução de
+  nomes se tornar valiosa, uma tarefa futura deve investigar o endpoint correto (não encontrado
+  aqui) antes de construir um catálogo dedicado.

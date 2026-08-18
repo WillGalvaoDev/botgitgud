@@ -27,7 +27,9 @@ from dataclasses import dataclass
 from botgitgud.analysis.alignment import AlignmentKind
 from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
+from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
+from botgitgud.report.build_divergence_text import render_build_divergence
 
 _GREEN_THRESHOLD_S = 10.0
 _YELLOW_THRESHOLD_S = 25.0
@@ -205,8 +207,13 @@ def render_report(
     header: ReportHeader,
     comparisons: Sequence[SpellComparison],
     manifest: RunManifest | None = None,
+    build_divergence: BuildDivergence | None = None,
 ) -> str:
-    lines = _render_header(header)
+    lines: list[str] = []
+    if build_divergence is not None:
+        lines.extend(render_build_divergence(build_divergence))
+        lines.append("")
+    lines.extend(_render_header(header))
 
     if not comparisons:
         lines.append("")

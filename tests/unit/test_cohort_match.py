@@ -3,6 +3,9 @@ from __future__ import annotations
 from botgitgud.analysis.cohort_match import DEGRADATION_ORDER, match_cohort
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 
+_DEFAULT_TALENTS: frozenset[tuple[int, int]] = frozenset({(1, 1), (2, 1), (3, 2)})
+_OTHER_TALENTS: frozenset[tuple[int, int]] = frozenset({(9, 1), (10, 2), (11, 1)})
+
 
 def _log(
     *,
@@ -11,6 +14,7 @@ def _log(
     tier_pieces: int | None = 4,
     has_augmentation: bool = False,
     external_buffs: frozenset[int] = frozenset(),
+    talent_pairs: frozenset[tuple[int, int]] = _DEFAULT_TALENTS,
     name: str = "Ref",
 ) -> PlayerLog:
     fight = FightRef(
@@ -33,6 +37,7 @@ def _log(
         tier_pieces=tier_pieces,
         external_buffs=external_buffs,
         has_augmentation=has_augmentation,
+        talent_pairs=talent_pairs,
     )
     return PlayerLog(fight=fight, build=build, dps=100000.0, percentile=50.0, cast_timeline={})
 
@@ -52,9 +57,10 @@ def test_strict_match_when_everyone_qualifies() -> None:
 
     assert len(filtered) == 10
     assert report.n_members == 10
-    assert report.relaxed == ("talent_cluster",)  # D-24: always pre-relaxed
+    assert report.relaxed == ()
     assert "tier_pieces" in report.matched
     assert "item_level" in report.matched
+    assert "talent_cluster" in report.matched
     assert "has_augmentation" in report.matched
     assert "duration±7%" in report.matched
 
@@ -135,13 +141,39 @@ def test_external_buffs_requires_exact_set_equality() -> None:
     assert "external_buffs" in report.matched
 
 
-def test_talent_cluster_always_starts_relaxed() -> None:
-    """D-24: no clustering exists yet (T2.2's job), so talent_cluster is
-    never attempted — it's relaxed from the very first filter pass.
+def test_talent_cluster_keeps_only_jaccard_similar_builds_while_n_is_sufficient() -> None:
+    """T2.2 (resolves D-24): a candidate whose build is Jaccard-dissimilar
+    to the target's is excluded while the matching build alone already
+    clears min_n.
     """
-    _filtered, report = match_cohort(_target(), [_log() for _ in range(20)], min_n=8)
+    same_build = [_log(talent_pairs=_DEFAULT_TALENTS) for _ in range(10)]
+    other_build = [_log(talent_pairs=_OTHER_TALENTS) for _ in range(10)]
+    filtered, report = match_cohort(_target(), same_build + other_build, min_n=8)
+
+    assert len(filtered) == 10
+    assert all(c.build.talent_pairs == _DEFAULT_TALENTS for c in filtered)
+    assert "talent_cluster" in report.matched
+
+
+def test_talent_cluster_relaxed_when_needed_to_reach_min_n() -> None:
+    same_build = [_log(talent_pairs=_DEFAULT_TALENTS) for _ in range(3)]
+    other_build = [_log(talent_pairs=_OTHER_TALENTS) for _ in range(7)]
+    filtered, report = match_cohort(_target(), same_build + other_build, min_n=8)
+
+    assert len(filtered) == 10
     assert "talent_cluster" in report.relaxed
-    assert "talent_cluster" not in report.matched
+
+
+def test_talent_cluster_never_matches_when_target_has_no_talent_data() -> None:
+    """An empty target.build.talent_pairs (no combatantInfo) can never
+    strictly match — jaccard_similarity treats "no data" as unknown, not
+    as "identical to everyone" — so the covariate is always relaxed.
+    """
+    target = _log(talent_pairs=frozenset(), name="Target")
+    candidates = [_log(talent_pairs=_DEFAULT_TALENTS) for _ in range(10)]
+    _filtered, report = match_cohort(target, candidates, min_n=8)
+
+    assert "talent_cluster" in report.relaxed
 
 
 def test_missing_item_level_never_matches_that_covariate() -> None:

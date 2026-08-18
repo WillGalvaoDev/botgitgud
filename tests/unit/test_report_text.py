@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from botgitgud.analysis.comparison import compare_spell_usage
+from botgitgud.analysis.talent_cluster import BuildDivergence, TalentDifference
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
@@ -125,6 +126,59 @@ def test_no_warning_banner_when_absent() -> None:
     header = _header(cohort_warnings=())
     text = render_report(header, [])
     assert "⚠️" not in text
+
+
+# -- T2.2: BUILD DIVERGENTE finding ----------------------------------------------
+
+
+def _divergence(**overrides: object) -> BuildDivergence:
+    defaults: dict[str, object] = {
+        "player_cluster_n": 2,
+        "total_n": 34,
+        "dominant_cluster_n": 32,
+        "dominant_median_dps": 1_240_000.0,
+        "player_median_dps": 1_090_000.0,
+        "differences": (TalentDifference(node_id=71918, dominant_rank=2, player_rank=1),),
+    }
+    defaults.update(overrides)
+    return BuildDivergence(**defaults)  # type: ignore[arg-type]
+
+
+def test_build_divergence_opens_the_report_before_the_header() -> None:
+    text = render_report(_header(), [], build_divergence=_divergence())
+    assert text.index("BUILD DIVERGENTE") < text.index("GITGUD MAJOR CD ANALYSIS")
+
+
+def test_build_divergence_shows_player_and_dominant_shares() -> None:
+    text = render_report(_header(), [], build_divergence=_divergence())
+    assert "Sua build aparece em 6% dos top parses (2/34 logs)." in text
+    assert "A build dominante (94%, 32/34)" in text
+
+
+def test_build_divergence_shows_dps_delta_and_call_to_action() -> None:
+    text = render_report(_header(), [], build_divergence=_divergence())
+    assert "DPS mediano da build dominante: 1,240,000 vs 1,090,000 na sua build" in text
+    assert "Δ +13.8%" in text
+    assert "⚠️ Antes de otimizar rotação, avalie a troca de build." in text
+
+
+def test_build_divergence_shows_talent_differences_by_node_id() -> None:
+    """D-26: no talent name catalog exists — shown by nodeID/rank."""
+    text = render_report(_header(), [], build_divergence=_divergence())
+    assert "nó 71918 (dominante: rank 2 / você: rank 1)" in text
+
+
+def test_build_divergence_caps_shown_differences_and_notes_the_remainder() -> None:
+    many_diffs = tuple(
+        TalentDifference(node_id=i, dominant_rank=1, player_rank=2) for i in range(8)
+    )
+    text = render_report(_header(), [], build_divergence=_divergence(differences=many_diffs))
+    assert "+3 mais" in text
+
+
+def test_no_build_divergence_block_when_none() -> None:
+    text = render_report(_header(), [], build_divergence=None)
+    assert "BUILD DIVERGENTE" not in text
 
 
 # -- T2.1: matched/relaxed covariate declaration --------------------------------

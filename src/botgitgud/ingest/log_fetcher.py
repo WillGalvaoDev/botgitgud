@@ -218,6 +218,7 @@ class LogFetcher:
             tier_pieces=match.tier_pieces,
             external_buffs=external_buffs,
             has_augmentation=has_augmentation,
+            talent_pairs=match.talent_pairs,
         )
         return PlayerLog(
             fight=fight,

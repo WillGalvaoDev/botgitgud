@@ -43,6 +43,7 @@ class PlayerBuild:
     tier_pieces: int | None
     external_buffs: frozenset[int] = frozenset()  # spell_ids of received external buffs (T2.1)
     has_augmentation: bool = False  # an Augmentation Evoker buffed this player (T2.1)
+    talent_pairs: frozenset[tuple[int, int]] = frozenset()  # (nodeID, rank) set (T2.2)
 
 
 @dataclass(frozen=True, slots=True)

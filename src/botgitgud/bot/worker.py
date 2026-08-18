@@ -71,7 +71,9 @@ def _run_analyze(job: Job, deps: Deps) -> str:
     # (unlike the interactive path, which never builds cold) — allowed to
     # do the full cohort fetch if the fast warm-profile lookup missed.
     result = run_analysis(req, deps, allow_cold_build=True)
-    return render_report(result.header, result.comparisons, result.manifest)
+    return render_report(
+        result.header, result.comparisons, result.manifest, result.build_divergence
+    )
 
 
 def _run_build_cohort(job: Job, deps: Deps) -> str:

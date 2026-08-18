@@ -28,22 +28,34 @@ class PlayerMatch:
     item_level: float | None
     talent_hash: str | None
     tier_pieces: int | None
+    talent_pairs: frozenset[tuple[int, int]] = frozenset()
 
 
-def compute_talent_hash(talent_tree: list[dict[str, Any]]) -> str | None:
-    """T2.2's own build-identity hash (docs/implementacao.md T2.2 step 1):
-    sha256 of the sorted (nodeID, rank) set from combatantInfo.talentTree
-    (docs/schema_confirmado.md §4 — combatantInfo.talents comes back
-    empty; the real loadout is in talentTree).
+def extract_talent_pairs(talent_tree: list[dict[str, Any]]) -> frozenset[tuple[int, int]]:
+    """T2.2 step 1 (docs/implementacao.md T2.2): the raw (nodeID, rank) set
+    from combatantInfo.talentTree (docs/schema_confirmado.md §4 —
+    combatantInfo.talents comes back empty; the real loadout is in
+    talentTree) — the input to Jaccard clustering. Unlike
+    compute_talent_hash, malformed input yields an empty frozenset, never
+    None: a set (even empty) is always a valid Jaccard operand.
     """
-    pairs = sorted(
+    return frozenset(
         (int(t["nodeID"]), int(t["rank"]))
         for t in talent_tree
         if isinstance(t, dict) and "nodeID" in t and "rank" in t
     )
+
+
+def compute_talent_hash(talent_tree: list[dict[str, Any]]) -> str | None:
+    """A deterministic build-identity hash of extract_talent_pairs' set —
+    cheap equality/dedup key. None (not a hash of "[]") when the set is
+    empty, so "no combatantInfo" is never confused with a real build that
+    happens to hash the same as another.
+    """
+    pairs = extract_talent_pairs(talent_tree)
     if not pairs:
         return None
-    payload = json.dumps(pairs, separators=(",", ":"))
+    payload = json.dumps(sorted(pairs), separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -91,8 +103,11 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                 combatant_info = p.get("combatantInfo")
                 talent_hash = None
                 tier_pieces = None
+                talent_pairs: frozenset[tuple[int, int]] = frozenset()
                 if isinstance(combatant_info, dict):
-                    talent_hash = compute_talent_hash(combatant_info.get("talentTree") or [])
+                    talent_tree = combatant_info.get("talentTree") or []
+                    talent_hash = compute_talent_hash(talent_tree)
+                    talent_pairs = extract_talent_pairs(talent_tree)
                     tier_pieces = count_tier_pieces(combatant_info.get("gear") or [])
                 return PlayerMatch(
                     player_id=p["id"],
@@ -104,6 +119,7 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                     item_level=p.get("maxItemLevel"),
                     talent_hash=talent_hash,
                     tier_pieces=tier_pieces,
+                    talent_pairs=talent_pairs,
                 )
     return None
 

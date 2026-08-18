@@ -162,10 +162,26 @@ def _build_deps(
     return Deps(client=client, fetcher=fetcher, store=store, catalog=catalog, settings=settings)
 
 
+# T2.2: shared across every fixture player in _happy_path_responses so
+# tier_pieces (4, matching the wider test suite's convention) and
+# talent_cluster strictly match by default — a "happy path" fixture where
+# every covariate matches on the strict pass, same intent as item_level's
+# shared default (283.0).
+_SHARED_COMBATANT_INFO: dict[str, Any] = {
+    "talentTree": [{"id": 1, "rank": 1, "nodeID": 100}, {"id": 2, "rank": 1, "nodeID": 101}],
+    "gear": [{"slot": i, "setID": 1989} for i in range(4)]
+    + [{"slot": i, "setID": None} for i in range(4, 16)],
+}
+
+
 def _happy_path_responses(
     *, class_name: str = "Warlock", spec_name: str = "Demonology"
 ) -> dict[str, Any]:
-    meta = [_meta_response(class_name=class_name, spec_name=spec_name)]
+    meta = [
+        _meta_response(
+            class_name=class_name, spec_name=spec_name, combatant_info=_SHARED_COMBATANT_INFO
+        )
+    ]
     primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
     events = [_events_response([primary_cast])]
     percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
@@ -178,6 +194,7 @@ def _happy_path_responses(
                 class_name=class_name,
                 spec_name=spec_name,
                 damage_total=900_000.0,
+                combatant_info=_SHARED_COMBATANT_INFO,
             )
         )
         events.append(
@@ -355,6 +372,93 @@ def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(tmp_path
         "⚠️ Buffs de suporte não pareados — parte do gap de dano por cast "
         "pode não ser controlável por você." in text
     )
+
+
+def test_minority_build_player_gets_a_build_divergence_finding_end_to_end(tmp_path: Path) -> None:
+    """T2.2 acceptance: a player in a minority talent cluster gets the
+    BUILD DIVERGENTE finding, and it opens the rendered report before any
+    timing analysis.
+    """
+    dominant_talents: dict[str, Any] = {
+        "talentTree": [{"id": 1, "rank": 1, "nodeID": 100}],
+        "gear": [],
+    }
+    minority_talents: dict[str, Any] = {
+        "talentTree": [{"id": 2, "rank": 2, "nodeID": 200}],
+        "gear": [],
+    }
+    n_dominant = 9
+    n_minority_cohort = 1  # + the target itself -> minority cluster of 2
+
+    meta = [
+        _meta_response(
+            class_name="Warlock", spec_name="Demonology", combatant_info=minority_talents
+        )
+    ]
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+    buffs = [_buffs_response()]
+    rankings_entries = []
+
+    total = n_dominant + n_minority_cohort
+    for i in range(total):
+        code = f"REFCODE{i:09d}"
+        rankings_entries.append(
+            {"name": f"Ref{i}", "duration": 100_000, "report": {"code": code, "fightID": 1}}
+        )
+        is_minority = i >= n_dominant
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                damage_total=900_000.0,
+                combatant_info=minority_talents if is_minority else dominant_talents,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, code, 1))
+        buffs.append(_buffs_response())
+
+    responses = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "buffs": buffs,
+        "rankings": [
+            {
+                "data": {
+                    "worldData": {
+                        "encounter": {
+                            "characterRankings": {
+                                "rankings": rankings_entries,
+                                "hasMorePages": False,
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "partition": _zone_partitions_response(),
+    }
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.build_divergence is not None
+    assert result.build_divergence.player_cluster_n == 2
+    assert result.build_divergence.dominant_cluster_n == n_dominant
+    text = render_report(
+        result.header, result.comparisons, result.manifest, result.build_divergence
+    )
+    assert text.index("BUILD DIVERGENTE") < text.index("GITGUD MAJOR CD ANALYSIS")
 
 
 def test_cold_build_persists_a_candidate_pool_for_reuse(tmp_path: Path) -> None:

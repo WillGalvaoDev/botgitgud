@@ -7,9 +7,15 @@ here) — this module only filters the ALREADY-fetched candidate PlayerLogs
 on the remaining covariates: duration_s, item_level, tier_pieces,
 has_augmentation, external_buffs, talent_cluster.
 
-docs/desvios.md D-24: `talent_cluster` needs T2.2's Jaccard clustering,
-which doesn't exist yet — it's always pre-relaxed (never attempted) until
-T2.2 wires real cluster assignment in here.
+docs/desvios.md D-24 (resolved by T2.2): `talent_cluster` now uses
+analysis/talent_cluster.py's Jaccard similarity — a candidate matches
+"strictly" when its build is >= JACCARD_THRESHOLD similar to the target's,
+same pairwise-to-target shape as item_level/tier_pieces. This is
+deliberately NOT a full cohort-wide clustering call (analysis/
+talent_cluster.py's cluster_builds/analyze_build_divergence) — matching
+only needs "close enough to the target," while the report-level "BUILD
+DIVERGENTE" finding needs the full cohort clustered together, a separate
+concern handled in analysis/talent_cluster.py itself.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from botgitgud.analysis.talent_cluster import JACCARD_THRESHOLD, jaccard_similarity
 from botgitgud.domain.models import PlayerLog
 
 DEGRADATION_ORDER: tuple[str, ...] = (
@@ -33,7 +40,13 @@ TIER_PIECES_BAND = 1
 DURATION_BANDS_PCT: tuple[float, ...] = (0.07, 0.12, 0.20)
 DURATION_FLOOR_S = 15.0
 
-_ALL_COVARIATES = ("tier_pieces", "external_buffs", "item_level", "has_augmentation")
+_ALL_COVARIATES = (
+    "tier_pieces",
+    "external_buffs",
+    "item_level",
+    "talent_cluster",
+    "has_augmentation",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +73,14 @@ def _within_tier_pieces_band(candidate: int | None, target: int | None) -> bool:
     return abs(candidate - target) <= TIER_PIECES_BAND
 
 
+def _same_talent_cluster(
+    candidate: frozenset[tuple[int, int]], target: frozenset[tuple[int, int]]
+) -> bool:
+    if not candidate or not target:
+        return False
+    return jaccard_similarity(candidate, target) >= JACCARD_THRESHOLD
+
+
 def match_cohort(
     target: PlayerLog, candidates: Sequence[PlayerLog], *, min_n: int
 ) -> tuple[list[PlayerLog], MatchReport]:
@@ -75,7 +96,7 @@ def match_cohort(
     cohort.py's classify_cohort_size), same as the pre-T2.1 pipeline.
     """
     active: set[str] = set(_ALL_COVARIATES)
-    relaxed: list[str] = ["talent_cluster"]  # D-24: never attempted yet
+    relaxed: list[str] = []
     duration_band_idx = 0
 
     def _apply() -> list[PlayerLog]:
@@ -94,6 +115,10 @@ def match_cohort(
                 c.build.item_level, target.build.item_level
             ):
                 continue
+            if "talent_cluster" in active and not _same_talent_cluster(
+                c.build.talent_pairs, target.build.talent_pairs
+            ):
+                continue
             if (
                 "has_augmentation" in active
                 and c.build.has_augmentation != target.build.has_augmentation
@@ -106,8 +131,6 @@ def match_cohort(
     for covariate in DEGRADATION_ORDER:
         if len(filtered) >= min_n:
             break
-        if covariate in relaxed:
-            continue
         if covariate == "duration":
             while len(filtered) < min_n and duration_band_idx < len(DURATION_BANDS_PCT) - 1:
                 duration_band_idx += 1

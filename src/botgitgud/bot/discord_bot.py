@@ -187,7 +187,9 @@ def build_bot(deps: Deps) -> commands.Bot:
             await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
             return
 
-        report_text = render_report(result.header, result.comparisons, result.manifest)
+        report_text = render_report(
+            result.header, result.comparisons, result.manifest, result.build_divergence
+        )
         chunk_max = deps.settings.discord_chunk_max_len
         for chunk in chunk_report_for_discord(report_text, max_len=chunk_max):
             await ctx.send(f"```markdown\n{chunk}\n```")

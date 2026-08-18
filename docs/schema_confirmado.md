@@ -75,6 +75,14 @@ gameVersion, healingDone, itemLevel, logFileDetails, logVersion, playerDetails, 
 - `combatantInfo`: `artifact, factionID, gear, heartOfAzeroth, specIDs, stats, talentTree, talents`
   - ⚠️ **`talents` vem VAZIO (`[]`)**. Os talentos reais estão em **`talentTree`**:
     `[{id, rank, nodeID}, ...]`. Use `talentTree` para o hash de build da T2.2.
+  - ❌ **`talentTree[].id` NÃO resolve nome via `gameData.ability(id)`** (verificado ao vivo na
+    T2.2: IDs reais de `talentTree`, ex. `91425`/`91430`, retornam `null`; um spell ID genuíno
+    como `104316` resolve normalmente). `gameData` também não tem campo `talent` (introspecção
+    `__type("GameData").fields` não lista nenhum). Do lado Blizzard, `/data/wow/talent/{id}` e
+    `/data/wow/spell-tree-node/{id}` retornam 404 ao vivo. **Não há resolução de nome de talento
+    disponível neste projeto** — D-26 em `docs/desvios.md`. `nodeID` é a posição na árvore, `id` é
+    o identificador do talento nessa posição (não confundir os dois — `compute_talent_hash`/
+    `extract_talent_pairs` usam `(nodeID, rank)`, não `id`).
   - `specIDs`: `[266]` (id numérico da spec — mais robusto que o nome).
   - `gear`: lista com `id, slot, quality, itemLevel, name, permanentEnchant, bonusIDs, setID` —
     ✅ **`setID` é o indicador confiável de peça de tier** (verificado ao vivo na T2.1, log de
