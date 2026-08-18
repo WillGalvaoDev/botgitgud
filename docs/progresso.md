@@ -413,6 +413,26 @@ T3.4 também transforma em HTML autocontido (`report/html_report.py`).
 **Fase 3 concluída.** 468/468 testes verdes, cobertura 90%, pipeline validado ponta a ponta contra
 a API real em múltiplos pontos ao longo da fase (T3.1, este portão de saída).
 
+### Fase 4 — bloqueada no pré-requisito de dados
+
+Ao tentar iniciar a Fase 4 (2026-08-18), constatado fato bloqueante previsto no próprio documento:
+"**Pré-requisito de dados: ≥ 5.000 logs ingeridos para a spec/encontro alvo. Não inicie a Fase 4
+antes disso.**" Verificado que o repositório não tem `data/warehouse.duckdb` — nenhum log foi
+persistido de forma duradoura até agora (cada log buscado nas Fases 0-3 viveu em diretórios
+temporários de teste ou nas cassetes de fixture, nunca no Store real). Contagem real: **0 logs**,
+não ≥5.000. Reunir esse volume para o encontro/spec do fixture não é trivial: o pool de
+`characterRankings` (leaderboard "top parses") desse encontro/spec teve historicamente só 9-26
+entradas ao longo desta sessão (verificado ao vivo repetidamente) — chegar a 5.000 exigiria uma
+abordagem de ingestão completamente diferente de "topo do leaderboard", que nenhuma tarefa das
+Fases 0-3 construiu, além de um orçamento de API/armazenamento numa escala muito maior do que
+qualquer coisa já rodada neste projeto.
+
+Apresentado ao usuário via pergunta direta (não uma decisão que uma IA deveria tomar sozinha —
+envolve custo de API, tempo de execução e armazenamento reais). **Decisão do usuário: parar aqui,
+revisitar a Fase 4 depois** — quando houver volume real de dados (ex.: o bot em produção
+acumulando logs organicamente com o tempo). Nenhum código da Fase 4 foi escrito. Fases 0-3
+permanecem o entregável completo desta rodada.
+
 ## Ações pendentes do usuário
 
 - **Rotacionar as 5 credenciais expostas** (Discord, WCL client id/secret, Blizzard client id/secret) — o `.env` foi lido em texto claro durante a auditoria. Recomendado antes de qualquer push para remoto. Não bloqueia a implementação local.
