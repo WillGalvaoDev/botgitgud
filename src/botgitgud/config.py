@@ -75,9 +75,10 @@ class Settings(BaseSettings):
     min_eligible_presence: float = 0.70
     single_use_n_threshold: float = 1.5
 
-    # -- T0.7: report rendering (pre-T2.3 absolute delta thresholds) ----------
-    green_threshold_s: float = 10.0
-    yellow_threshold_s: float = 25.0
+    # -- T0.7: report rendering ------------------------------------------------
+    # T2.3 removed the fixed green/yellow delta thresholds this section used to
+    # hold (achado 3.6) — grading is quantile-relative now (analysis/grading.py),
+    # not a Settings-tunable absolute value.
     discord_chunk_max_len: int = 1900
 
     # -- T0.8: cohort duration bands and size thresholds -----------------------

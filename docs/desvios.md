@@ -574,3 +574,33 @@ de um projeto pessoal/comunidade pequena).
   real). O "efeito colateral desejado" de ampliar o pool fica como trabalho futuro explícito, não
   perdido — se uma tarefa posterior quiser essa ampliação, o chaveamento por fase já existe e
   está testado; só falta decidir a nova política de banda.
+
+## D-28 — Nenhuma API expõe cooldown de habilidade; tabela curada da T2.5 começa vazia
+
+- **Tarefa:** T2.5
+- **Documento diz:** fonte 1 — API de spell da Blizzard, "se exposto — verifique e registre";
+  fonte 2 — tabela manual curada "para as habilidades que aparecerem nos relatórios reais";
+  fonte 3 — `None`, fallback já existente da T0.6.
+- **Realidade (verificado ao vivo antes de escrever qualquer valor):** `GET /data/wow/spell/{id}`
+  da Blizzard retorna só `id, name, description, media` — nenhum campo de cooldown, testado
+  contra 3 spell IDs reais (104316, 1122, 267171). Verificado também (não pedido pelo documento,
+  mas o lugar óbvio a checar antes de desistir de uma fonte de API) `gameData.ability(id)` da WCL
+  — o tipo GraphQL `GameAbility` expõe só `id, icon, name`, mesma lacuna. Nenhuma das duas APIs
+  que este projeto já fala tem esse dado.
+- **Ação tomada:** `domain/cooldowns.py` implementa o mecanismo completo (`BASE_COOLDOWNS_S`,
+  `get_base_cooldown`, ligado em `analysis/profile.py`'s `discover_eligible_spell_ids` e
+  `analysis/comparison.py`'s `compare_all_spells`) mas a tabela em si **começa vazia**,
+  deliberadamente. Toda outra tabela curada deste projeto (`domain/blacklist.py`,
+  `domain/external_buffs.py`) foi construída a partir de dado real verificado ao vivo — não existe
+  equivalente aqui: preencher a tabela significaria declarar valores numéricos de memória, para
+  spell IDs de conteúdo muito recente sem nenhuma fonte verificável nesta sessão. Um cooldown
+  errado corrompe silenciosamente a classificação MAJOR/MINOR — pior que o "desconhecido" honesto
+  que a tabela vazia já produz (mesmo espírito da supressão por amostra da T2.3: "melhor não
+  opinar que opinar errado").
+- **Impacto:** nenhuma regressão — `base_cooldown` sempre foi `None` em produção antes desta
+  tarefa (nem `profile.py` nem `comparison.py` o passavam), então a tabela vazia mantém o
+  comportamento idêntico ao pré-T2.5 (confirmado: o snapshot dourado não mudou). O mecanismo está
+  completo e testado (`test_cooldowns.py`, extensões em `test_profile.py`/`test_comparison.py`
+  provam que um valor curado presente vence — primeiro ramo — e que a ausência degrada para os
+  ramos seguintes sem erro); popular a tabela com dados reais fica para quando houver uma fonte
+  verificável (tooltip in-game, nota de patch oficial, ou uma API futura).

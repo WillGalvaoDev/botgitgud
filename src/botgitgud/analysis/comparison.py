@@ -39,6 +39,7 @@ from botgitgud.analysis.grading import (
     empirical_quantile,
     grade_deviation,
 )
+from botgitgud.domain.cooldowns import get_base_cooldown
 from botgitgud.domain.models import PhaseInterval, PhaseKey, PlayerLog, SpellProfile
 from botgitgud.domain.spells import SpellCatalog, SpellInfo
 
@@ -98,7 +99,7 @@ def compare_spell_usage(
     reference_n: int,
     *,
     base_cooldown: float | None = None,
-    gap_penalty: float = 25.0,
+    gap_penalty: float = 25.0,  # mirrors Settings.gap_penalty_s's default; see compare_all_spells
     slot_ref_times: Sequence[Sequence[float]] = (),
 ) -> SpellComparison:
     """`slot_ref_times[i]` must be the raw distribution behind
@@ -133,7 +134,7 @@ def compare_spell_usage_by_phase(
     reference_n: int,
     *,
     base_cooldown: float | None = None,
-    gap_penalty: float = 25.0,
+    gap_penalty: float = 25.0,  # mirrors Settings.gap_penalty_s's default; see compare_all_spells
     phase_slot_ref_times: Mapping[PhaseKey, Sequence[Sequence[float]]] | None = None,
     flat_ref_times: Sequence[float] = (),
 ) -> SpellComparison:
@@ -196,6 +197,7 @@ def compare_all_spells(
     *,
     catalog: SpellCatalog,
     reference_n: int,
+    gap_penalty: float = 25.0,  # see this function's own docstring below
 ) -> list[SpellComparison]:
     """T1.6/T2.4: replaces bot.py's compare_all_spells — one SpellComparison
     per eligible spell, in the given order (discover_eligible_spell_ids'
@@ -204,6 +206,11 @@ def compare_all_spells(
     (compare_spell_usage_by_phase) — player_log.fight.phase_intervals is
     always populated (single fallback interval for phase-less fights), so
     this is the one production code path, not a special case.
+
+    `gap_penalty`'s default mirrors Settings.gap_penalty_s's own default
+    for direct/test callers that don't have a Settings object — the real
+    pipeline (analysis/pipeline.py) always passes deps.settings.gap_penalty_s
+    explicitly, so a `.env` override actually reaches the alignment cost.
     """
     comparisons: list[SpellComparison] = []
     for spell_id in eligible_spell_ids:
@@ -217,8 +224,10 @@ def compare_all_spells(
                 intervals=player_log.fight.phase_intervals,
                 n_usages_median=sp.n_usages_median,
                 reference_n=reference_n,
+                gap_penalty=gap_penalty,
                 phase_slot_ref_times=sp.phase_slot_ref_times,
                 flat_ref_times=sp.ref_times,
+                base_cooldown=get_base_cooldown(spell_id),
             )
         )
     return comparisons

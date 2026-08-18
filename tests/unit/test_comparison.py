@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from botgitgud.analysis.alignment import AlignmentKind
-from botgitgud.analysis.comparison import compare_spell_usage, compare_spell_usage_by_phase
+from botgitgud.analysis.comparison import (
+    compare_all_spells,
+    compare_spell_usage,
+    compare_spell_usage_by_phase,
+)
 from botgitgud.analysis.phases import derive_phase_intervals
-from botgitgud.domain.spells import SpellInfo
+from botgitgud.domain.cooldowns import BASE_COOLDOWNS_S
+from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, SpellProfile
+from botgitgud.domain.spells import SpellCatalog, SpellInfo
 
 
 def _spell(spell_id: int = 1, name: str = "Test Spell") -> SpellInfo:
@@ -209,3 +219,125 @@ def test_reference_with_fewer_occurrences_contributes_only_to_the_phases_it_reac
     )
     assert comparison.alignment.n_matched == 1  # (1,0)
     assert comparison.alignment.n_missed == 1  # (1,1): expected but the player never got there
+
+
+# -- T2.5: curated base_cooldown reaches the real comparison pipeline ---------------
+
+
+def test_compare_all_spells_uses_a_curated_base_cooldown_for_classification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T2.5 acceptance: through the real compare_all_spells entry point,
+    a curated base_cooldown_s decides cd_type via the first branch — here
+    it flips an otherwise-MINOR-looking 30s interval to MAJOR.
+    """
+    spell_id = 555555
+    monkeypatch.setitem(BASE_COOLDOWNS_S, spell_id, 120.0)
+
+    intervals = derive_phase_intervals([], fight_start_ms=0, fight_end_ms=100)
+    fight = FightRef(
+        report_code="ABCDEFGHIJKLMNOP",
+        fight_id=1,
+        encounter_id=3179,
+        boss_name="Fallen-King Salhadaar",
+        difficulty=5,
+        duration_s=100.0,
+        kill=True,
+        phase_intervals=intervals,
+    )
+    build = PlayerBuild(
+        character_name="Ref",
+        server="Azralon",
+        class_name="Warlock",
+        spec_name="Demonology",
+        role="dps",
+        item_level=283.0,
+        talent_hash=None,
+        tier_pieces=None,
+    )
+    player_log = PlayerLog(
+        fight=fight,
+        build=build,
+        dps=100_000.0,
+        percentile=50.0,
+        cast_timeline={spell_id: (10.0, 40.0)},
+        phase_cast_timeline={spell_id: {(0, 0): (10.0, 40.0)}},
+    )
+    profile = {
+        spell_id: SpellProfile(
+            spell_id=spell_id,
+            presence=1.0,
+            ref_times=(10.0, 40.0),  # 30s interval alone would classify MINOR
+            n_usages_median=2.0,
+            phase_ref_times={(0, 0): (10.0, 40.0)},
+        )
+    }
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+
+    comparisons = compare_all_spells(
+        player_log, profile, [spell_id], catalog=catalog, reference_n=1
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0].cd_type == "MAJOR"  # curated 120s cooldown wins over the 30s interval
+
+
+def test_compare_all_spells_gap_penalty_reaches_the_real_alignment(tmp_path: Path) -> None:
+    """T2.5/Fase 2 exit gate: compare_all_spells' gap_penalty parameter
+    (sourced from Settings.gap_penalty_s in the real pipeline) must
+    actually reach align() — same configurability test_alignment.py's own
+    test_gap_penalty_is_configurable proves at the align() level, one
+    layer up.
+    """
+    spell_id = 666666
+    intervals = derive_phase_intervals([], fight_start_ms=0, fight_end_ms=200)
+    fight = FightRef(
+        report_code="ABCDEFGHIJKLMNOP",
+        fight_id=1,
+        encounter_id=3179,
+        boss_name="Fallen-King Salhadaar",
+        difficulty=5,
+        duration_s=200.0,
+        kill=True,
+        phase_intervals=intervals,
+    )
+    build = PlayerBuild(
+        character_name="Ref",
+        server="Azralon",
+        class_name="Warlock",
+        spec_name="Demonology",
+        role="dps",
+        item_level=283.0,
+        talent_hash=None,
+        tier_pieces=None,
+    )
+    player_log = PlayerLog(
+        fight=fight,
+        build=build,
+        dps=100_000.0,
+        percentile=50.0,
+        cast_timeline={spell_id: (100.0,)},
+        phase_cast_timeline={spell_id: {(0, 0): (100.0,)}},
+    )
+    profile = {
+        spell_id: SpellProfile(
+            spell_id=spell_id,
+            presence=1.0,
+            ref_times=(0.0,),
+            n_usages_median=1.0,
+            phase_ref_times={(0, 0): (0.0,)},
+        )
+    }
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+
+    small_penalty = compare_all_spells(
+        player_log, profile, [spell_id], catalog=catalog, reference_n=1, gap_penalty=10.0
+    )[0]
+    large_penalty = compare_all_spells(
+        player_log, profile, [spell_id], catalog=catalog, reference_n=1, gap_penalty=1000.0
+    )[0]
+
+    # 100s off: cheaper as MISSED+EXTRA with a small penalty, cheaper as a
+    # MATCH with a huge one — same logic as align()'s own configurability.
+    assert small_penalty.alignment.n_matched == 0
+    assert large_penalty.alignment.n_matched == 1

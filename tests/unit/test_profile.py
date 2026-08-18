@@ -4,6 +4,7 @@ import pytest
 
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
+from botgitgud.domain.cooldowns import BASE_COOLDOWNS_S
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, SpellProfile
 
 
@@ -217,3 +218,38 @@ def test_ties_broken_by_ascending_spell_id_deterministically() -> None:
         10: SpellProfile(spell_id=10, presence=1.0, ref_times=(10.0, 200.0), n_usages_median=2.0),
     }
     assert discover_eligible_spell_ids(profile) == [10, 20]
+
+
+def test_a_curated_base_cooldown_takes_priority_over_the_observed_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T2.5 acceptance: a known base_cooldown_s uses the FIRST branch of
+    the classification/eligibility rule — here, a curated cooldown below
+    the 15s eligibility floor excludes the spell even though its observed
+    interval (210s) alone would look like a perfectly legitimate long CD.
+    """
+    spell_id = 424242
+    monkeypatch.setitem(BASE_COOLDOWNS_S, spell_id, 5.0)  # below _MIN_ELIGIBLE_INTERVAL_S
+    profile = {
+        spell_id: SpellProfile(
+            spell_id=spell_id, presence=1.0, ref_times=(10.0, 220.0), n_usages_median=2.0
+        )
+    }
+    assert discover_eligible_spell_ids(profile) == []
+
+
+def test_without_a_curated_cooldown_the_observed_interval_branch_still_governs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T2.5 acceptance: a spell with no curated data degrades to the
+    existing observed-interval branch without error — same spell, same
+    data, absent from the curated table this time.
+    """
+    spell_id = 424243
+    monkeypatch.delitem(BASE_COOLDOWNS_S, spell_id, raising=False)
+    profile = {
+        spell_id: SpellProfile(
+            spell_id=spell_id, presence=1.0, ref_times=(10.0, 220.0), n_usages_median=2.0
+        )
+    }
+    assert discover_eligible_spell_ids(profile) == [spell_id]  # 210s interval >= 15s -> eligible

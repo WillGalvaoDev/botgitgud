@@ -168,7 +168,12 @@ def run_analysis(
 
     eligible_ids = discover_eligible_spell_ids(profile)
     comparisons = compare_all_spells(
-        player_log, profile, eligible_ids, catalog=deps.catalog, reference_n=num_positional
+        player_log,
+        profile,
+        eligible_ids,
+        catalog=deps.catalog,
+        reference_n=num_positional,
+        gap_penalty=deps.settings.gap_penalty_s,
     )
 
     warnings: list[str] = []

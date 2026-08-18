@@ -252,6 +252,18 @@ Formato confirmado:
 
 ---
 
+## 10b. Cooldown de habilidade — ❌ NENHUMA API EXPÕE (verificado na T2.5)
+
+- `GET /data/wow/spell/{id}` (Blizzard) retorna só `id, name, description, media` — testado
+  contra 3 IDs reais (104316 Call Dreadstalkers, 1122 Summon Infernal, 267171 Demonic Strength).
+  Nenhum campo de cooldown em nenhum dos três.
+- `gameData.ability(id)` (WCL) — tipo GraphQL `GameAbility` — expõe só `id, icon, name`. Mesma
+  lacuna do lado da WCL.
+- **Consequência:** `domain/cooldowns.py`'s tabela curada (fonte 2 da T2.5) começa vazia — não há
+  fonte de API verificável para preenchê-la. Ver D-28 em `docs/desvios.md`.
+
+---
+
 ## 11. Itens da sondagem original — resolvidos em T0.1
 
 Todos os itens abaixo foram fechados durante a execução formal da T0.1

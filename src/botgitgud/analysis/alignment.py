@@ -55,7 +55,7 @@ def align(
     user_times: Sequence[float],
     ref_times: Sequence[float],
     *,
-    gap_penalty: float = 25.0,
+    gap_penalty: float = 25.0,  # mirrors Settings.gap_penalty_s's own default; see comparison.py
 ) -> Alignment:
     """Align `user_times` against `ref_times` via global DP alignment.
 

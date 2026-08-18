@@ -26,6 +26,7 @@ from botgitgud.analysis.cohort import (
     within_positional_band,
 )
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
+from botgitgud.domain.cooldowns import get_base_cooldown
 from botgitgud.domain.models import PhaseKey, PlayerLog, SpellProfile
 
 
@@ -136,7 +137,11 @@ def discover_eligible_spell_ids(profile: Mapping[int, SpellProfile]) -> list[int
     """
     eligible: list[tuple[int, float]] = []
     for spell_id, sp in sorted(profile.items()):
-        cadence = compute_cadence(sp.ref_times, n_usages_median=sp.n_usages_median)
+        cadence = compute_cadence(
+            sp.ref_times,
+            n_usages_median=sp.n_usages_median,
+            base_cooldown=get_base_cooldown(spell_id),
+        )
         if is_eligible(spell_id, sp.presence, cadence, blacklist=MAJOR_CD_BLACKLIST):
             eligible.append((spell_id, sp.presence))
 
