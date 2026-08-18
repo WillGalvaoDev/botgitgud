@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
+from botgitgud.analysis.findings import Finding
 from botgitgud.analysis.performance_features import PerformanceFindings
 from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
@@ -41,6 +42,7 @@ from botgitgud.report.performance_text import (
     render_resource_waste_section,
     render_uptimes_section,
 )
+from botgitgud.report.top_actions_text import render_top_actions_section
 
 _SEPARATOR = "=" * 42
 
@@ -165,23 +167,26 @@ def render_report(
     build_divergence: BuildDivergence | None = None,
     performance: PerformanceFindings | None = None,
     dps_gap: DpsGapReport | None = None,
+    top_actions: Sequence[Finding] = (),
 ) -> str:
-    """Section order (interim, pre-T3.3 — the final normative order, Top 3
-    then this same content, is T3.3's own job): 1. Build (`build_divergence`,
-    above the header) 2. De onde veio o gap de DPS (T3.2, `dps_gap`) 3.
-    Mortes/downtime 4. Active time 5. Uptimes 6. Waste de recurso 7. Usos
-    perdidos de CD 8. Timing de CD (`render_cd_sections`). Every section
-    from `dps_gap` onward renders even with zero CD comparisons — none of
-    them are contingent on eligible cooldowns.
+    """T3.3's normative report structure: 1. Cabeçalho 2. Top 3 ações
+    (`top_actions`) 3. De onde veio o gap de DPS (T3.2, `dps_gap`) 4.
+    Detalhamento por categoria, na ordem da T3.1 (Build first, then
+    Mortes/downtime, Active time, Uptimes, Waste de recurso, Usos
+    perdidos de CD, Timing de CD) 5. Desvios menores (bundled into
+    `render_cd_sections`, which already ends with that collapsed section)
+    6. Rodapé. Every section from Top 3 onward renders even with zero CD
+    comparisons — none of them are contingent on eligible cooldowns.
     """
-    lines: list[str] = []
-    if build_divergence is not None:
-        lines.extend(render_build_divergence(build_divergence))
-        lines.append("")
-    lines.extend(_render_header(header))
+    lines: list[str] = list(_render_header(header))
+    lines.extend(render_top_actions_section(top_actions))
 
     if dps_gap is not None:
         lines.extend(render_dps_gap_section(dps_gap))
+
+    if build_divergence is not None:
+        lines.append("")
+        lines.extend(render_build_divergence(build_divergence))
     if performance is not None:
         lines.extend(render_deaths_downtime_section(performance.deaths, performance.downtime))
         lines.extend(render_active_time_section(performance.active_time))

@@ -78,6 +78,7 @@ def _run_analyze(job: Job, deps: Deps) -> str:
         result.build_divergence,
         result.performance,
         result.dps_gap,
+        result.top_actions,
     )
 
 

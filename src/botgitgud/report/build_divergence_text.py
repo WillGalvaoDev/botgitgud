@@ -29,8 +29,10 @@ def _render_talent_difference(
 
 
 def render_build_divergence(divergence: BuildDivergence) -> list[str]:
-    """T2.2: must open the report BEFORE any timing analysis — "otimizar a
-    rotação de uma build inferior é conselho de baixo valor."
+    """T2.2: "otimizar a rotação de uma build inferior é conselho de baixo
+    valor" — must precede every OTHER category section (T3.3's normative
+    order puts it first among "detalhamento por categoria", right after
+    Top 3 / DPS gap, matching T3.1's own item 1).
     """
     diffs = divergence.differences[:_MAX_DIFFERENCES_SHOWN]
     diff_text = "; ".join(
@@ -52,13 +54,7 @@ def render_build_divergence(divergence: BuildDivergence) -> list[str]:
         ),
     ]
     if divergence.dominant_median_dps is not None and divergence.player_median_dps is not None:
-        delta_pct = None
-        if divergence.player_median_dps:
-            delta_pct = (
-                (divergence.dominant_median_dps - divergence.player_median_dps)
-                / divergence.player_median_dps
-                * 100
-            )
+        delta_pct = divergence.estimated_gain_pct
         delta_fmt = f" (Δ {delta_pct:+.1f}%)" if delta_pct is not None else ""
         lines.append(
             f"DPS mediano da build dominante: {_fmt_dps(divergence.dominant_median_dps)} "

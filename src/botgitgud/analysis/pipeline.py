@@ -41,6 +41,7 @@ from botgitgud.analysis.cohort import (
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.dps_gap import DpsGapReport, analyze_dps_gap
+from botgitgud.analysis.findings import Finding, build_findings, select_top_actions
 from botgitgud.analysis.performance_features import (
     PerformanceFindings,
     analyze_performance_features,
@@ -90,6 +91,7 @@ class AnalysisResult:
     build_divergence: BuildDivergence | None = None
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
+    top_actions: tuple[Finding, ...] = ()
 
 
 def run_analysis(
@@ -187,6 +189,13 @@ def run_analysis(
         catalog=deps.catalog,
         buffs_relaxed=buffs_relaxed,
     )
+    findings = build_findings(
+        build_divergence=build_divergence,
+        dps_gap=dps_gap,
+        n=num_positional,
+        relaxed_covariates=match_report.relaxed,
+    )
+    top_actions = select_top_actions(findings)
 
     eligible_ids = discover_eligible_spell_ids(profile)
     comparisons = compare_all_spells(
@@ -244,4 +253,5 @@ def run_analysis(
         build_divergence=build_divergence,
         performance=performance,
         dps_gap=dps_gap,
+        top_actions=tuple(top_actions),
     )

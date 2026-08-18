@@ -144,9 +144,14 @@ def _divergence(**overrides: object) -> BuildDivergence:
     return BuildDivergence(**defaults)  # type: ignore[arg-type]
 
 
-def test_build_divergence_opens_the_report_before_the_header() -> None:
+def test_build_divergence_is_the_first_category_section_after_the_header() -> None:
+    """T3.3 moved this from literally opening the report (T2.2's
+    provisional placement) to the first item of "detalhamento por
+    categoria" — still ahead of every other category, just after the
+    header/Top3/DPS-gap sections now.
+    """
     text = render_report(_header(), [], build_divergence=_divergence())
-    assert text.index("BUILD DIVERGENTE") < text.index("GITGUD MAJOR CD ANALYSIS")
+    assert text.index("GITGUD MAJOR CD ANALYSIS") < text.index("BUILD DIVERGENTE")
 
 
 def test_build_divergence_shows_player_and_dominant_shares() -> None:

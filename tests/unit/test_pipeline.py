@@ -479,7 +479,12 @@ def test_minority_build_player_gets_a_build_divergence_finding_end_to_end(tmp_pa
     text = render_report(
         result.header, result.comparisons, result.manifest, result.build_divergence
     )
-    assert text.index("BUILD DIVERGENTE") < text.index("GITGUD MAJOR CD ANALYSIS")
+    # T3.3: BUILD DIVERGENTE now renders as the first "detalhamento por
+    # categoria" item, after the header/Top3/DPS-gap sections — no longer
+    # literally the first line of the report (that was T2.2's provisional
+    # placement, pending this task).
+    assert "BUILD DIVERGENTE" in text
+    assert text.index("GITGUD MAJOR CD ANALYSIS") < text.index("BUILD DIVERGENTE")
 
 
 def test_cold_build_persists_a_candidate_pool_for_reuse(tmp_path: Path) -> None:

@@ -135,6 +135,16 @@ class BuildDivergence:
     def dominant_pct(self) -> float:
         return self.dominant_cluster_n / self.total_n if self.total_n else 0.0
 
+    @property
+    def estimated_gain_pct(self) -> float | None:
+        """T3.3: the same `(dominant - player) / player * 100` delta
+        report/build_divergence_text.py already displays — the dominant
+        build's median DPS taken as the achievable target.
+        """
+        if not self.dominant_median_dps or not self.player_median_dps:
+            return None
+        return (self.dominant_median_dps - self.player_median_dps) / self.player_median_dps * 100
+
 
 def analyze_build_divergence(
     target: PlayerLog, cohort_logs: Sequence[PlayerLog]

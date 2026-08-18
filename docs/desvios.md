@@ -671,3 +671,34 @@ de um projeto pessoal/comunidade pequena).
 - **Impacto:** nenhum teste trava por causa disso — o snapshot dourado captura o que quer que o
   código produza de forma autoconsistente (função normal de teste de regressão), e nenhum critério
   de aceite da T3.2 depende de os números da coorte no fixture serem realistas.
+
+## D-31 — Só `BUILD` e `ABILITY_GAP` recebem `estimated_gain_pct` real; as outras 6 categorias de `FindingKind` nunca competem pelo Top 3
+
+- **Tarefa:** T3.3
+- **Documento diz:** `Finding.kind` é um dos 8 valores — `BUILD | DEATH | ACTIVE_TIME | UPTIME |
+  WASTE | MISSED_CD | CD_TIMING | ABILITY_GAP` — e cada `Finding` carrega `estimated_gain_pct:
+  float | None`. Nenhuma fórmula é dada para converter nenhuma categoria específica num ganho de
+  DPS — só a regra de score (`estimated_gain_pct × peso_de_confiança`) e o critério de aceite
+  "nenhum finding sem `estimated_gain_pct` entra no Top 3" (implicitamente permitindo que um
+  finding tenha `None`).
+- **Realidade:** `BUILD` (T2.2's `BuildDivergence`) já tinha uma fórmula natural, real e já exibida
+  no próprio relatório desde a T2.2 (`(dominant_median_dps - player_median_dps) / player_median_dps
+  × 100`, ver `report/build_divergence_text.py`). `ABILITY_GAP` (T3.2) também: `delta_dps_pct` já É
+  literalmente um ganho percentual de DPS, calculado com uma fórmula exata e verificada
+  (`analysis/dps_gap.py`). As outras 6 categorias (`DEATH`, `ACTIVE_TIME`, `UPTIME`, `WASTE`,
+  `MISSED_CD`, `CD_TIMING`) não têm nenhuma fórmula equivalente em lugar nenhum do documento — só
+  uma classificação por quantil (🟢/🟡/🔴, T2.3/T3.1), que não é uma % de DPS.
+- **Ação tomada:** `analysis/findings.py`'s `build_findings` só constrói `Finding`s para `BUILD` e
+  `ABILITY_GAP`, cada um com `estimated_gain_pct` real e verificável. As outras 6 categorias
+  continuam com sua própria seção no relatório (`report/text.py`'s "detalhamento por categoria",
+  herdado sem mudança da T3.1), só que nunca competem pelo Top 3 — consistente com o próprio
+  critério de aceite da T3.3 ("nenhum finding sem `estimated_gain_pct` entra no Top 3": ausência de
+  estimativa é um estado válido e previsto, não um erro a esconder). Inventar uma fórmula de
+  conversão linear (ex.: "% de downtime × DPS" ou "gap de uptime × valor típico do buff") seria
+  apresentar como quantidade real algo sem base — mesmo espírito de D-28/D-29 ("melhor não opinar
+  que opinar errado").
+- **Impacto:** `Top 3 Ações` fica, nesta versão, restrito a achados de build e de habilidade — os
+  dois com maior poder explicativo e única fonte quantificada do roadmap (a própria T3.2 é descrita
+  no documento como "maior retorno/esforço"). Se uma fórmula honesta para as outras 6 categorias for
+  definida numa tarefa futura, `build_findings` é o único lugar que precisa mudar — o tipo `Finding`
+  e `select_top_actions` já suportam qualquer `FindingKind` sem alteração.
