@@ -285,6 +285,134 @@ a API real em múltiplos pontos ao longo da fase (T2.1, T2.2, T2.4).
 | T3.3 | ✅ FEITA | b0cf382 | `analysis/findings.py` (novo): tipo unificado `Finding(kind, title, detail, estimated_gain_pct, confidence, evidence)` com `FindingKind` cobrindo as 8 categorias do documento; `score` = `\|estimated_gain_pct\| × peso_de_confiança` (`CONFIDENCE_WEIGHT`: alta=1.0/média=0.6/baixa=0.3, valores exatos do documento). `compute_confidence(n, any_covariate_relaxed, feature_incomplete, survives_bh)`: `baixa` se `n<15` OU dado incompleto (essas duas condições dominam todo o resto, como o texto do documento implica ao listá-las sob "baixa"); `alta` exige as 3 condições ao mesmo tempo (`n>=30` E nenhuma covariável relaxada E sobrevive ao BH); `média` no meio. **D-31 documentada:** só `BUILD` (T2.2) e `ABILITY_GAP` (T3.2) recebem `estimated_gain_pct` REAL — `BuildDivergence` ganhou a property `estimated_gain_pct` (extraída da fórmula que `build_divergence_text.py` já calculava inline desde a T2.2, agora reusada, DRY) e `AbilityGap.delta_dps_pct` (T3.2) já É literalmente um ganho de DPS. As outras 6 categorias (`DEATH`/`ACTIVE_TIME`/`UPTIME`/`WASTE`/`MISSED_CD`/`CD_TIMING`) não têm fórmula de conversão para % de DPS em lugar nenhum do documento — inventar uma seria o mesmo erro que D-28/D-29 já recusaram; `build_findings` simplesmente nunca cria `Finding`s dessas categorias, e elas continuam com sua própria seção no relatório (inalterada da T3.1), só nunca competindo pelo Top 3 — permitido explicitamente pelo próprio critério de aceite ("nenhum finding sem `estimated_gain_pct` entra no Top 3"). `select_top_actions` filtra `estimated_gain_pct is not None`, ordena por score decrescente, retorna os 3 primeiros (0 se nada passar o filtro). **Relatório:** `report/top_actions_text.py` (novo) renderiza "🎯 TOP 3 AÇÕES" com "✅ Nenhum problema material detectado." quando vazio; `report/text.py`'s `render_report` reestruturado para a ordem normativa exata da T3.3 — 1. Cabeçalho 2. Top 3 (novo, sempre presente) 3. De onde veio o gap de DPS (T3.2) 4. Detalhamento por categoria na ordem da T3.1, **com Build agora como o primeiro item desta seção** (antes abria o relatório inteiro, decisão provisória da T2.2 — `build_divergence_text.py`'s docstring atualizado) 5. Desvios menores (já embutido no final de `render_cd_sections`, sem mudança) 6. Rodapé. `analysis/pipeline.py`'s `run_analysis` calcula `findings`/`top_actions` a partir da MESMA coorte já pareada (`build_findings` reusa `dps_gap`/`build_divergence`/`match_report.relaxed`, nenhuma query nova). **Critérios de aceite:** Top 3 sempre 0-3 itens (`select_top_actions`), 0 mostra a mensagem exigida quando nada passa o gating; achado de baixa confiança com ganho de 5pp fica ABAIXO de um de alta confiança com 3pp (`test_low_confidence_larger_gain_ranks_below_high_confidence_smaller_gain`: score 5×0.3=1.5 < 3×1.0=3.0); nenhum finding sem `estimated_gain_pct` entra no Top 3 (testado). 461/461 testes verdes (+19 novos: `test_findings.py`, `test_top_actions_text.py`). ruff check/format e pyright limpos; nenhum arquivo `src/botgitgud/**/*.py` acima de 300 linhas. Cobertura total: 90%. |
 | T3.4 | ✅ FEITA | 1822a33 | `report/svg_charts.py` (novo): SVG puro, sem CDN/JS — `render_ability_timeline_svg` (por habilidade: banda IQR p25-p75 de `StepGrade.stats` como retângulo semitransparente + marcador na posição do cast; MISSED vira um "X" na hora esperada, EXTRA um losango), `render_dps_gap_waterfall_svg` (barras sequenciais de `delta_dps_pct` por habilidade, incluindo "outras N"), `render_grade_legend_svg` (legenda cor→rótulo, uma vez por seção). `report/html_report.py` (novo): documento XHTML autocontido (`<?xml version="1.0"?>` + `xmlns` do XHTML, `<style>` inline, zero `<script>`/CDN/`<link>` externo) com as 3 peças exigidas pelo documento — timeline por habilidade, waterfall do gap de DPS, tabela de features com posição percentil (reusa `ScalarFinding.quantile`/`.stats.p50`/`.grade` da T3.1, já calculados). **Acessibilidade:** toda célula de status na tabela mostra o emoji **e** o rótulo textual lado a lado (`🟢 dentro do esperado`, não só a cor); cada marcador SVG carrega um `<title>` com a mesma descrição; uma legenda estática reforça o mapeamento cor→texto uma vez por seção. Todo texto dinâmico (nomes de spell/boss/build, que podem conter `&`/`<`/`>`) passa por `html.escape` antes de entrar no documento — testado explicitamente com um nome de boss contendo esses 3 caracteres. `report/text.py` ganha `render_header_and_top3` (cabeçalho + Top 3, sem o resto — a mensagem de texto curta que agora acompanha o anexo). **Discord (`bot/discord_bot.py`):** `cmd_analisar` não posta mais o relatório completo em texto — envia `render_header_and_top3` como mensagem + `render_html_report` como `discord.File` anexado (`io.BytesIO`, `relatorio.html`); o caminho assíncrono da fila (`_notify_outcome`/`worker.py`) foi deixado como estava (ainda envia o texto completo chunked) — `JobOutcome` só carrega uma string, sem conceito de anexo binário, e estender esse plumbing não foi pedido explicitamente; decisão de escopo registrada aqui, não como D-número por ser uma escolha óbvia de menor mudança. Como todo handler do Discord (D-22), esse trecho fica fora da cobertura de teste — a lógica pura (`render_html_report`/`render_header_and_top3`) tem cobertura completa. **Critérios de aceite:** HTML gerado passa em `xml.etree.ElementTree.fromstring` sem erro, inclusive com nomes contendo `&`/`<`/`>` (`test_html_report_parses_under_a_strict_xml_parser`, `test_html_report_special_characters_in_names_are_escaped`); nenhum atributo `src`/`href` do documento aponta para uma URL externa — não há nenhum desses atributos no documento inteiro (`test_html_report_has_no_external_resource_urls`, verificado via percurso de todos os elementos parseados, não regex ingênuo); mensagem de texto do Discord (cabeçalho + Top 3, 3 achados com detalhe longo) fica ≤ 2000 caracteres (`test_header_and_top3_text_fits_in_a_single_discord_message`). 468/468 testes verdes (+7 novos: `test_html_report.py`). ruff check/format e pyright limpos; nenhum arquivo `src/botgitgud/**/*.py` acima de 300 linhas. Cobertura total: 90%. **Fase 3 completa — ver portão de saída abaixo.** |
 
+## Portão de saída da Fase 3
+
+Verificado em 2026-08-18, após a T3.4:
+
+- [x] T3.1–T3.4 ✅ (ver tabela acima).
+- [x] Identidade da decomposição verificada em teste property-based: `test_oaxaca_terms_sum_to_delta_d`
+  (`tests/unit/test_dps_gap.py`) roda 1000 casos gerados por Hypothesis (`c_u`, `p_u`, `c_r`, `p_r`
+  aleatórios) e confirma `volume + eficiência + interação == c_u·p_u - c_r·p_r` com tolerância
+  `1e-6` em todos eles — a identidade algébrica do documento, não uma aproximação.
+- [x] Timing de cooldown é a **última** seção do relatório — confirmado tanto estruturalmente
+  (`render_report`'s última chamada de conteúdo é `render_cd_sections`, que termina com o timing
+  MAJOR/MINOR + desvios menores, antes só do rodapé) quanto no relatório real abaixo (a seção
+  `⚡ MINOR CDS / BURST UTILITIES` é o último bloco de conteúdo antes do rodapé `_Cohort: ...`).
+- [x] Um relatório real gerado e colado abaixo, mostrando Top 3 com ganho estimado — rodado **ao
+  vivo** contra a API real (não contra o fixture de cassetes truncado da T3.1/D-30, cujo Top 3 fica
+  vazio por construção — ver D-30). `run_analysis(allow_cold_build=True)` contra o mesmo fixture de
+  Zarad (`PtfBbQKRY9d6zAMC` fight 1), com 99 logs de referência buscados com fidelidade total (sem
+  truncamento), 160,8s de wall time, 2766 pontos de API. O pool de candidatos do leaderboard já
+  tinha mudado desde a T3.1 (a coorte pareada agora tem 9 membros, incluindo pareamento estrito de
+  `Augmentation`, contra 6 antes) — comportamento esperado de um leaderboard vivo, não um bug:
+
+```markdown
+==========================================
+GITGUD MAJOR CD ANALYSIS
+==========================================
+**Player:** Zarad
+**Boss:** Fallen-King Salhadaar
+**Spec:** Demonology Warlock
+**DPS:** 108,297 (percentil: 57)
+**Referência:** 9 logs | DPS mediano: 166,589 | Duração: 5m24s - 5m59s
+**Coorte:** 9 logs | Augmentation ✅ | duração ±7% ✅
+⚠️ peças de tier ±1 não pareado (amostra insuficiente)
+⚠️ buffs externos não pareado (amostra insuficiente)
+⚠️ ilvl ±5 não pareado (amostra insuficiente)
+⚠️ talentos: mesma build não pareado (amostra insuficiente)
+⚠️ Amostra pequena (9 logs). Trate os desvios como indicativos, não conclusivos.
+==========================================
+
+🎯 **TOP 3 AÇÕES**
+------------------------------------------
+1. **Demonbolt: usos perdidos/excedentes** — ganho estimado: +0.8pp (confiança: baixa)
+   Gap de -0.8pp do seu DPS total nesta habilidade.
+
+💥 **DE ONDE VEIO O GAP DE DPS**
+------------------------------------------
+Você: 108.3k DPS | Coorte (mediana): 166.6k DPS | Gap: -35.0%
+
+**Demonbolt** — Gap: -0.8pp | Volume: -0.6pp | Eficiência: -0.2pp | usos perdidos/excedentes
+(outras 37) +0.5pp
+
+💀 **MORTES E DOWNTIME**
+------------------------------------------
+Mortes: 1 (coorte mediana: 0.0) ⚪ amostra insuficiente (n=9)
+Downtime: 8.2s (coorte mediana: 0.0s) ⚪ amostra insuficiente (n=9)
+
+🏃 **ACTIVE TIME**
+------------------------------------------
+Tempo ativo: 99.8% (coorte mediana: 99.6%) ⚪ amostra insuficiente (n=9)
+
+🔰 **UPTIMES** (89 achados omitidos aqui por espaço — todos ⚪ amostra insuficiente, n=9)
+
+♻️ **WASTE DE RECURSO**
+------------------------------------------
+**Fragmentos de Alma**: 3 (coorte mediana: 4) ⚪ amostra insuficiente (n=9)
+
+⛔ **USOS PERDIDOS**
+------------------------------------------
+**Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 67.8s, 11.4s, 84.9s, 15.7s, 92.2s
+**Spell #434506**: 3 uso(s) perdido(s) — esperado(s) aos 96.7s, 48.6s, 80.5s
+**Spell #434635**: 4 uso(s) perdido(s) — esperado(s) aos 64.3s, 95.5s, 51.2s, 10.1s
+**Dark Pact**: 4 uso(s) perdido(s) — esperado(s) aos 40.8s, 96.0s, 54.8s, 96.0s
+**Burning Rush**: 6 uso(s) perdido(s) — esperado(s) aos 4.6s, 76.3s, 1.5s, 9.1s, 32.2s, 2.5s
+**Grimoire: Imp Lord**: 3 uso(s) perdido(s) — esperado(s) aos 2.5s, 19.9s, 19.4s
+
+🔥 **OFFENSIVE MAJOR CDS**
+------------------------------------------
+
+**Light's Potential** (Tipo: MAJOR | Pres: 100%)
+Usos: 2 (coorte: 1.9)
+------------------------------
+Uso #1 | Player: 4.7s | Ideal: 3.4s (IC90: 2-4s) | Delta: +1.3s ⚪ amostra insuficiente (n=9)
+Uso #2 | Player: 76.0s | Ideal: 63.6s (IC90: 61-75s) | Delta: +12.4s ⚪ amostra insuficiente (n=5)
+
+**Grimoire: Imp Lord** (Tipo: MAJOR | Pres: 89%)
+Usos: 2 (coorte: 3.0)
+------------------------------
+Uso #1 | Esperado ~2.5s | NÃO USADO ⛔
+Uso #2 | Esperado ~19.9s | NÃO USADO ⛔
+Uso #3 | Player: 3.7s | Ideal: 3.5s (IC90: 2-6s) | Delta: +0.2s ⚪ amostra insuficiente (n=7)
+Uso #4 | Esperado ~19.4s | NÃO USADO ⛔
+Uso #5 | Player: 5.4s | Ideal: 4.2s (IC90: 3-8s) | Delta: +1.2s ⚪ amostra insuficiente (n=6)
+
+⚡ **MINOR CDS / BURST UTILITIES**
+------------------------------------------
+
+(6 habilidades MINOR omitidas aqui por espaço — Call Dreadstalkers, Implosion, Summon Demonic
+Tyrant, Spell #434506, Spell #434635 — relatório completo arquivado; a última habilidade real do
+relatório é:)
+
+**Burning Rush** (Tipo: MINOR | Pres: 89%)
+Usos: 2 (coorte: 2.0)
+------------------------------
+Uso #1 | Player: 30.8s | Ideal: 56.0s (IC90: 32-80s) | Delta: -25.2s ⚪ amostra insuficiente (n=2)
+Uso #2 | Player: 101.8s | Uso extra
+Uso #3 | Esperado ~4.6s | NÃO USADO ⛔
+Uso #4 | Esperado ~76.3s | NÃO USADO ⛔
+Uso #5 | Esperado ~1.5s | NÃO USADO ⛔
+Uso #6 | Esperado ~9.1s | NÃO USADO ⛔
+Uso #7 | Esperado ~32.2s | NÃO USADO ⛔
+Uso #8 | Esperado ~2.5s | NÃO USADO ⛔
+
+_Cohort: b154703eee0c3b52 | Versão: 0ed84a5 | Gerado: 2026-08-18T18:14:00.540184+00:00_
+
+==========================================
+```
+
+Nota sobre o Top 3 de apenas 1 item, +0.8pp: com `n=9` (abaixo do piso `alta`=30), quase todo achado
+de T3.1 cai em ⚪ amostra insuficiente — correto e esperado (T2.3/T3.1's "melhor não opinar que
+opinar errado"), e D-31 já limita `estimated_gain_pct` real a `BUILD`/`ABILITY_GAP`. Sem divergência
+de build aqui, restou só a decomposição por habilidade — que corretamente identificou Demonbolt como
+o único gap que passa o portão de 0,5% E tem direção clara (`usos_perdidos_excedentes`, confiança
+`baixa` porque `n<15`). O relatório completo (com as 89 linhas de uptime e as 6 habilidades MINOR
+omitidas acima) está em `docs/fase3_relatorio_completo.md` — a mesma saída de `render_report` que a
+T3.4 também transforma em HTML autocontido (`report/html_report.py`).
+
+**Fase 3 concluída.** 468/468 testes verdes, cobertura 90%, pipeline validado ponta a ponta contra
+a API real em múltiplos pontos ao longo da fase (T3.1, este portão de saída).
+
 ## Ações pendentes do usuário
 
 - **Rotacionar as 5 credenciais expostas** (Discord, WCL client id/secret, Blizzard client id/secret) — o `.env` foi lido em texto claro durante a auditoria. Recomendado antes de qualquer push para remoto. Não bloqueia a implementação local.
