@@ -65,3 +65,60 @@ def test_extra_usage_is_represented_without_masking() -> None:
     assert comparison.alignment.n_extra == 1
     extra_steps = [s for s in comparison.alignment.steps if s.kind is AlignmentKind.EXTRA]
     assert extra_steps[0].delta is None  # never a masked 0.0
+
+
+# -- T2.3: per-step quantile grading -------------------------------------------------
+
+
+def test_match_steps_get_a_step_grade_none_for_missed_and_extra() -> None:
+    ref_dist = [float(i) for i in range(1, 21)]  # 20 pts, median ~10.5
+    comparison = compare_spell_usage(
+        spell=_spell(),
+        presence=1.0,
+        user_times=[10.5],
+        ref_times=[10.5],
+        n_usages_median=1.0,
+        reference_n=20,
+        slot_ref_times=[ref_dist],
+    )
+    assert len(comparison.step_grades) == len(comparison.alignment.steps)
+    match_grades = [
+        g
+        for s, g in zip(comparison.alignment.steps, comparison.step_grades, strict=True)
+        if s.kind is AlignmentKind.MATCH
+    ]
+    assert len(match_grades) == 1
+    assert match_grades[0] is not None
+    assert match_grades[0].grade == "green"
+
+
+def test_step_grade_none_when_slot_ref_times_not_provided() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(),
+        presence=1.0,
+        user_times=[10.0],
+        ref_times=[10.0],
+        n_usages_median=1.0,
+        reference_n=5,
+    )
+    match_grades = [g for g in comparison.step_grades if g is not None]
+    assert len(match_grades) == 1
+    assert match_grades[0].grade == "insufficient"  # empty reference distribution -> n=0 < 15
+
+
+def test_thin_slot_distribution_grades_insufficient_not_red() -> None:
+    """T2.3 acceptance, exercised through the real comparison pipeline:
+    n=8 for a position must never be red.
+    """
+    thin_dist = [float(i) for i in range(8)]
+    comparison = compare_spell_usage(
+        spell=_spell(),
+        presence=1.0,
+        user_times=[20.0],  # far outside [0..7] — would be "red" with n>=15
+        ref_times=[3.5],
+        n_usages_median=1.0,
+        reference_n=8,
+        slot_ref_times=[thin_dist],
+    )
+    match_grade = next(g for g in comparison.step_grades if g is not None)
+    assert match_grade.grade == "insufficient"

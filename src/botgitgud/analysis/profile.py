@@ -67,11 +67,17 @@ def build_cd_reference_profile(
     for spell_id in presence_count:
         presence = presence_count[spell_id] / num_logs
 
-        slot_medians = [
-            statistics.median(times)
-            for _slot, times in sorted(slot_timings.get(spell_id, {}).items())
-            if times
-        ]
+        raw_slots = [times for _slot, times in sorted(slot_timings.get(spell_id, {}).items())]
+        # ref_times must be ascending for alignment.align() (§0.5's own
+        # _require_sorted) — slot_ref_times is re-paired through the same
+        # sort so slot_ref_times[i] stays the raw distribution behind
+        # ref_times[i] (T2.3: grading/bootstrap CI need that raw data).
+        by_median = sorted(
+            ((statistics.median(times), tuple(times)) for times in raw_slots if times),
+            key=lambda pair: pair[0],
+        )
+        slot_medians = [median for median, _times in by_median]
+        slot_ref_times = tuple(times for _median, times in by_median)
 
         if positional_logs:
             # Spells the positional subset never cast still contribute an
@@ -87,8 +93,9 @@ def build_cd_reference_profile(
         profile[spell_id] = SpellProfile(
             spell_id=spell_id,
             presence=presence,
-            ref_times=tuple(sorted(slot_medians)),
+            ref_times=tuple(slot_medians),
             n_usages_median=n_usages_median,
+            slot_ref_times=slot_ref_times,
         )
 
     return profile, num_positional

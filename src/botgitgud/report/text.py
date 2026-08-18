@@ -14,9 +14,11 @@ Changes from the legacy renderer (docs/implementacao.md T0.7):
      "Parse méd: 99" was fiction in every report it ever produced
      (achado 3.10). The cohort's median DPS is shown instead.
 
-The MATCH delta color thresholds (10s/25s) are unchanged from legacy on
-purpose — replacing them with per-ability quantile-based grading is T2.3's
-job, out of scope here.
+T2.3: the old fixed 10s/25s MATCH delta thresholds are gone — grading is
+now relative to each position's own empirical reference distribution
+(analysis/grading.py, via report/grading_text.py), with a Benjamini-
+Hochberg pass collapsing statistically-unreliable yellow/red findings into
+their own section instead of showing them inline.
 """
 
 from __future__ import annotations
@@ -30,9 +32,12 @@ from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
 from botgitgud.report.build_divergence_text import render_build_divergence
+from botgitgud.report.grading_text import (
+    compute_minor_deviation_keys,
+    render_match_step_line,
+    render_minor_deviations_section,
+)
 
-_GREEN_THRESHOLD_S = 10.0
-_YELLOW_THRESHOLD_S = 25.0
 _SEPARATOR = "=" * 42
 
 # T2.1: display labels for analysis/cohort_match.py's covariate names.
@@ -76,15 +81,6 @@ def _fmt_dps(value: float | None) -> str:
 
 def _fmt_percentile(value: float | None) -> str:
     return f"{value:.0f}" if value is not None else "n/d"
-
-
-def _match_status(delta: float) -> str:
-    abs_delta = abs(delta)
-    if abs_delta <= _GREEN_THRESHOLD_S:
-        return "🟢"
-    if abs_delta <= _YELLOW_THRESHOLD_S:
-        return "🟡"
-    return "🔴"
 
 
 def _render_covariates_line(header: ReportHeader) -> str | None:
@@ -162,7 +158,9 @@ def _render_missed_usage_section(comparisons: Sequence[SpellComparison]) -> list
     return lines
 
 
-def _render_spell_block(c: SpellComparison) -> list[str]:
+def _render_spell_block(
+    c: SpellComparison, minor_keys: set[tuple[int, int]], c_idx: int
+) -> list[str]:
     n_user = c.alignment.n_matched + c.alignment.n_extra
     n_ref_median = c.cadence.n_usages_median
     lines = [
@@ -171,16 +169,18 @@ def _render_spell_block(c: SpellComparison) -> list[str]:
         f"Usos: {n_user} (coorte: {n_ref_median:.1f})",
         "-" * 30,
     ]
-    for idx, step in enumerate(c.alignment.steps, start=1):
+    for s_idx, step in enumerate(c.alignment.steps):
+        idx = s_idx + 1
         if step.kind is AlignmentKind.MATCH:
+            if (c_idx, s_idx) in minor_keys:
+                continue  # T2.3: rendered in the collapsed section instead
             assert step.user_time is not None
             assert step.ref_time is not None
             assert step.delta is not None
-            sign = "+" if step.delta > 0 else ""
-            status = _match_status(step.delta)
+            grade = c.step_grades[s_idx]
+            assert grade is not None
             lines.append(
-                f"Uso #{idx} | Player: {step.user_time:.1f}s | Ideal: {step.ref_time:.1f}s "
-                f"| Delta: {sign}{step.delta:.1f}s {status}"
+                render_match_step_line(idx, step.user_time, step.ref_time, step.delta, grade)
             )
         elif step.kind is AlignmentKind.MISSED:
             assert step.ref_time is not None
@@ -224,23 +224,29 @@ def render_report(
 
     lines.extend(_render_missed_usage_section(comparisons))
 
-    major = [c for c in comparisons if c.cd_type == "MAJOR"]
-    minor = [c for c in comparisons if c.cd_type == "MINOR"]
+    # T2.3: BH runs over the WHOLE report's yellow/red steps before any
+    # spell block renders, so major/minor ordering doesn't bias which
+    # findings survive.
+    minor_keys = compute_minor_deviation_keys(comparisons)
+    indexed = list(enumerate(comparisons))
+    major = [(i, c) for i, c in indexed if c.cd_type == "MAJOR"]
+    minor = [(i, c) for i, c in indexed if c.cd_type == "MINOR"]
 
     if major:
         lines.append("")
         lines.append("🔥 **OFFENSIVE MAJOR CDS**")
         lines.append("-" * 42)
-        for c in major:
-            lines.extend(_render_spell_block(c))
+        for i, c in major:
+            lines.extend(_render_spell_block(c, minor_keys, i))
 
     if minor:
         lines.append("")
         lines.append("⚡ **MINOR CDS / BURST UTILITIES**")
         lines.append("-" * 42)
-        for c in minor:
-            lines.extend(_render_spell_block(c))
+        for i, c in minor:
+            lines.extend(_render_spell_block(c, minor_keys, i))
 
+    lines.extend(render_minor_deviations_section(comparisons, minor_keys))
     lines.extend(_render_manifest_footer(manifest))
     lines.append("")
     lines.append(_SEPARATOR)

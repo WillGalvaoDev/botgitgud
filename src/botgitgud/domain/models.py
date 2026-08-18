@@ -126,6 +126,11 @@ class SpellProfile:
     presence: float
     ref_times: tuple[float, ...]
     n_usages_median: float
+    # T2.3: raw per-slot reference times, index-aligned with ref_times —
+    # slot_ref_times[i] is every log's observed time at ref_times[i]'s
+    # position, the empirical distribution grading/bootstrap CI need
+    # (ref_times[i] is just that distribution's median).
+    slot_ref_times: tuple[tuple[float, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

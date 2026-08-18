@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from botgitgud.analysis.comparison import compare_spell_usage
+from botgitgud.analysis.comparison import SpellComparison, compare_spell_usage
 from botgitgud.analysis.talent_cluster import BuildDivergence, TalentDifference
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
@@ -179,6 +179,67 @@ def test_build_divergence_caps_shown_differences_and_notes_the_remainder() -> No
 def test_no_build_divergence_block_when_none() -> None:
     text = render_report(_header(), [], build_divergence=None)
     assert "BUILD DIVERGENTE" not in text
+
+
+# -- T2.3: quantile grading, bootstrap CI, BH collapsing -------------------------
+
+_REF_20 = [float(i) for i in range(1, 21)]  # n=20 >= MIN_N_FOR_GRADING, median 10.5
+
+
+def _graded_comparison(
+    user_time: float, *, reference_n: int = 20, ref_dist: list[float] | None = None
+) -> SpellComparison:
+    ref_dist = _REF_20 if ref_dist is None else ref_dist
+    return compare_spell_usage(
+        spell=_spell(1, "Test Spell"),
+        presence=1.0,
+        user_times=[user_time],
+        ref_times=[10.5],
+        n_usages_median=1.0,
+        reference_n=reference_n,
+        slot_ref_times=[ref_dist],
+    )
+
+
+def test_green_deviation_shows_green_and_is_never_collapsed() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(10.5)])  # q=0.5
+    assert "🟢" in text
+    assert "Desvios menores" not in text
+
+
+def test_single_yellow_deviation_collapses_alone() -> None:
+    """A single yellow candidate's BH threshold is (1/1)*FDR=0.10; a
+    yellow-graded p-value (~0.3-0.5) never survives that alone — it's
+    moved out of the ability's own inline block into the collapsed
+    section (which still shows the grade, just labeled non-significant).
+    """
+    text = render_report(_header(reference_n=20), [_graded_comparison(3.5)])  # q=0.15 -> yellow
+    before, after = text.split("Desvios menores (não significativos)")
+    assert "🟡" not in before  # not shown inline in the ability's own block
+    assert "Test Spell" in after
+    assert "🟡" in after
+
+
+def test_single_extreme_red_deviation_survives_bh_alone() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(0.5)])  # q=0.0 -> extreme
+    assert "🔴" in text
+    assert "Desvios menores" not in text
+
+
+def test_insufficient_sample_shows_no_color() -> None:
+    thin = [float(i) for i in range(5)]  # n=5 < MIN_N_FOR_GRADING
+    text = render_report(
+        _header(reference_n=5), [_graded_comparison(10.0, reference_n=5, ref_dist=thin)]
+    )
+    assert "⚪ amostra insuficiente (n=5)" in text
+    assert "🟢" not in text
+    assert "🟡" not in text
+    assert "🔴" not in text
+
+
+def test_ic90_shown_in_the_ideal_line_when_bootstrap_ci_available() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(10.5)])
+    assert "IC90:" in text
 
 
 # -- T2.1: matched/relaxed covariate declaration --------------------------------
