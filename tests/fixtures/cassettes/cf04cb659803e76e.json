@@ -1,0 +1,157 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "464",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Ppa",
+      "serverRegion": "CN",
+      "serverSlug": "米奈希尔"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 74.29045576717003,
+            "bestAmount": 173785.46428821,
+            "difficulty": 5,
+            "fastestKill": 271717,
+            "medianPerformance": 95.56737178311951,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 173785.46428821,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 271717,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "historicalPercent": 99.8338097191427,
+                "historicalTotalParses": 6801,
+                "lockedIn": true,
+                "rankPercent": 99.8338097191427,
+                "rankTotalParses": 6801,
+                "report": {
+                  "code": "hnTbKFt9aLcXypkB",
+                  "fightID": 164,
+                  "startTime": 1782795475812
+                },
+                "spec": "Demonology",
+                "startTime": 1782823302078,
+                "todayPercent": 99.25625437903292,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 146733.37128733,
+                "banned": true,
+                "bestSpec": "Demonology",
+                "bracketData": 286,
+                "class": 10,
+                "duration": 349546,
+                "exploit": 44,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "historicalPercent": 99.6083454662006,
+                "historicalTotalParses": 18636,
+                "lockedIn": true,
+                "rankPercent": 99.6083454662006,
+                "rankTotalParses": 18636,
+                "report": {
+                  "code": "xMR8yZnfh4vJ1cgp",
+                  "fightID": 23,
+                  "startTime": 1778993474443
+                },
+                "spec": "Demonology",
+                "startTime": 1778996989330,
+                "todayPercent": 97.69470135955048,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 130699.88319094,
+                "bestSpec": "Demonology",
+                "bracketData": 284,
+                "class": 10,
+                "duration": 375827,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "historicalPercent": 95.56737178311951,
+                "historicalTotalParses": 15269,
+                "lockedIn": true,
+                "rankPercent": 95.56737178311951,
+                "rankTotalParses": 15269,
+                "report": {
+                  "code": "WfCTb8ZFyzBgGxkh",
+                  "fightID": 96,
+                  "startTime": 1778307188765
+                },
+                "spec": "Demonology",
+                "startTime": 1778329945285,
+                "todayPercent": 84.49874195413716,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 100081.31216739,
+                "bestSpec": "Demonology",
+                "bracketData": 289,
+                "class": 10,
+                "duration": 351571,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "historicalPercent": 27.47018579924786,
+                "historicalTotalParses": 21936,
+                "lockedIn": true,
+                "rankPercent": 27.47018579924786,
+                "rankTotalParses": 21936,
+                "report": {
+                  "code": "G48YK6fWrH9x7abv",
+                  "fightID": 98,
+                  "startTime": 1779598515571
+                },
+                "spec": "Demonology",
+                "startTime": 1779616683507,
+                "todayPercent": 25.587676087597956,
+                "todayTotalParses": 28276
+              }
+            ],
+            "totalKills": 3,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

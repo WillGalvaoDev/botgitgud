@@ -1,6 +1,5 @@
 """T1.7 — batch cohort-building, the logic behind the CLI's `build-cohort`
-subcommand: "Baixa rankings, ingere os logs (usando o cache da T1.4),
-calcula o CohortProfile e o persiste."
+subcommand: "Baixa rankings, ingere os logs (usando o cache da T1.4)."
 
 Duration buckets (analysis/cohort.py, 5% wide) are discovered from the
 live pool in a single unfiltered rankings fetch (docs/desvios.md D-15's
@@ -8,23 +7,29 @@ live pool in a single unfiltered rankings fetch (docs/desvios.md D-15's
 "salva o progresso parcial" if RateLimitBudgetExceeded fires mid-batch,
 since each bucket is persisted immediately after it's built, not batched
 to the end.
+
+T2.1 (docs/desvios.md D-25): this no longer aggregates a CohortProfile —
+per-player covariate matching means there is no single "the" profile for
+a bucket, only a candidate pool that every player's own analysis matches
+against independently (analysis/pipeline.py). This job's value is
+prefetching: it warms the candidate-pool cache (Store.write_candidate_pool)
+AND the individual reference-log cache (fetch_cohort_logs, via LogFetcher's
+T1.4 Store-backed cache) so the next interactive `!analisar` for this
+bucket never needs a synchronous rankings query or a synchronous 100-log
+fetch.
 """
 
 from __future__ import annotations
 
-import statistics
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import structlog
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, duration_bucket_bounds, duration_bucket_id
 from botgitgud.analysis.pipeline import Deps
-from botgitgud.analysis.profile import build_cd_reference_profile
-from botgitgud.domain.models import CohortCriteria, CohortProfile
+from botgitgud.domain.models import CohortCriteria, RankingCandidate
 from botgitgud.ingest.rankings import (
-    RankingCandidate,
     fetch_cohort_logs,
     fetch_ranking_candidates,
     get_current_partition,
@@ -51,9 +56,9 @@ def build_cohorts(
     difficulty: int,
     duration_bucket_s: float | None,
 ) -> list[BucketBuildResult]:
-    """Builds/persists a CohortProfile per duration bucket with at least
-    COHORT_MIN_HARD candidates — every such bucket, or just the one
-    containing `duration_bucket_s` when given. Raises
+    """Warms the candidate-pool cache and the individual log cache for
+    every duration bucket with at least COHORT_MIN_HARD candidates — or
+    just the one containing `duration_bucket_s` when given. Raises
     RateLimitBudgetExceeded if the budget runs out mid-batch.
     """
     partition = get_current_partition(deps.client, encounter_id)
@@ -84,13 +89,11 @@ def build_cohorts(
             )
             continue
 
-        reference_logs = fetch_cohort_logs(
-            deps.fetcher, bucket_candidates, max_workers=deps.settings.max_workers
-        )
-        representative_duration = statistics.median(c.duration_s for c in bucket_candidates)
-        profile, num_positional = build_cd_reference_profile(
-            reference_logs, representative_duration
-        )
+        # Warms the T1.4 per-log Store cache for every candidate in this
+        # bucket — the value of a batch build. The result is discarded:
+        # aggregation happens per-player, in analysis/pipeline.py, since
+        # T2.1 (docs/desvios.md D-25).
+        fetch_cohort_logs(deps.fetcher, bucket_candidates, max_workers=deps.settings.max_workers)
 
         bucket_lo, bucket_hi = duration_bucket_bounds(bucket_id)
         criteria = CohortCriteria(
@@ -104,26 +107,19 @@ def build_cohorts(
             duration_max_s=bucket_hi,
         )
         cohort_id = criteria.cohort_id()
-        deps.store.write_profile(
-            CohortProfile(
-                cohort_id=cohort_id,
-                n_members=num_positional,
-                built_at=datetime.now(UTC),
-                spells=profile,
-            )
-        )
+        deps.store.write_candidate_pool(cohort_id, bucket_candidates)
         log.info(
             "cohort_builder.bucket_built",
             bucket_id=bucket_id,
             cohort_id=cohort_id,
-            n_members=num_positional,
+            n_candidates=len(bucket_candidates),
         )
         results.append(
             BucketBuildResult(
                 bucket_id=bucket_id,
                 duration_min_s=bucket_lo,
                 duration_max_s=bucket_hi,
-                n_members=num_positional,
+                n_members=len(bucket_candidates),
                 cohort_id=cohort_id,
             )
         )

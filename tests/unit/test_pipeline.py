@@ -26,6 +26,7 @@ from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import CohortNotReady, InsufficientCohort, PlayerNotFound, ScopeRejected
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
+from botgitgud.report.text import render_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
 PRIMARY_REPORT = "ABCDEFGHIJKLMNOP"
@@ -64,6 +65,14 @@ def _rankings_response(n: int, *, has_more: bool = False) -> dict[str, Any]:
             }
         }
     }
+
+
+def _buffs_response(aura_guids: list[int] | None = None) -> dict[str, Any]:
+    auras = [
+        {"guid": g, "name": f"Aura{g}", "totalUptime": 1000, "totalUses": 1}
+        for g in (aura_guids or [])
+    ]
+    return {"data": {"reportData": {"report": {"table": {"data": {"auras": auras}}}}}}
 
 
 def _zone_partitions_response(*, default_partition: int = 3) -> dict[str, Any]:
@@ -107,13 +116,17 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "rankings"
         elif "GetZonePartitions" in query:
             op = "partition"
+        elif "GetPlayerBuffs" in query:
+            op = "buffs"
         else:
             pytest.fail(f"query GraphQL não reconhecida: {query[:80]}")
 
+        self.calls.append(op)
+        if op == "buffs" and op not in self._responses:
+            return httpx.Response(200, json=_buffs_response())  # T2.1: default empty buffs
         if op not in self._responses:
             pytest.fail(f"operação '{op}' inesperada — nenhuma resposta canned para ela")
 
-        self.calls.append(op)
         payload = self._responses[op]
         item = payload.pop(0) if isinstance(payload, list) else payload
         return httpx.Response(200, json=item)
@@ -199,24 +212,171 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert any(c.spell.spell_id == 104316 for c in result.comparisons)
     assert result.manifest.cohort_id
     assert result.manifest.wcl_partition == 3
+    assert "has_augmentation" in result.header.matched_covariates
+    assert "item_level" in result.header.matched_covariates
 
 
-def test_cold_build_persists_a_cohort_profile_for_reuse(tmp_path: Path) -> None:
+def test_player_without_augmentation_gets_an_augmentation_free_cohort(tmp_path: Path) -> None:
+    """T2.1 acceptance: a player without Augmentation in the raid gets a
+    cohort of ONLY non-Augmentation logs, as long as n >= COHORT_MIN_HARD
+    without needing to relax has_augmentation — 8 clean candidates plus 4
+    Augmentation-buffed ones are offered; only the 8 clean ones survive.
+    """
+    n_clean = N_REFS
+    n_augmented = 4
+    meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]  # primary: no augment
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+    buffs = [_buffs_response()]  # primary: no Ebon Might received
+    rankings_entries = []
+
+    for i in range(n_clean + n_augmented):
+        code = f"REFCODE{i:09d}"
+        rankings_entries.append(
+            {"name": f"Ref{i}", "duration": 100_000, "report": {"code": code, "fightID": 1}}
+        )
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                damage_total=900_000.0,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, code, 1))
+        is_augmented = i >= n_clean
+        buffs.append(_buffs_response([395152]) if is_augmented else _buffs_response())
+
+    responses = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "buffs": buffs,
+        "rankings": [
+            {
+                "data": {
+                    "worldData": {
+                        "encounter": {
+                            "characterRankings": {
+                                "rankings": rankings_entries,
+                                "hasMorePages": False,
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "partition": _zone_partitions_response(),
+    }
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.header.reference_n == n_clean
+    assert "has_augmentation" in result.header.matched_covariates
+    assert "has_augmentation" not in result.header.relaxed_covariates
+
+
+def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(tmp_path: Path) -> None:
+    """T2.1 acceptance: when the only way to reach COHORT_MIN_HARD is to
+    admit Augmentation-buffed candidates, the RENDERED report carries the
+    support-buff warning.
+    """
+    n_clean = 3  # below COHORT_MIN_HARD alone — forces has_augmentation to relax
+    n_augmented = 8
+    meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+    buffs = [_buffs_response()]
+    rankings_entries = []
+
+    total = n_clean + n_augmented
+    for i in range(total):
+        code = f"REFCODE{i:09d}"
+        rankings_entries.append(
+            {"name": f"Ref{i}", "duration": 100_000, "report": {"code": code, "fightID": 1}}
+        )
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                damage_total=900_000.0,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, code, 1))
+        is_augmented = i >= n_clean
+        buffs.append(_buffs_response([395152]) if is_augmented else _buffs_response())
+
+    responses = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "buffs": buffs,
+        "rankings": [
+            {
+                "data": {
+                    "worldData": {
+                        "encounter": {
+                            "characterRankings": {
+                                "rankings": rankings_entries,
+                                "hasMorePages": False,
+                            }
+                        }
+                    }
+                }
+            }
+        ],
+        "partition": _zone_partitions_response(),
+    }
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert "has_augmentation" in result.header.relaxed_covariates
+    text = render_report(result.header, result.comparisons, result.manifest)
+    assert (
+        "⚠️ Buffs de suporte não pareados — parte do gap de dano por cast "
+        "pode não ser controlável por você." in text
+    )
+
+
+def test_cold_build_persists_a_candidate_pool_for_reuse(tmp_path: Path) -> None:
+    """T2.1 (docs/desvios.md D-25): the Store caches the raw candidate
+    pool, not an aggregated profile — matching is per-player and always
+    runs fresh (see analysis/cohort_match.py).
+    """
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
 
     result = run_analysis(_req(), deps)
 
-    profile = deps.store.read_profile(result.manifest.cohort_id)
-    assert profile is not None
-    assert profile.n_members == N_REFS
+    pool = deps.store.read_candidate_pool(result.manifest.cohort_id)
+    assert pool is not None
+    assert len(pool) == N_REFS
 
 
-def test_second_call_with_a_warm_profile_makes_zero_ranking_queries(tmp_path: Path) -> None:
-    """T1.7's own acceptance criterion, in spirit: once a CohortProfile is
+def test_second_call_with_a_warm_candidate_pool_makes_zero_ranking_queries(tmp_path: Path) -> None:
+    """T1.7's own acceptance criterion, in spirit: once a candidate pool is
     cached, a second analysis for the same criteria never re-queries
     characterRankings — the warm path is fetch-the-user's-log +
-    lookup-a-profile, not a fresh 100-log fetch.
+    lookup-a-pool, not a fresh 100-log fetch.
     """
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
@@ -242,7 +402,7 @@ def test_cohort_not_ready_when_cold_build_disallowed_and_nothing_cached(tmp_path
     assert "rankings" not in transport.calls
 
 
-def test_allow_cold_build_false_still_uses_an_existing_warm_profile(tmp_path: Path) -> None:
+def test_allow_cold_build_false_still_uses_an_existing_warm_candidate_pool(tmp_path: Path) -> None:
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
     run_analysis(_req(), deps)  # cold build (allowed), populates the cache
@@ -320,6 +480,71 @@ def test_player_not_found_propagates(tmp_path: Path) -> None:
 def test_insufficient_cohort_propagates(tmp_path: Path) -> None:
     responses = _happy_path_responses()
     responses["rankings"] = [_rankings_response(3)]  # below COHORT_MIN_HARD (8)
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+    req = _req()
+
+    with pytest.raises(InsufficientCohort):
+        run_analysis(req, deps)
+
+
+def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
+    tmp_path: Path,
+) -> None:
+    """T2.1 acceptance: 8 raw candidates clear rankings.py's own ±35% gate
+    (so InsufficientCohort is NOT raised there), but every one's own fight
+    is 30s off the player's 100s fight — outside match_cohort's ±20%
+    duration ceiling (max(100*0.20, 15)=20s), which is never relaxed
+    further no matter how every other covariate degrades.
+    difficulty/partition/class/spec are exact by construction (the
+    rankings query itself) and are never touched by match_cohort either
+    way — pipeline.py must still raise InsufficientCohort from the
+    post-matching count.
+    """
+    meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+    rankings_entries = []
+    for i in range(N_REFS):
+        code = f"REFCODE{i:09d}"
+        rankings_entries.append(
+            {"name": f"Ref{i}", "duration": 130_000, "report": {"code": code, "fightID": 1}}
+        )
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                start=0,
+                end=130_000,  # 130s: 30s off the 100s primary fight
+                damage_total=900_000.0,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, code, 1))
+
+    off_duration_rankings = {
+        "data": {
+            "worldData": {
+                "encounter": {
+                    "characterRankings": {"rankings": rankings_entries, "hasMorePages": False}
+                }
+            }
+        }
+    }
+    responses = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "rankings": [off_duration_rankings],
+        "partition": _zone_partitions_response(),
+    }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
     req = _req()

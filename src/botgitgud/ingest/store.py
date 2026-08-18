@@ -9,10 +9,21 @@ across players and re-ingestions) and how each was resolved.
 Layout:
     data/
     ├── warehouse.duckdb            dimension tables + index
-    ├── raw/
-    │   └── encounter_id=<E>/difficulty=<D>/partition=<P>/<file>.parquet
-    └── profiles/
-        └── <cohort_id>.parquet
+    └── raw/
+        └── encounter_id=<E>/difficulty=<D>/partition=<P>/<file>.parquet
+
+docs/desvios.md D-25 (T2.1): the T1.7 `profiles/<cohort_id>.parquet` +
+`cohorts` table (a pre-aggregated CohortProfile cached per bucket) is gone
+— T2.1's per-player covariate matching (analysis/cohort_match.py) means
+the aggregate can no longer be precomputed once and reused across every
+player who lands in the same bucket; it must be built fresh from
+`build_cd_reference_profile` on every request, from whichever reference
+logs survive that player's own matching cascade. What IS still safe to
+cache per cohort_id is the *candidate pool* (`cohort_candidates` below):
+the same ranking page fetch produces it regardless of which player is
+being analyzed, so a warm request still spends zero characterRankings
+queries — pipeline.py's own per-request match_cohort() call does the rest
+in-memory.
 
 Nested PlayerLog fields (cast_timeline, damage_by_ability, uptimes,
 resource_waste) are never queried at the SQL level, so they're stored as
@@ -46,13 +57,8 @@ from typing import Any
 import duckdb
 import polars as pl
 
-from botgitgud.domain.models import CohortProfile, PlayerLog, RunManifest
-from botgitgud.ingest.parquet_codec import (
-    read_parquet_log,
-    read_parquet_profile,
-    write_parquet_log,
-    write_parquet_profile,
-)
+from botgitgud.domain.models import PlayerLog, RankingCandidate, RunManifest
+from botgitgud.ingest.parquet_codec import read_parquet_log, write_parquet_log
 
 _CREATE_LOGS_TABLE = """
 CREATE TABLE IF NOT EXISTS logs (
@@ -69,14 +75,16 @@ CREATE TABLE IF NOT EXISTS logs (
 # the same (report_code, fight_id, player_name) must SUCCEED (immutability:
 # re-ingestion adds a row with a later ingested_at; reads take the latest).
 
-_CREATE_COHORTS_TABLE = """
-CREATE TABLE IF NOT EXISTS cohorts (
-    cohort_id VARCHAR PRIMARY KEY, criteria_json VARCHAR,
-    n_members INTEGER, built_at TIMESTAMP, code_version VARCHAR
+_CREATE_CANDIDATES_TABLE = """
+CREATE TABLE IF NOT EXISTS cohort_candidates (
+    cohort_id VARCHAR, report_code VARCHAR, fight_id INTEGER,
+    player_name VARCHAR, duration_s DOUBLE
 )
 """
-# A cohort_id is a content hash of its criteria (T1.5) — rebuilding the same
-# cohort should replace its row, not duplicate it, so this table IS upserted.
+# D-25: replaces T1.7's `cohorts` table. A cohort_id's candidate pool is
+# replaced wholesale on rebuild (DELETE + re-INSERT in write_candidate_pool)
+# rather than upserted row-by-row — the pool is one atomic unit, not a set
+# of independently-updatable facts like `logs`/`runs`.
 
 _CREATE_SPELLS_TABLE = """
 CREATE TABLE IF NOT EXISTS spells (
@@ -103,14 +111,12 @@ class Store:
     def __init__(self, data_dir: Path) -> None:
         self._data_dir = data_dir
         self._raw_dir = data_dir / "raw"
-        self._profiles_dir = data_dir / "profiles"
         self._raw_dir.mkdir(parents=True, exist_ok=True)
-        self._profiles_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = data_dir / "warehouse.duckdb"
         self._lock = threading.RLock()
         self._conn = duckdb.connect(str(self._db_path))
         self._conn.execute(_CREATE_LOGS_TABLE)
-        self._conn.execute(_CREATE_COHORTS_TABLE)
+        self._conn.execute(_CREATE_CANDIDATES_TABLE)
         self._conn.execute(_CREATE_SPELLS_TABLE)
         self._conn.execute(_CREATE_RUNS_TABLE)
 
@@ -206,27 +212,37 @@ class Store:
                 ],
             )
 
-    # -- cohort profiles ----------------------------------------------------------
+    # -- cohort candidate pools (T2.1, D-25) ---------------------------------------
 
-    def read_profile(self, cohort_id: str) -> CohortProfile | None:
-        path = self._profiles_dir / f"{cohort_id}.parquet"
-        if not path.exists():
-            return None
-        return read_parquet_profile(path)
-
-    def write_profile(self, profile: CohortProfile) -> None:
-        path = self._profiles_dir / f"{profile.cohort_id}.parquet"
-        write_parquet_profile(profile, path)
+    def read_candidate_pool(self, cohort_id: str) -> list[RankingCandidate] | None:
+        """None means "never built" — an empty list is a valid, previously-
+        recorded outcome (a bucket whose only candidates all failed to
+        parse) and callers must not treat the two the same way.
+        """
         with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO cohorts (cohort_id, criteria_json, n_members, built_at, code_version)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (cohort_id) DO UPDATE SET
-                    n_members = excluded.n_members,
-                    built_at = excluded.built_at
-                """,
-                [profile.cohort_id, "{}", profile.n_members, profile.built_at, "unknown"],
+            rows = self._conn.execute(
+                "SELECT report_code, fight_id, player_name, duration_s "
+                "FROM cohort_candidates WHERE cohort_id = ?",
+                [cohort_id],
+            ).fetchall()
+        if not rows:
+            return None
+        return [
+            RankingCandidate(report_code=r[0], fight_id=r[1], player_name=r[2], duration_s=r[3])
+            for r in rows
+        ]
+
+    def write_candidate_pool(self, cohort_id: str, candidates: list[RankingCandidate]) -> None:
+        rows = [
+            (cohort_id, c.report_code, c.fight_id, c.player_name, c.duration_s) for c in candidates
+        ]
+        with self._lock:
+            self._conn.execute("DELETE FROM cohort_candidates WHERE cohort_id = ?", [cohort_id])
+            self._conn.executemany(
+                "INSERT INTO cohort_candidates "
+                "(cohort_id, report_code, fight_id, player_name, duration_s) "
+                "VALUES (?, ?, ?, ?, ?)",
+                rows,
             )
 
     # -- run manifests --------------------------------------------------------------

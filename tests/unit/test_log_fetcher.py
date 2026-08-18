@@ -51,6 +51,7 @@ def _meta_response(
     damage_total: float = 1_000_000.0,
     ilvl: float = 283.0,
     abilities: list[dict[str, Any]] | None = None,
+    combatant_info: dict[str, Any] | None = None,
     no_player: bool = False,
     no_fight: bool = False,
 ) -> dict[str, Any]:
@@ -69,21 +70,18 @@ def _meta_response(
             }
         ]
 
-    dps_group = (
-        []
-        if no_player
-        else [
-            {
-                "id": player_id,
-                "name": player_name,
-                "type": class_name,
-                "server": server,
-                "region": region,
-                "specs": [spec_name],
-                "maxItemLevel": ilvl,
-            }
-        ]
-    )
+    player_entry: dict[str, Any] = {
+        "id": player_id,
+        "name": player_name,
+        "type": class_name,
+        "server": server,
+        "region": region,
+        "specs": [spec_name],
+        "maxItemLevel": ilvl,
+    }
+    if combatant_info is not None:
+        player_entry["combatantInfo"] = combatant_info
+    dps_group = [] if no_player else [player_entry]
     abilities = (
         abilities if abilities is not None else [{"guid": 104316, "name": "Call Dreadstalkers"}]
     )
@@ -106,6 +104,14 @@ def _meta_response(
             }
         }
     }
+
+
+def _buffs_response(aura_guids: list[int] | None = None) -> dict[str, Any]:
+    auras = [
+        {"guid": g, "name": f"Aura{g}", "totalUptime": 1000, "totalUses": 1}
+        for g in (aura_guids or [])
+    ]
+    return {"data": {"reportData": {"report": {"table": {"data": {"auras": auras}}}}}}
 
 
 def _events_response(
@@ -165,10 +171,14 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "events"
         elif "GetPercentile" in query:
             op = "percentile"
+        elif "GetPlayerBuffs" in query:
+            op = "buffs"
         else:
             pytest.fail(f"query GraphQL não reconhecida: {query[:80]}")
 
         self.calls.append(op)
+        if op == "buffs" and op not in self._responses:
+            return httpx.Response(200, json=_buffs_response())  # T2.1: default empty buffs
         payload = self._responses[op]
         item = payload.pop(0) if isinstance(payload, list) else payload
         return httpx.Response(200, json=item)
@@ -251,6 +261,39 @@ def test_fetch_builds_correct_player_log(tmp_path: Path) -> None:
     assert result.dps == 10000.0  # 1_000_000 / 100s
     assert result.percentile == 71.0
     assert result.cast_timeline == {104316: (1.3,)}
+    assert result.build.talent_hash is None  # no combatantInfo in this fixture
+    assert result.build.tier_pieces is None
+    assert result.build.has_augmentation is False
+    assert result.build.external_buffs == frozenset()
+
+
+def test_fetch_populates_augmentation_and_external_buffs(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["buffs"] = [_buffs_response([395152, 10060, 999999])]  # Ebon Might + Power Infusion
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.build.has_augmentation is True
+    assert result.build.external_buffs == frozenset({10060})  # 999999 isn't a known external buff
+
+
+def test_fetch_populates_talent_hash_and_tier_pieces_from_combatant_info(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["meta"] = [
+        _meta_response(
+            combatant_info={
+                "talentTree": [{"nodeID": 1, "rank": 1}],
+                "gear": [{"setID": 1989}, {"setID": None}],
+            }
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.build.talent_hash is not None
+    assert result.build.tier_pieces == 1
 
 
 def test_fetch_persists_to_store(tmp_path: Path) -> None:

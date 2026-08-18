@@ -7,33 +7,45 @@ layers (bot/discord_bot.py, cli.py) are the only places allowed to catch
 them broadly and translate to a user-facing message.
 
 T1.7: the cohort is now identity-addressed by CohortCriteria/cohort_id
-(T1.5) and looked up in the Store before ever hitting the live rankings
-API. `allow_cold_build=False` (used by the Discord path) turns a cache
-miss into CohortNotReady instead of a synchronous 100-log fetch — "o
-caminho interativo... nunca baixa 100 logs de forma síncrona".
+(T1.5) and its candidate pool looked up in the Store before ever hitting
+the live rankings API. `allow_cold_build=False` (used by the Discord path)
+turns a cache miss into CohortNotReady instead of a synchronous 100-log
+fetch — "o caminho interativo... nunca baixa 100 logs de forma síncrona".
+
+T2.1 (docs/desvios.md D-25): the Store now caches the raw candidate pool
+per cohort_id instead of a pre-aggregated CohortProfile — per-player
+covariate matching (analysis/cohort_match.py) means the aggregate can't be
+precomputed once and shared across every player who lands in the same
+duration bucket, but the candidate *pool* (which report/fight/player this
+bucket's rankings query resolved to) is identical for all of them, so a
+warm request still spends zero characterRankings queries. Every request,
+warm or cold, ends the same way: fetch_cohort_logs -> match_cohort ->
+build_cd_reference_profile, freshly, against whichever reference logs
+survive THIS player's own matching cascade.
 """
 
 from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 import structlog
 
 from botgitgud.analysis.cohort import (
+    COHORT_MIN_HARD,
     POSITIONAL_MIN_N,
     classify_cohort_size,
     duration_bucket_bounds,
     duration_bucket_id,
 )
+from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
 from botgitgud.config import Settings
-from botgitgud.domain.models import CohortCriteria, CohortProfile, RunManifest
+from botgitgud.domain.models import CohortCriteria, RunManifest
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import CohortNotReady, ScopeRejected
+from botgitgud.errors import CohortNotReady, InsufficientCohort, ScopeRejected
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.rankings import (
     fetch_cohort_logs,
@@ -75,9 +87,11 @@ def run_analysis(
     req: AnalysisRequest, deps: Deps, *, allow_cold_build: bool = True
 ) -> AnalysisResult:
     """Raises PlayerNotFound/FightNotFound (LogFetcher.fetch), ScopeRejected
-    (out-of-scope spec), CohortNotReady (no cached profile and
+    (out-of-scope spec), CohortNotReady (no cached candidate pool and
     allow_cold_build=False), or InsufficientCohort (too few ranking
-    candidates, cold path only) on every expected failure path.
+    candidates overall — raised by ingest/rankings.py, cold path only — or
+    too few survive match_cohort's covariate degradation cascade, which can
+    happen on either path) on every expected failure path.
     """
     player_log = deps.fetcher.fetch(req.report_code, req.fight_id, req.character_name)
 
@@ -102,15 +116,9 @@ def run_analysis(
         duration_max_s=bucket_hi,
     )
     cohort_id = criteria.cohort_id()
-    cached_profile = deps.store.read_profile(cohort_id)
+    candidates = deps.store.read_candidate_pool(cohort_id)
 
-    if cached_profile is not None:
-        profile = cached_profile.spells
-        num_positional = cached_profile.n_members
-        duration_min_s, duration_max_s = bucket_lo, bucket_hi
-        cohort_median_dps = None  # not tracked by a persisted CohortProfile
-        cohort_size_status = classify_cohort_size(cached_profile.n_members)
-    else:
+    if candidates is None:
         if not allow_cold_build:
             msg = (
                 f"coorte ainda não construída para encontro {criteria.encounter_id} "
@@ -126,29 +134,30 @@ def run_analysis(
             partition=partition,
             target_duration_s=player_log.fight.duration_s,
         )
-        reference_logs = fetch_cohort_logs(
-            deps.fetcher, candidates, max_workers=deps.settings.max_workers
-        )
-        profile, num_positional = build_cd_reference_profile(
-            reference_logs, player_log.fight.duration_s
-        )
-        durations = [rl.fight.duration_s for rl in reference_logs]
-        dps_values = [rl.dps for rl in reference_logs if rl.dps is not None]
-        cohort_median_dps = statistics.median(dps_values) if dps_values else None
-        duration_min_s = min(durations) if durations else player_log.fight.duration_s
-        duration_max_s = max(durations) if durations else player_log.fight.duration_s
-        cohort_size_status = classify_cohort_size(len(reference_logs))
-
         # Persisted so the next request for this same bucket — interactive
-        # or another build-cohort run — reuses it instead of refetching.
-        deps.store.write_profile(
-            CohortProfile(
-                cohort_id=cohort_id,
-                n_members=num_positional,
-                built_at=datetime.now(UTC),
-                spells=profile,
-            )
+        # or another build-cohort run — reuses it instead of re-querying
+        # characterRankings. The per-player matching below always runs
+        # fresh, warm or cold (docs/desvios.md D-25).
+        deps.store.write_candidate_pool(cohort_id, candidates)
+
+    reference_logs = fetch_cohort_logs(
+        deps.fetcher, candidates, max_workers=deps.settings.max_workers
+    )
+    matched_logs, match_report = match_cohort(player_log, reference_logs, min_n=COHORT_MIN_HARD)
+    if len(matched_logs) < COHORT_MIN_HARD:
+        msg = (
+            f"apenas {len(matched_logs)} logs de referência após matching de "
+            f"covariáveis (mínimo: {COHORT_MIN_HARD})"
         )
+        raise InsufficientCohort(msg, n_members=len(matched_logs), minimum_required=COHORT_MIN_HARD)
+
+    profile, num_positional = build_cd_reference_profile(matched_logs, player_log.fight.duration_s)
+    durations = [rl.fight.duration_s for rl in matched_logs]
+    dps_values = [rl.dps for rl in matched_logs if rl.dps is not None]
+    cohort_median_dps = statistics.median(dps_values) if dps_values else None
+    duration_min_s = min(durations) if durations else player_log.fight.duration_s
+    duration_max_s = max(durations) if durations else player_log.fight.duration_s
+    cohort_size_status = classify_cohort_size(len(matched_logs))
 
     eligible_ids = discover_eligible_spell_ids(profile)
     comparisons = compare_all_spells(
@@ -183,6 +192,8 @@ def run_analysis(
         player_percentile=player_log.percentile,
         cohort_median_dps=cohort_median_dps,
         cohort_warnings=tuple(warnings),
+        matched_covariates=match_report.matched,
+        relaxed_covariates=match_report.relaxed,
     )
     manifest = build_run_manifest(
         cohort_id=cohort_id,

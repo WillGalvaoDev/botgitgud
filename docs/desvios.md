@@ -452,3 +452,68 @@ de um projeto pessoal/comunidade pequena).
   o processo de longa duração do bot.
 - **Impacto:** nenhum na metodologia. Sem isso, toda a infraestrutura da T1.8 (fila, orçamento,
   justiça entre usuários) não teria como rodar de verdade fora dos testes.
+
+## D-24 — `talent_cluster` sempre pré-relaxada em `match_cohort` até a T2.2 existir
+
+- **Tarefa:** T2.1
+- **Documento diz:** a covariável `talent_cluster` participa da cascata de degradação como
+  qualquer outra — só é relaxada se `n < COHORT_MIN_HARD` após tentar pareá-la.
+- **Realidade:** o clustering de builds de talentos por similaridade de Jaccard (que define o que
+  "mesmo cluster" significa) é o próprio objeto da T2.2, que ainda não existe nesta tarefa —
+  T2.1 é um pré-requisito dela, não o contrário. Não há como *tentar* parear `talent_cluster`
+  sem primeiro ter clusters.
+- **Ação tomada:** `analysis/cohort_match.py`'s `match_cohort` inicializa `relaxed` já contendo
+  `"talent_cluster"` (nunca em `active`) e nunca a testa na cascata — ela aparece em
+  `MatchReport.relaxed` desde a primeira chamada, em todo relatório, até a T2.2 implementar
+  clustering real e este módulo ser atualizado para usá-lo.
+- **Impacto:** nenhum na metodologia — a T2.1 antecipa exatamente este encadeamento (ver a
+  ordem `tier_pieces → external_buffs → item_level → talent_cluster → has_augmentation →
+  duração`, com `talent_cluster` no meio). Todo relatório até a T2.2 mostra o aviso genérico
+  "talentos: mesma build não pareado" — esperado e documentado, não um bug.
+
+## D-25 — Cache de coorte agregada (T1.7) incompatível com matching por jogador (T2.1)
+
+- **Tarefa:** T2.1
+- **Tarefa diz:** aplicar a cascata de degradação de covariáveis (`match_cohort`) entre
+  `fetch_cohort_logs` e `build_cd_reference_profile`, tanto no caminho quente (coorte já em cache)
+  quanto no frio.
+- **Realidade:** a T1.7 implementou o caminho quente como um `CohortProfile` *já agregado*
+  (`Store.write_profile`/`read_profile`, tabela `cohorts`) — um `Mapping[int, SpellProfile]`
+  calculado uma vez por bucket e reutilizado por qualquer jogador que caia nele. Isso é
+  estruturalmente incompatível com matching por jogador: as covariáveis do jogador analisado
+  (ilvl, tier_pieces, has_augmentation, external_buffs) só são conhecidas no momento da análise,
+  então o subconjunto de logs de referência que sobrevive a `match_cohort` é diferente para cada
+  jogador — não existe "o" perfil agregado de um bucket sob a T2.1.
+- **Ação tomada:** substituída a persistência de `CohortProfile` por uma persistência do **pool de
+  candidatos brutos** por `cohort_id` (`Store.write_candidate_pool`/`read_candidate_pool`, tabela
+  `cohort_candidates` — mesmos `report_code`/`fight_id`/`player_name`/`duration_s` que
+  `characterRankings` já resolve). O que é cacheável entre jogadores é a *lista de candidatos*
+  (resultado de uma query cara a `characterRankings`), não a agregação (barata, em memória).
+  `analysis/pipeline.py`'s `run_analysis` agora sempre executa
+  `fetch_cohort_logs → match_cohort → build_cd_reference_profile` a cada chamada, quente ou fria —
+  só a etapa de descoberta de candidatos (`fetch_ranking_candidates`) é pulada quando o pool já
+  está em cache. `analysis/cohort_builder.py`'s `build_cohorts` (o job em lote por trás de
+  `build-cohort`) para de agregar um perfil e passa a apenas aquecer o pool de candidatos e o
+  cache de logs individuais (T1.4) — o valor do job em lote continua sendo evitar a query de
+  rankings e os fetches de log síncronos na primeira análise interativa de um bucket, só que sem
+  fingir que existe "um" perfil por bucket. `CohortProfile`, `write_profile`/`read_profile`, a
+  tabela `cohorts` e o parquet de perfil (`ingest/parquet_codec.py`) foram removidos — ficariam
+  mortos, sem nenhum consumidor, após a mudança.
+- **Impacto:** o teste `test_second_call_with_a_warm_profile_makes_zero_ranking_queries` (T1.7) foi
+  renomeado para `..._warm_candidate_pool_...` e continua validando o invariante real que importa
+  (zero queries a `characterRankings` na segunda chamada) — a asserção nunca dependeu do mecanismo
+  interno de cache, só do número de queries. `tests/fixtures/record.py` precisou de duas correções
+  relacionadas, descobertas ao re-gravar os cassetes para a nova query `GetPlayerBuffs`: (1) a
+  banda de truncamento de `_fetch_and_truncate_rankings` (±35%, `SANITY_BAND_PCT`) é mais larga que
+  o teto real da cascata de duração de `match_cohort` (±20%, `DURATION_BANDS_PCT[-1]`) — com
+  `N_RECORDING_REFS` baixo o suficiente, isso deixava poucos candidatos realmente *alcançáveis*
+  pelo matching (4 de 10 na primeira regravação), abaixo de `COHORT_MIN_HARD`; (2) o pool ao vivo
+  para esta fixture acabou sendo mais raso do que o D-15 media (a partição atual está no início da
+  sua temporada) — a página 1 sozinha não bastava mesmo com `N_RECORDING_REFS` mais alto, então o
+  script de gravação passou a paginar como `ingest/rankings.py`'s `fetch_ranking_candidates` já
+  faz em produção, em vez de assumir que uma página basta. `N_RECORDING_REFS` subiu de 10 para 24
+  como consequência. O snapshot dourado da pipeline legada (`test_legacy_output.ambr`) também
+  precisou de `--snapshot-update`: `tests/fixtures/record.py`'s `main()` sempre regrava os
+  cassetes legados também, e o pool ao vivo cresceu desde a última gravação — deriva de dados
+  ao vivo já prevista pela própria D-15, não uma mudança de comportamento do código legado (que
+  segue intocado).

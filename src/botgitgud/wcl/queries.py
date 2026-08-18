@@ -80,3 +80,17 @@ query GetZonePartitions($encounterID: Int!) {
   }
 }
 """
+
+# T2.1 (docs/schema_confirmado.md §6): sourceID filters correctly on the
+# Buffs table — this is the player's own aura list (self-buffs + anything
+# applied to them by others), the source for has_augmentation and
+# external_buffs detection.
+QUERY_PLAYER_BUFFS = """
+query GetPlayerBuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {
+  reportData {
+    report(code: $code) {
+      table(fightIDs: $fightIDs, dataType: Buffs, sourceID: $sourceID, translate: true)
+    }
+  }
+}
+"""

@@ -76,8 +76,11 @@ gameVersion, healingDone, itemLevel, logFileDetails, logVersion, playerDetails, 
   - ⚠️ **`talents` vem VAZIO (`[]`)**. Os talentos reais estão em **`talentTree`**:
     `[{id, rank, nodeID}, ...]`. Use `talentTree` para o hash de build da T2.2.
   - `specIDs`: `[266]` (id numérico da spec — mais robusto que o nome).
-  - `gear`: lista com `id, slot, quality, itemLevel, name, permanentEnchant, bonusIDs` — fonte
-    para contagem de peças de tier.
+  - `gear`: lista com `id, slot, quality, itemLevel, name, permanentEnchant, bonusIDs, setID` —
+    ✅ **`setID` é o indicador confiável de peça de tier** (verificado ao vivo na T2.1, log de
+    Zarad: as 4 peças "Abyssal Immolator's ..." — o tier set de Warlock — compartilham
+    `setID: 1989`; toda peça não-tier tem `setID: null`). `tier_pieces` = contar itens com `setID`
+    não nulo — não precisa de tabela curada de `bonusIDs` por patch.
 - `damageDone` traz `{name, id, guid, type, icon, total}` por jogador — **o `total` é autoritativo**.
 
 ---
@@ -127,7 +130,7 @@ Chaves de `data`: `auras, endTime, gameVersion, logVersion, startTime, totalTime
 - Uptime % = `totalUptime / data.totalTime`.
 - ✅ Detecção de Augmentation (T2.1): buscar Ebon Might / Prescience na lista de auras do jogador.
   Neste log: **ausentes**, confirmando que a detecção por ausência funciona.
-  ❓ Confirmar os `guid` exatos de Ebon Might / Prescience na versão atual do jogo.
+  ✅ `guid` confirmado em §11: `395152` (Ebon Might), `410089` (Prescience), `413984` (Shifting Sands).
 
 ---
 

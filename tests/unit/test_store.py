@@ -7,12 +7,11 @@ from pathlib import Path
 
 from botgitgud.domain.models import (
     AbilityDamage,
-    CohortProfile,
     FightRef,
     PlayerBuild,
     PlayerLog,
+    RankingCandidate,
     RunManifest,
-    SpellProfile,
 )
 from botgitgud.ingest.store import Store
 
@@ -173,47 +172,45 @@ def test_partition_none_falls_back_to_unknown_directory(tmp_path: Path) -> None:
     assert (tmp_path / "raw" / "encounter_id=1" / "difficulty=1" / "partition=unknown").exists()
 
 
-def test_profile_round_trip(tmp_path: Path) -> None:
-    profile = CohortProfile(
-        cohort_id="deadbeefdeadbeef",
-        n_members=17,
-        built_at=datetime.now(UTC),
-        spells={
-            104316: SpellProfile(104316, 1.0, (10.0, 130.0, 250.0), 4.0),
-            395152: SpellProfile(395152, 0.7, (), 0.0),
-        },
+def _candidate(
+    report_code: str = "ABCDEFGHIJKLMNOP",
+    fight_id: int = 1,
+    player_name: str = "Ref0",
+    duration_s: float = 300.0,
+) -> RankingCandidate:
+    return RankingCandidate(
+        report_code=report_code, fight_id=fight_id, player_name=player_name, duration_s=duration_s
     )
+
+
+def test_read_candidate_pool_none_before_any_write(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
-        assert store.read_profile("deadbeefdeadbeef") is None
-        store.write_profile(profile)
-        read_back = store.read_profile("deadbeefdeadbeef")
+        assert store.read_candidate_pool("deadbeefdeadbeef") is None
+
+
+def test_candidate_pool_round_trip(tmp_path: Path) -> None:
+    candidates = [_candidate(player_name=f"Ref{i}", duration_s=300.0 + i) for i in range(5)]
+    with Store(tmp_path) as store:
+        store.write_candidate_pool("deadbeefdeadbeef", candidates)
+        read_back = store.read_candidate_pool("deadbeefdeadbeef")
 
     assert read_back is not None
-    assert read_back.n_members == 17
-    assert read_back.spells[104316].ref_times == (10.0, 130.0, 250.0)
-    assert read_back.spells[395152].ref_times == ()
+    assert len(read_back) == 5
+    assert {c.player_name for c in read_back} == {f"Ref{i}" for i in range(5)}
 
 
-def test_write_profile_upserts_same_cohort_id(tmp_path: Path) -> None:
+def test_write_candidate_pool_replaces_the_previous_set_for_the_same_cohort_id(
+    tmp_path: Path,
+) -> None:
     with Store(tmp_path) as store:
-        store.write_profile(
-            CohortProfile(
-                cohort_id="samehash00000001", n_members=5, built_at=datetime.now(UTC), spells={}
-            )
-        )
-        store.write_profile(
-            CohortProfile(
-                cohort_id="samehash00000001", n_members=9, built_at=datetime.now(UTC), spells={}
-            )
-        )
-        rows = store.query(
-            "SELECT count(*) AS n FROM cohorts WHERE cohort_id = $c", c="samehash00000001"
-        )
-        assert rows["n"][0] == 1  # upserted, not duplicated
+        store.write_candidate_pool("samehash00000001", [_candidate(player_name="Old")])
+        store.write_candidate_pool("samehash00000001", [_candidate(player_name="New")])
 
-        latest = store.read_profile("samehash00000001")
-        assert latest is not None
-        assert latest.n_members == 9
+        read_back = store.read_candidate_pool("samehash00000001")
+
+    assert read_back is not None
+    assert len(read_back) == 1  # replaced, not accumulated
+    assert read_back[0].player_name == "New"
 
 
 def test_write_run_persists_manifest_row(tmp_path: Path) -> None:

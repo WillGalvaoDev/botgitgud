@@ -25,12 +25,26 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from botgitgud.analysis.alignment import AlignmentKind
+from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.domain.models import RunManifest
 
 _GREEN_THRESHOLD_S = 10.0
 _YELLOW_THRESHOLD_S = 25.0
 _SEPARATOR = "=" * 42
+
+# T2.1: display labels for analysis/cohort_match.py's covariate names.
+_COVARIATE_LABELS: dict[str, str] = {
+    "tier_pieces": f"peças de tier ±{TIER_PIECES_BAND}",
+    "external_buffs": "buffs externos",
+    "item_level": f"ilvl ±{int(ITEM_LEVEL_BAND)}",
+    "talent_cluster": "talentos: mesma build",
+    "has_augmentation": "Augmentation",
+}
+_AUGMENTATION_RELAXED_WARNING = (
+    "Buffs de suporte não pareados — parte do gap de dano por cast "
+    "pode não ser controlável por você."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +60,8 @@ class ReportHeader:
     player_percentile: float | None = None
     cohort_median_dps: float | None = None
     cohort_warnings: tuple[str, ...] = ()
+    matched_covariates: tuple[str, ...] = ()  # T2.1: analysis.cohort_match.MatchReport.matched
+    relaxed_covariates: tuple[str, ...] = ()  # T2.1: ...MatchReport.relaxed
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -69,6 +85,36 @@ def _match_status(delta: float) -> str:
     return "🔴"
 
 
+def _render_covariates_line(header: ReportHeader) -> str | None:
+    """T2.1: `Coorte: 43 logs | ilvl ±5 ✅ | talentos: mesma build ✅ |
+    duração ±7% ✅` — declares which covariates were matched exactly.
+    """
+    if not header.matched_covariates:
+        return None
+    parts = [f"**Coorte:** {header.reference_n} logs"]
+    for cov in header.matched_covariates:
+        if cov.startswith("duration"):
+            parts.append(f"duração {cov.removeprefix('duration')} ✅")
+        else:
+            parts.append(f"{_COVARIATE_LABELS.get(cov, cov)} ✅")
+    return " | ".join(parts)
+
+
+def _render_relaxed_covariate_warnings(header: ReportHeader) -> list[str]:
+    """T2.1: one ⚠️ line per relaxed covariate — `has_augmentation` gets
+    the specific support-buff warning the spec mandates; every other
+    relaxed covariate gets the generic `<label> não pareado` line.
+    """
+    lines: list[str] = []
+    for cov in header.relaxed_covariates:
+        if cov == "has_augmentation":
+            lines.append(f"⚠️ {_AUGMENTATION_RELAXED_WARNING}")
+        else:
+            label = _COVARIATE_LABELS.get(cov, cov)
+            lines.append(f"⚠️ {label} não pareado (amostra insuficiente)")
+    return lines
+
+
 def _render_header(header: ReportHeader) -> list[str]:
     lines = [
         _SEPARATOR,
@@ -88,6 +134,10 @@ def _render_header(header: ReportHeader) -> list[str]:
             f"{_fmt_duration(header.duration_max_s)}"
         ),
     ]
+    covariates_line = _render_covariates_line(header)
+    if covariates_line is not None:
+        lines.append(covariates_line)
+    lines.extend(_render_relaxed_covariate_warnings(header))
     for warning in header.cohort_warnings:
         lines.append(f"⚠️ {warning}")
     lines.append(_SEPARATOR)

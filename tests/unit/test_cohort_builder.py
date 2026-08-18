@@ -122,7 +122,11 @@ def test_explicit_duration_bucket_builds_only_that_bucket(tmp_path: Path) -> Non
     assert results[0].duration_min_s <= 500.0 < results[0].duration_max_s
 
 
-def test_persisted_profile_is_readable_from_the_store(tmp_path: Path) -> None:
+def test_persisted_candidate_pool_is_readable_from_the_store(tmp_path: Path) -> None:
+    """T2.1 (docs/desvios.md D-25): build_cohorts warms the candidate-pool
+    cache, not an aggregated profile — matching happens per-player, in
+    analysis/pipeline.py.
+    """
     responses = _responses_for({100.0: 8})
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -136,9 +140,9 @@ def test_persisted_profile_is_readable_from_the_store(tmp_path: Path) -> None:
         duration_bucket_s=None,
     )
 
-    profile = deps.store.read_profile(results[0].cohort_id)
-    assert profile is not None
-    assert profile.n_members == 8
+    pool = deps.store.read_candidate_pool(results[0].cohort_id)
+    assert pool is not None
+    assert len(pool) == 8
 
 
 def test_rerunning_build_cohort_does_not_duplicate_log_rows(tmp_path: Path) -> None:

@@ -8,150 +8,164 @@
   **Boss:** Fallen-King Salhadaar
   **Spec:** Demonology Warlock
   **DPS:** 108,297 (percentil: 57)
-  **Referência:** 2 logs | DPS mediano: 181,083 | Duração: 3m45s - 5m52s
-  ⚠️ Amostra pequena (2 logs). Trate os desvios como indicativos, não conclusivos.
-  ⚠️ Apenas 2 logs com duração próxima à sua (±12%) para comparar o timing dos cooldowns — os valores 'Ideal' têm confiança baixa.
+  **Referência:** 6 logs | DPS mediano: 173,657 | Duração: 4m45s - 6m00s
+  **Coorte:** 6 logs | duração ±20% ✅
+  ⚠️ talentos: mesma build não pareado (amostra insuficiente)
+  ⚠️ peças de tier ±1 não pareado (amostra insuficiente)
+  ⚠️ buffs externos não pareado (amostra insuficiente)
+  ⚠️ ilvl ±5 não pareado (amostra insuficiente)
+  ⚠️ Buffs de suporte não pareados — parte do gap de dano por cast pode não ser controlável por você.
+  ⚠️ Amostra pequena (6 logs). Trate os desvios como indicativos, não conclusivos.
+  ⚠️ Apenas 6 logs com duração próxima à sua (±12%) para comparar o timing dos cooldowns — os valores 'Ideal' têm confiança baixa.
   ==========================================
   
   ⛔ **USOS PERDIDOS**
   ------------------------------------------
-  **Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 66.3s, 244.2s, 297.1s, 313.6s, 315.2s
-  **Spell #434506**: 2 uso(s) perdido(s) — esperado(s) aos 161.3s, 337.5s
-  **Spell #434635**: 3 uso(s) perdido(s) — esperado(s) aos 175.5s, 216.1s, 348.3s
-  **Dark Pact**: 4 uso(s) perdido(s) — esperado(s) aos 221.9s, 226.0s, 269.2s, 340.5s
-  **Grimoire: Imp Lord**: 1 uso(s) perdido(s) — esperado(s) aos 3.0s
-  **Burning Rush**: 4 uso(s) perdido(s) — esperado(s) aos 238.0s, 261.1s, 274.3s, 339.1s
+  **Dark Pact**: 4 uso(s) perdido(s) — esperado(s) aos 185.8s, 247.9s, 250.4s, 318.1s
+  **Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 56.4s, 187.8s, 293.7s, 319.4s, 348.3s
+  **Spell #434506**: 2 uso(s) perdido(s) — esperado(s) aos 322.9s, 326.9s
+  **Spell #434635**: 3 uso(s) perdido(s) — esperado(s) aos 183.8s, 296.4s, 348.3s
+  **Burning Rush**: 5 uso(s) perdido(s) — esperado(s) aos 152.4s, 238.0s, 245.7s, 260.4s, 339.1s
+  **Unending Resolve**: 1 uso(s) perdido(s) — esperado(s) aos 193.5s
+  **Grimoire: Imp Lord**: 1 uso(s) perdido(s) — esperado(s) aos 2.5s
   
   🔥 **OFFENSIVE MAJOR CDS**
   ------------------------------------------
   
-  **Spell #1236616** (Tipo: MAJOR | Pres: 90%)
-  Usos: 2 (coorte: 1.0)
+  **Spell #1236616** (Tipo: MAJOR | Pres: 100%)
+  Usos: 2 (coorte: 1.5)
   ------------------------------
-  Uso #1 | Player: 4.7s | Ideal: 4.6s | Delta: +0.1s 🟢
-  Uso #2 | Player: 319.9s | Uso extra
+  Uso #1 | Player: 4.7s | Ideal: 3.5s | Delta: +1.2s 🟢
+  Uso #2 | Player: 319.9s | Ideal: 307.0s | Delta: +12.9s 🟡
+  
+  **Unending Resolve** (Tipo: MAJOR | Pres: 80%)
+  Usos: 1 (coorte: 1.0)
+  ------------------------------
+  Uso #1 | Esperado ~193.5s | NÃO USADO ⛔
+  Uso #2 | Player: 338.1s | Ideal: 302.3s | Delta: +35.8s 🔴
   
   **Spell #1250508** (Tipo: MAJOR | Pres: 80%)
-  Usos: 3 (coorte: 1.5)
+  Usos: 3 (coorte: 2.9)
   ------------------------------
-  Uso #1 | Player: 4.7s | Ideal: 6.4s | Delta: -1.7s 🟢
-  Uso #2 | Player: 131.3s | Ideal: 130.1s | Delta: +1.2s 🟢
-  Uso #3 | Player: 256.2s | Ideal: 255.2s | Delta: +1.0s 🟢
+  Uso #1 | Player: 4.7s | Ideal: 3.9s | Delta: +0.8s 🟢
+  Uso #2 | Player: 131.3s | Ideal: 128.3s | Delta: +3.0s 🟢
+  Uso #3 | Player: 256.2s | Ideal: 251.2s | Delta: +5.0s 🟢
   
   **Grimoire: Imp Lord** (Tipo: MAJOR | Pres: 80%)
   Usos: 2 (coorte: 3.0)
   ------------------------------
-  Uso #1 | Esperado ~3.0s | NÃO USADO ⛔
-  Uso #2 | Player: 126.0s | Ideal: 127.0s | Delta: -1.0s 🟢
-  Uso #3 | Player: 249.3s | Ideal: 249.6s | Delta: -0.3s 🟢
+  Uso #1 | Esperado ~2.5s | NÃO USADO ⛔
+  Uso #2 | Player: 126.0s | Ideal: 126.4s | Delta: -0.4s 🟢
+  Uso #3 | Player: 249.3s | Ideal: 250.2s | Delta: -0.9s 🟢
   
   ⚡ **MINOR CDS / BURST UTILITIES**
   ------------------------------------------
   
   **Call Dreadstalkers** (Tipo: MINOR | Pres: 100%)
-  Usos: 17 (coorte: 16.8)
+  Usos: 17 (coorte: 16.9)
   ------------------------------
-  Uso #1 | Player: 1.3s | Ideal: 1.2s | Delta: +0.1s 🟢
-  Uso #2 | Player: 22.2s | Ideal: 21.4s | Delta: +0.8s 🟢
-  Uso #3 | Player: 43.1s | Ideal: 41.7s | Delta: +1.4s 🟢
-  Uso #4 | Player: 63.2s | Ideal: 62.4s | Delta: +0.8s 🟢
-  Uso #5 | Player: 83.7s | Ideal: 82.6s | Delta: +1.1s 🟢
-  Uso #6 | Player: 105.1s | Ideal: 103.6s | Delta: +1.5s 🟢
-  Uso #7 | Player: 128.6s | Ideal: 125.2s | Delta: +3.4s 🟢
-  Uso #8 | Player: 149.7s | Ideal: 145.6s | Delta: +4.1s 🟢
-  Uso #9 | Player: 170.0s | Ideal: 165.6s | Delta: +4.4s 🟢
-  Uso #10 | Player: 190.8s | Ideal: 186.4s | Delta: +4.4s 🟢
-  Uso #11 | Player: 212.1s | Ideal: 207.4s | Delta: +4.7s 🟢
-  Uso #12 | Player: 233.3s | Ideal: 227.8s | Delta: +5.5s 🟢
-  Uso #13 | Player: 253.4s | Ideal: 249.6s | Delta: +3.8s 🟢
-  Uso #14 | Player: 274.3s | Ideal: 270.4s | Delta: +3.9s 🟢
-  Uso #15 | Player: 294.4s | Ideal: 290.9s | Delta: +3.4s 🟢
-  Uso #16 | Player: 314.5s | Ideal: 312.4s | Delta: +2.1s 🟢
+  Uso #1 | Player: 1.3s | Ideal: 1.3s | Delta: 0.0s 🟢
+  Uso #2 | Player: 22.2s | Ideal: 21.9s | Delta: +0.3s 🟢
+  Uso #3 | Player: 43.1s | Ideal: 42.7s | Delta: +0.4s 🟢
+  Uso #4 | Player: 63.2s | Ideal: 63.2s | Delta: +0.0s 🟢
+  Uso #5 | Player: 83.7s | Ideal: 83.9s | Delta: -0.2s 🟢
+  Uso #6 | Player: 105.1s | Ideal: 104.6s | Delta: +0.5s 🟢
+  Uso #7 | Player: 128.6s | Ideal: 126.2s | Delta: +2.4s 🟢
+  Uso #8 | Player: 149.7s | Ideal: 146.9s | Delta: +2.8s 🟢
+  Uso #9 | Player: 170.0s | Ideal: 167.4s | Delta: +2.6s 🟢
+  Uso #10 | Player: 190.8s | Ideal: 188.2s | Delta: +2.6s 🟢
+  Uso #11 | Player: 212.1s | Ideal: 209.3s | Delta: +2.8s 🟢
+  Uso #12 | Player: 233.3s | Ideal: 229.7s | Delta: +3.7s 🟢
+  Uso #13 | Player: 253.4s | Ideal: 251.8s | Delta: +1.6s 🟢
+  Uso #14 | Player: 274.3s | Ideal: 272.7s | Delta: +1.6s 🟢
+  Uso #15 | Player: 294.4s | Ideal: 293.6s | Delta: +0.8s 🟢
+  Uso #16 | Player: 314.5s | Ideal: 313.6s | Delta: +0.9s 🟢
   Uso #17 | Player: 335.0s | Ideal: 333.4s | Delta: +1.6s 🟢
   
-  **Implosion** (Tipo: MINOR | Pres: 100%)
-  Usos: 17 (coorte: 19.7)
+  **Dark Pact** (Tipo: MINOR | Pres: 100%)
+  Usos: 2 (coorte: 3.1)
   ------------------------------
-  Uso #1 | Player: 10.1s | Ideal: 8.2s | Delta: +1.9s 🟢
-  Uso #2 | Player: 27.6s | Ideal: 26.6s | Delta: +1.0s 🟢
-  Uso #3 | Player: 44.5s | Ideal: 43.2s | Delta: +1.3s 🟢
-  Uso #4 | Esperado ~66.3s | NÃO USADO ⛔
-  Uso #5 | Player: 78.0s | Ideal: 82.2s | Delta: -4.2s 🟢
-  Uso #6 | Player: 94.3s | Ideal: 104.2s | Delta: -10.0s 🟢
-  Uso #7 | Player: 121.9s | Ideal: 122.1s | Delta: -0.2s 🟢
-  Uso #8 | Player: 138.0s | Ideal: 137.9s | Delta: +0.1s 🟢
-  Uso #9 | Player: 153.6s | Ideal: 161.2s | Delta: -7.6s 🟢
-  Uso #10 | Player: 176.4s | Ideal: 177.1s | Delta: -0.7s 🟢
-  Uso #11 | Player: 200.7s | Ideal: 193.0s | Delta: +7.7s 🟢
-  Uso #12 | Player: 216.1s | Ideal: 209.4s | Delta: +6.7s 🟢
-  Uso #13 | Player: 234.6s | Ideal: 225.2s | Delta: +9.4s 🟢
-  Uso #14 | Esperado ~244.2s | NÃO USADO ⛔
-  Uso #15 | Player: 260.7s | Ideal: 264.6s | Delta: -3.9s 🟢
-  Uso #16 | Player: 280.8s | Ideal: 280.6s | Delta: +0.2s 🟢
-  Uso #17 | Esperado ~297.1s | NÃO USADO ⛔
-  Uso #18 | Player: 305.0s | Ideal: 300.1s | Delta: +4.9s 🟢
-  Uso #19 | Esperado ~313.6s | NÃO USADO ⛔
-  Uso #20 | Esperado ~315.2s | NÃO USADO ⛔
-  Uso #21 | Player: 323.4s | Ideal: 331.4s | Delta: -8.0s 🟢
-  Uso #22 | Player: 342.9s | Ideal: 348.3s | Delta: -5.4s 🟢
+  Uso #1 | Player: 31.3s | Ideal: 63.8s | Delta: -32.5s 🔴
+  Uso #2 | Player: 99.5s | Uso extra
+  Uso #3 | Esperado ~185.8s | NÃO USADO ⛔
+  Uso #4 | Esperado ~247.9s | NÃO USADO ⛔
+  Uso #5 | Esperado ~250.4s | NÃO USADO ⛔
+  Uso #6 | Esperado ~318.1s | NÃO USADO ⛔
+  
+  **Implosion** (Tipo: MINOR | Pres: 100%)
+  Usos: 17 (coorte: 19.8)
+  ------------------------------
+  Uso #1 | Player: 10.1s | Ideal: 7.2s | Delta: +2.9s 🟢
+  Uso #2 | Player: 27.6s | Ideal: 22.9s | Delta: +4.7s 🟢
+  Uso #3 | Player: 44.5s | Ideal: 40.9s | Delta: +3.6s 🟢
+  Uso #4 | Esperado ~56.4s | NÃO USADO ⛔
+  Uso #5 | Player: 78.0s | Ideal: 73.5s | Delta: +4.5s 🟢
+  Uso #6 | Player: 94.3s | Ideal: 89.8s | Delta: +4.5s 🟢
+  Uso #7 | Player: 121.9s | Ideal: 106.2s | Delta: +15.7s 🟡
+  Uso #8 | Player: 138.0s | Ideal: 129.8s | Delta: +8.2s 🟢
+  Uso #9 | Player: 153.6s | Ideal: 148.2s | Delta: +5.4s 🟢
+  Uso #10 | Player: 176.4s | Ideal: 167.4s | Delta: +9.0s 🟢
+  Uso #11 | Esperado ~187.8s | NÃO USADO ⛔
+  Uso #12 | Player: 200.7s | Ideal: 204.9s | Delta: -4.2s 🟢
+  Uso #13 | Player: 216.1s | Ideal: 222.1s | Delta: -6.0s 🟢
+  Uso #14 | Player: 234.6s | Ideal: 237.7s | Delta: -3.1s 🟢
+  Uso #15 | Player: 260.7s | Ideal: 262.1s | Delta: -1.4s 🟢
+  Uso #16 | Player: 280.8s | Ideal: 278.6s | Delta: +2.2s 🟢
+  Uso #17 | Esperado ~293.7s | NÃO USADO ⛔
+  Uso #18 | Player: 305.0s | Ideal: 308.9s | Delta: -3.9s 🟢
+  Uso #19 | Esperado ~319.4s | NÃO USADO ⛔
+  Uso #20 | Player: 323.4s | Ideal: 322.6s | Delta: +0.8s 🟢
+  Uso #21 | Player: 342.9s | Ideal: 339.3s | Delta: +3.6s 🟢
+  Uso #22 | Esperado ~348.3s | NÃO USADO ⛔
   
   **Summon Demonic Tyrant** (Tipo: MINOR | Pres: 100%)
-  Usos: 6 (coorte: 5.9)
+  Usos: 6 (coorte: 6.0)
   ------------------------------
-  Uso #1 | Player: 3.6s | Ideal: 4.3s | Delta: -0.7s 🟢
-  Uso #2 | Player: 65.9s | Ideal: 65.8s | Delta: +0.2s 🟢
-  Uso #3 | Player: 131.3s | Ideal: 128.8s | Delta: +2.5s 🟢
-  Uso #4 | Player: 193.4s | Ideal: 190.2s | Delta: +3.2s 🟢
-  Uso #5 | Player: 256.1s | Ideal: 252.9s | Delta: +3.2s 🟢
+  Uso #1 | Player: 3.6s | Ideal: 3.2s | Delta: +0.4s 🟢
+  Uso #2 | Player: 65.9s | Ideal: 65.2s | Delta: +0.8s 🟢
+  Uso #3 | Player: 131.3s | Ideal: 128.8s | Delta: +2.6s 🟢
+  Uso #4 | Player: 193.4s | Ideal: 190.3s | Delta: +3.1s 🟢
+  Uso #5 | Player: 256.1s | Ideal: 253.1s | Delta: +3.0s 🟢
   Uso #6 | Player: 318.4s | Ideal: 315.2s | Delta: +3.2s 🟢
   
   **Spell #434506** (Tipo: MINOR | Pres: 100%)
-  Usos: 8 (coorte: 9.4)
+  Usos: 8 (coorte: 9.1)
   ------------------------------
-  Uso #1 | Player: 26.2s | Ideal: 23.1s | Delta: +3.1s 🟢
-  Uso #2 | Player: 74.1s | Ideal: 58.0s | Delta: +16.0s 🟡
-  Uso #3 | Player: 115.8s | Ideal: 92.4s | Delta: +23.4s 🟡
-  Uso #4 | Player: 140.2s | Ideal: 132.3s | Delta: +7.9s 🟢
-  Uso #5 | Esperado ~161.3s | NÃO USADO ⛔
-  Uso #6 | Player: 190.4s | Ideal: 203.8s | Delta: -13.4s 🟡
-  Uso #7 | Player: 226.7s | Ideal: 239.1s | Delta: -12.4s 🟡
-  Uso #8 | Player: 267.5s | Ideal: 272.2s | Delta: -4.7s 🟢
-  Uso #9 | Player: 299.7s | Ideal: 311.0s | Delta: -11.3s 🟡
-  Uso #10 | Esperado ~337.5s | NÃO USADO ⛔
+  Uso #1 | Player: 26.2s | Ideal: 23.2s | Delta: +2.9s 🟢
+  Uso #2 | Player: 74.1s | Ideal: 60.5s | Delta: +13.6s 🟡
+  Uso #3 | Player: 115.8s | Ideal: 93.7s | Delta: +22.1s 🟡
+  Uso #4 | Player: 140.2s | Ideal: 134.6s | Delta: +5.6s 🟢
+  Uso #5 | Player: 190.4s | Ideal: 168.2s | Delta: +22.2s 🟡
+  Uso #6 | Player: 226.7s | Ideal: 209.3s | Delta: +17.4s 🟡
+  Uso #7 | Player: 267.5s | Ideal: 251.7s | Delta: +15.8s 🟡
+  Uso #8 | Player: 299.7s | Ideal: 281.6s | Delta: +18.1s 🟡
+  Uso #9 | Esperado ~322.9s | NÃO USADO ⛔
+  Uso #10 | Esperado ~326.9s | NÃO USADO ⛔
   
   **Spell #434635** (Tipo: MINOR | Pres: 100%)
-  Usos: 7 (coorte: 9.4)
+  Usos: 7 (coorte: 9.0)
   ------------------------------
-  Uso #1 | Player: 36.4s | Ideal: 30.6s | Delta: +5.8s 🟢
-  Uso #2 | Player: 76.8s | Ideal: 70.6s | Delta: +6.2s 🟢
-  Uso #3 | Player: 117.1s | Ideal: 102.9s | Delta: +14.2s 🟡
-  Uso #4 | Player: 152.1s | Ideal: 140.3s | Delta: +11.8s 🟡
-  Uso #5 | Esperado ~175.5s | NÃO USADO ⛔
-  Uso #6 | Esperado ~216.1s | NÃO USADO ⛔
-  Uso #7 | Player: 241.2s | Ideal: 254.3s | Delta: -13.1s 🟡
-  Uso #8 | Player: 274.3s | Ideal: 284.9s | Delta: -10.6s 🟡
-  Uso #9 | Player: 312.9s | Ideal: 320.4s | Delta: -7.6s 🟢
+  Uso #1 | Player: 36.4s | Ideal: 30.8s | Delta: +5.6s 🟢
+  Uso #2 | Player: 76.8s | Ideal: 72.9s | Delta: +3.9s 🟢
+  Uso #3 | Player: 117.1s | Ideal: 108.9s | Delta: +8.2s 🟢
+  Uso #4 | Player: 152.1s | Ideal: 143.1s | Delta: +9.0s 🟢
+  Uso #5 | Esperado ~183.8s | NÃO USADO ⛔
+  Uso #6 | Player: 241.2s | Ideal: 223.0s | Delta: +18.2s 🟡
+  Uso #7 | Player: 274.3s | Ideal: 262.4s | Delta: +11.9s 🟡
+  Uso #8 | Esperado ~296.4s | NÃO USADO ⛔
+  Uso #9 | Player: 312.9s | Ideal: 329.4s | Delta: -16.5s 🟡
   Uso #10 | Esperado ~348.3s | NÃO USADO ⛔
   
-  **Dark Pact** (Tipo: MINOR | Pres: 90%)
-  Usos: 2 (coorte: 3.5)
+  **Burning Rush** (Tipo: MINOR | Pres: 90%)
+  Usos: 2 (coorte: 3.4)
   ------------------------------
-  Uso #1 | Player: 31.3s | Ideal: 55.2s | Delta: -23.9s 🟡
-  Uso #2 | Player: 99.5s | Uso extra
-  Uso #3 | Esperado ~221.9s | NÃO USADO ⛔
-  Uso #4 | Esperado ~226.0s | NÃO USADO ⛔
-  Uso #5 | Esperado ~269.2s | NÃO USADO ⛔
-  Uso #6 | Esperado ~340.5s | NÃO USADO ⛔
-  
-  **Burning Rush** (Tipo: MINOR | Pres: 70%)
-  Usos: 2 (coorte: 4.9)
-  ------------------------------
-  Uso #1 | Player: 30.8s | Ideal: 56.1s | Delta: -25.3s 🔴
-  Uso #2 | Player: 101.8s | Ideal: 147.1s | Delta: -45.3s 🔴
-  Uso #3 | Esperado ~238.0s | NÃO USADO ⛔
-  Uso #4 | Esperado ~261.1s | NÃO USADO ⛔
-  Uso #5 | Esperado ~274.3s | NÃO USADO ⛔
-  Uso #6 | Esperado ~339.1s | NÃO USADO ⛔
+  Uso #1 | Player: 30.8s | Uso extra
+  Uso #2 | Player: 101.8s | Ideal: 94.0s | Delta: +7.8s 🟢
+  Uso #3 | Esperado ~152.4s | NÃO USADO ⛔
+  Uso #4 | Esperado ~238.0s | NÃO USADO ⛔
+  Uso #5 | Esperado ~245.7s | NÃO USADO ⛔
+  Uso #6 | Esperado ~260.4s | NÃO USADO ⛔
+  Uso #7 | Esperado ~339.1s | NÃO USADO ⛔
   
   ==========================================
   '''

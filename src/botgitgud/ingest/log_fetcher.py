@@ -18,16 +18,19 @@ import structlog
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
+from botgitgud.ingest.log_fetcher_aux import (
+    fetch_augmentation_and_external_buffs,
+    fetch_percentile,
+)
 from botgitgud.ingest.store import Store
 from botgitgud.ingest.wcl_parsing import (
     extract_damage_total,
-    find_matching_rank_percent,
     find_player_in_details,
     learn_spells_from_casts_table,
     parse_cast_events,
 )
 from botgitgud.wcl.client import WclClient
-from botgitgud.wcl.queries import QUERY_PLAYER_EVENTS, QUERY_PLAYER_META, QUERY_PLAYER_PERCENTILE
+from botgitgud.wcl.queries import QUERY_PLAYER_EVENTS, QUERY_PLAYER_META
 
 log = structlog.get_logger(__name__)
 
@@ -181,7 +184,8 @@ class LogFetcher:
         )
         dps = (damage_total / duration_s) if (damage_total and duration_s > 0) else None
 
-        percentile = self._fetch_percentile(
+        percentile = fetch_percentile(
+            self._query,
             report_code=report_code,
             fight_id=fight_id,
             player=player,
@@ -189,6 +193,9 @@ class LogFetcher:
             region=match.region,
             encounter_id=raw_fight["encounterID"],
             difficulty=raw_fight.get("difficulty"),
+        )
+        has_augmentation, external_buffs = fetch_augmentation_and_external_buffs(
+            self._query, report_code=report_code, fight_id=fight_id, player_id=match.player_id
         )
 
         fight = FightRef(
@@ -207,8 +214,10 @@ class LogFetcher:
             spec_name=match.spec_name,
             role=match.role,  # type: ignore[arg-type]
             item_level=match.item_level,
-            talent_hash=None,
-            tier_pieces=None,
+            talent_hash=match.talent_hash,
+            tier_pieces=match.tier_pieces,
+            external_buffs=external_buffs,
+            has_augmentation=has_augmentation,
         )
         return PlayerLog(
             fight=fight,
@@ -259,40 +268,3 @@ class LogFetcher:
             current_start = next_page
 
         return {sid: tuple(times) for sid, times in timeline_by_id.items()}
-
-    def _fetch_percentile(
-        self,
-        *,
-        report_code: str,
-        fight_id: int,
-        player: str,
-        server: str | None,
-        region: str | None,
-        encounter_id: int,
-        difficulty: int | None,
-    ) -> float | None:
-        """Best-effort: None (never fabricated) on any missing input or
-        API failure — see find_matching_rank_percent for the real source.
-        """
-        if not server or not region or not difficulty:
-            return None
-
-        server_slug = server.lower().replace(" ", "-")
-        try:
-            res_json = self._query(
-                QUERY_PLAYER_PERCENTILE,
-                {
-                    "name": player,
-                    "serverSlug": server_slug,
-                    "serverRegion": region,
-                    "encounterID": encounter_id,
-                    "difficulty": difficulty,
-                },
-                op_name="fetch_player_percentile",
-            )
-        except ApiError as e:
-            log.warning("log_fetcher.percentile_failed", error=str(e))
-            return None
-
-        character = res_json.get("data", {}).get("characterData", {}).get("character")
-        return find_matching_rank_percent(character, report_code, fight_id)

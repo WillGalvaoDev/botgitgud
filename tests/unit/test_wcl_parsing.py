@@ -4,10 +4,13 @@ from pathlib import Path
 
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.ingest.wcl_parsing import (
+    compute_talent_hash,
+    count_tier_pieces,
     extract_damage_total,
     find_matching_rank_percent,
     find_player_in_details,
     learn_spells_from_casts_table,
+    parse_aura_ids,
     parse_cast_events,
 )
 
@@ -60,6 +63,84 @@ def test_find_player_in_details_handles_dict_shaped_specs() -> None:
     match = find_player_in_details(details, "X")
     assert match is not None
     assert match.spec_name == "Fire"
+
+
+def test_find_player_in_details_parses_talent_hash_and_tier_pieces_from_combatant_info() -> None:
+    details = {
+        "dps": [
+            {
+                "id": 6,
+                "name": "Zarad",
+                "type": "Warlock",
+                "specs": ["Demonology"],
+                "combatantInfo": {
+                    "talentTree": [{"id": 1, "rank": 1, "nodeID": 100}],
+                    "gear": [{"slot": 0, "setID": 1989}, {"slot": 1, "setID": None}],
+                },
+            }
+        ]
+    }
+    match = find_player_in_details(details, "Zarad")
+    assert match is not None
+    assert match.talent_hash is not None
+    assert match.tier_pieces == 1
+
+
+def test_find_player_in_details_leaves_talent_fields_none_without_combatant_info() -> None:
+    details = {"dps": [{"id": 6, "name": "Zarad", "type": "Warlock", "specs": ["Demonology"]}]}
+    match = find_player_in_details(details, "Zarad")
+    assert match is not None
+    assert match.talent_hash is None
+    assert match.tier_pieces is None
+
+
+# -- T2.1: talent hash / tier pieces / auras -------------------------------------
+
+
+def test_compute_talent_hash_is_deterministic_regardless_of_input_order() -> None:
+    tree_a = [{"nodeID": 100, "rank": 1}, {"nodeID": 50, "rank": 2}]
+    tree_b = [{"nodeID": 50, "rank": 2}, {"nodeID": 100, "rank": 1}]
+    assert compute_talent_hash(tree_a) == compute_talent_hash(tree_b)
+
+
+def test_compute_talent_hash_differs_when_a_rank_changes() -> None:
+    tree_a = [{"nodeID": 100, "rank": 1}]
+    tree_b = [{"nodeID": 100, "rank": 2}]
+    assert compute_talent_hash(tree_a) != compute_talent_hash(tree_b)
+
+
+def test_compute_talent_hash_none_for_empty_tree() -> None:
+    assert compute_talent_hash([]) is None
+
+
+def test_compute_talent_hash_skips_malformed_entries() -> None:
+    tree = [{"nodeID": 100, "rank": 1}, {"unexpected": "shape"}]
+    assert compute_talent_hash(tree) == compute_talent_hash([{"nodeID": 100, "rank": 1}])
+
+
+def test_count_tier_pieces_counts_only_items_with_a_set_id() -> None:
+    gear = [{"setID": 1989}, {"setID": None}, {"setID": 1989}, {}]
+    assert count_tier_pieces(gear) == 2
+
+
+def test_count_tier_pieces_zero_when_no_tier_gear() -> None:
+    gear = [{"setID": None}, {"setID": None}]
+    assert count_tier_pieces(gear) == 0
+
+
+def test_count_tier_pieces_none_when_gear_missing() -> None:
+    assert count_tier_pieces(None) is None  # type: ignore[arg-type]
+
+
+def test_parse_aura_ids_extracts_guids() -> None:
+    buffs_data = {"auras": [{"guid": 395152, "name": "Ebon Might"}, {"guid": 10060}]}
+    assert parse_aura_ids(buffs_data) == frozenset({395152, 10060})
+
+
+def test_parse_aura_ids_empty_when_no_auras() -> None:
+    assert parse_aura_ids({"auras": []}) == frozenset()
+    assert parse_aura_ids({}) == frozenset()
+    assert parse_aura_ids(None) == frozenset()  # type: ignore[arg-type]
 
 
 def test_extract_damage_total_matches_by_id() -> None:

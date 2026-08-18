@@ -56,7 +56,16 @@ MAX_REFERENCE_LOGS = 5  # keep cassette count small; see T0.2 instructions
 # _fetch_and_truncate_rankings) — kept just above COHORT_MIN_HARD (8) so
 # a stray per-candidate fetch failure doesn't tip the golden test into
 # InsufficientCohort.
-N_RECORDING_REFS = 10
+N_RECORDING_REFS = 24
+# T2.1 (docs/desvios.md D-25): analysis/cohort_match.py's own duration
+# cascade tops out at ±20%, tighter than this truncation's ±35%
+# SANITY_BAND_PCT — a candidate outside ±20% is NEVER admitted by
+# match_cohort, no matter how far every other covariate relaxes. Recording
+# with the old N_RECORDING_REFS=10 empirically left only 4/10 candidates
+# within ±20% (the other 6 sat in the 20-35% dead zone) — below
+# COHORT_MIN_HARD (8). Widening the page-1 pull to 24 (~40% of this
+# fixture's candidates land within ±20%, observed empirically) gives
+# enough margin without adding pagination to this recording pass.
 
 RECORDING_SCRATCH_DIR = Path(__file__).resolve().parent / "_record_scratch"
 RECORDING_SCRATCH_DIR_NEW = Path(__file__).resolve().parent / "_record_scratch_new"
@@ -135,6 +144,9 @@ class _RecordingHooks:
         return response
 
 
+_MAX_RECORDING_PAGES = 10  # mirrors analysis/cohort.py's MAX_RANKING_PAGES
+
+
 def _fetch_and_truncate_rankings(
     client: WclClient,
     *,
@@ -144,59 +156,81 @@ def _fetch_and_truncate_rankings(
     partition: int,
     target_duration_s: float,
 ) -> list[RankingCandidate]:
-    """Makes the real page-1 characterRankings call (which RecordingTransport
-    saves as a cassette), then overwrites that same cassette (same request
-    => same key, see http_cassette.cassette_key) with a version truncated
-    to N_RECORDING_REFS candidates and hasMorePages=False — see
-    N_RECORDING_REFS's docstring for why.
+    """Pages through the real characterRankings call (RecordingTransport
+    saves each page as a cassette) exactly like ingest/rankings.py's own
+    fetch_ranking_candidates does, then overwrites each visited page's
+    cassette (same request => same key, see http_cassette.cassette_key)
+    with a version truncated to only the within-sanity-band candidates —
+    see N_RECORDING_REFS's docstring for why. The last page visited gets
+    hasMorePages forced to False, so the golden test's own replay (which
+    re-runs this exact pagination independently) stops exactly where this
+    recording pass did, on the same final candidate set.
+
+    docs/desvios.md D-25: this fixture's live pool turned out to be thin
+    enough (this partition is early in its season) that a single page no
+    longer reliably yields N_RECORDING_REFS candidates — hence the
+    pagination, mirroring production instead of assuming page 1 suffices.
     """
-    variables = {
-        "encounterID": encounter_id,
-        "className": class_name,
-        "specName": spec_name,
-        "page": 1,
-        "partition": partition,
-    }
-    res_json = client.query(QUERY_RANKINGS_PAGE, variables, op_name="fetch_rankings_page")
-    rankings_list = (
-        res_json.get("data", {})
-        .get("worldData", {})
-        .get("encounter", {})
-        .get("characterRankings", {})
-        .get("rankings", [])
-    )
-
-    kept_raw: list[dict[str, Any]] = []
     candidates: list[RankingCandidate] = []
-    for r in rankings_list:
-        dur_s = r.get("duration", 0) / 1000.0
-        if not within_sanity_band(dur_s, target_duration_s):
-            continue
-        rep = r.get("report", {})
-        if not (rep.get("code") and rep.get("fightID") is not None):
-            continue
-        kept_raw.append(r)
-        candidates.append(RankingCandidate(rep["code"], rep["fightID"], r["name"], dur_s))
-        if len(candidates) >= N_RECORDING_REFS:
-            break
+    page = 1
+    while page <= _MAX_RECORDING_PAGES and len(candidates) < N_RECORDING_REFS:
+        variables = {
+            "encounterID": encounter_id,
+            "className": class_name,
+            "specName": spec_name,
+            "page": page,
+            "partition": partition,
+        }
+        res_json = client.query(QUERY_RANKINGS_PAGE, variables, op_name="fetch_rankings_page")
+        rankings_data = (
+            res_json.get("data", {})
+            .get("worldData", {})
+            .get("encounter", {})
+            .get("characterRankings", {})
+        )
+        rankings_list = rankings_data.get("rankings", [])
+        real_has_more = rankings_data.get("hasMorePages", False)
 
-    truncated_response = {
-        "data": {
-            "worldData": {
-                "encounter": {"characterRankings": {"rankings": kept_raw, "hasMorePages": False}}
+        kept_raw: list[dict[str, Any]] = []
+        for r in rankings_list:
+            dur_s = r.get("duration", 0) / 1000.0
+            if not within_sanity_band(dur_s, target_duration_s):
+                continue
+            rep = r.get("report", {})
+            if not (rep.get("code") and rep.get("fightID") is not None):
+                continue
+            kept_raw.append(r)
+            candidates.append(RankingCandidate(rep["code"], rep["fightID"], r["name"], dur_s))
+            if len(candidates) >= N_RECORDING_REFS:
+                break
+
+        stopping_here = len(candidates) >= N_RECORDING_REFS or not real_has_more
+        truncated_response = {
+            "data": {
+                "worldData": {
+                    "encounter": {
+                        "characterRankings": {
+                            "rankings": kept_raw,
+                            "hasMorePages": not stopping_here,
+                        }
+                    }
+                }
             }
         }
-    }
-    save_cassette(
-        Cassette(
-            method="POST",
-            url=API_URL,
-            request_payload={"query": QUERY_RANKINGS_PAGE, "variables": variables},
-            request_headers={},
-            status_code=200,
-            response_json=truncated_response,
+        save_cassette(
+            Cassette(
+                method="POST",
+                url=API_URL,
+                request_payload={"query": QUERY_RANKINGS_PAGE, "variables": variables},
+                request_headers={},
+                status_code=200,
+                response_json=truncated_response,
+            )
         )
-    )
+        if stopping_here:
+            break
+        page += 1
+
     return candidates
 
 

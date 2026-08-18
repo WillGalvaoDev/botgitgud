@@ -1,0 +1,3056 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "308",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerBuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Buffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "69bwQ27m8BAjxPZg",
+      "fightIDs": [
+        33
+      ],
+      "sourceID": 324
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "achievement_raid_argusraid.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5312081,
+                      "startTime": 5298079
+                    },
+                    {
+                      "endTime": 5364205,
+                      "startTime": 5350193
+                    },
+                    {
+                      "endTime": 5379161,
+                      "startTime": 5365144
+                    },
+                    {
+                      "endTime": 5431081,
+                      "startTime": 5417068
+                    },
+                    {
+                      "endTime": 5494132,
+                      "startTime": 5480131
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5501907
+                    }
+                  ],
+                  "guid": 1282501,
+                  "name": "Dominion of Argus: Lady Sacrolash",
+                  "totalUptime": 74991,
+                  "totalUses": 6,
+                  "type": 36
+                },
+                {
+                  "abilityIcon": "ability_evoker_temporalanomaly.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5297701,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5349702,
+                      "startTime": 5347808
+                    },
+                    {
+                      "endTime": 5364687,
+                      "startTime": 5364518
+                    },
+                    {
+                      "endTime": 5392937,
+                      "startTime": 5392676
+                    },
+                    {
+                      "endTime": 5398907,
+                      "startTime": 5398257
+                    },
+                    {
+                      "endTime": 5420565,
+                      "startTime": 5412716
+                    },
+                    {
+                      "endTime": 5426572,
+                      "startTime": 5425738
+                    },
+                    {
+                      "endTime": 5439577,
+                      "startTime": 5439532
+                    },
+                    {
+                      "endTime": 5453575,
+                      "startTime": 5452675
+                    },
+                    {
+                      "endTime": 5488647,
+                      "startTime": 5488238
+                    },
+                    {
+                      "endTime": 5506604,
+                      "startTime": 5503544
+                    }
+                  ],
+                  "guid": 373862,
+                  "name": "Temporal Anomaly",
+                  "totalUptime": 32330,
+                  "totalUses": 12,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "inv_fabric_felcloth_ebon.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5387982,
+                      "startTime": 5377970
+                    }
+                  ],
+                  "guid": 434559,
+                  "name": "Infernal Vitality",
+                  "totalUptime": 10012,
+                  "totalUses": 1,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "ability_warrior_battleshout.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 6673,
+                  "name": "Battle Shout",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "spell_fel_firebolt.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5303805,
+                      "startTime": 5302437
+                    },
+                    {
+                      "endTime": 5340907,
+                      "startTime": 5336541
+                    },
+                    {
+                      "endTime": 5372329,
+                      "startTime": 5367979
+                    },
+                    {
+                      "endTime": 5414708,
+                      "startTime": 5412585
+                    },
+                    {
+                      "endTime": 5436667,
+                      "startTime": 5434735
+                    },
+                    {
+                      "endTime": 5483593,
+                      "startTime": 5478410
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5504267
+                    }
+                  ],
+                  "guid": 433891,
+                  "name": "Infernal Bolt",
+                  "totalUptime": 21908,
+                  "totalUses": 7,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "spell_monk_envelopingmist.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5300709,
+                      "startTime": 5296682
+                    },
+                    {
+                      "endTime": 5309034,
+                      "startTime": 5307015
+                    },
+                    {
+                      "endTime": 5325149,
+                      "startTime": 5310146
+                    },
+                    {
+                      "endTime": 5330685,
+                      "startTime": 5328670
+                    },
+                    {
+                      "endTime": 5334745,
+                      "startTime": 5332745
+                    },
+                    {
+                      "endTime": 5374204,
+                      "startTime": 5372200
+                    },
+                    {
+                      "endTime": 5459505,
+                      "startTime": 5453504
+                    }
+                  ],
+                  "guid": 124682,
+                  "name": "Enveloping Mist",
+                  "totalUptime": 33069,
+                  "totalUses": 7,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "ability_evoker_reversion2.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5388545,
+                      "startTime": 5364018
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5492525
+                    }
+                  ],
+                  "guid": 367364,
+                  "name": "Reversion",
+                  "totalUptime": 38855,
+                  "totalUses": 3,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "spell_nature_regeneration.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1126,
+                  "name": "Mark of the Wild",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv_12_profession_alchemy_flask_sindoreipotion_red--.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1235111,
+                  "name": "Flask of the Shattered Sun",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv_12_profession_alchemy_voidpotion_red.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5316293,
+                      "startTime": 5286284
+                    }
+                  ],
+                  "guid": 1236994,
+                  "name": "Potion of Recklessness",
+                  "totalUptime": 30009,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "warlock_spelldrain.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5301273,
+                      "startTime": 5298446
+                    },
+                    {
+                      "endTime": 5309861,
+                      "startTime": 5302623
+                    },
+                    {
+                      "endTime": 5333396,
+                      "startTime": 5313483
+                    },
+                    {
+                      "endTime": 5337148,
+                      "startTime": 5333799
+                    },
+                    {
+                      "endTime": 5353602,
+                      "startTime": 5341058
+                    },
+                    {
+                      "endTime": 5358046,
+                      "startTime": 5355287
+                    },
+                    {
+                      "endTime": 5368560,
+                      "startTime": 5358524
+                    },
+                    {
+                      "endTime": 5373860,
+                      "startTime": 5369394
+                    },
+                    {
+                      "endTime": 5381169,
+                      "startTime": 5375970
+                    },
+                    {
+                      "endTime": 5396924,
+                      "startTime": 5382469
+                    },
+                    {
+                      "endTime": 5427240,
+                      "startTime": 5402696
+                    },
+                    {
+                      "endTime": 5432945,
+                      "startTime": 5429599
+                    },
+                    {
+                      "endTime": 5450828,
+                      "startTime": 5439237
+                    },
+                    {
+                      "endTime": 5456081,
+                      "startTime": 5451244
+                    },
+                    {
+                      "endTime": 5494018,
+                      "startTime": 5456799
+                    },
+                    {
+                      "endTime": 5498144,
+                      "startTime": 5497356
+                    },
+                    {
+                      "endTime": 5504874,
+                      "startTime": 5499291
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5505767
+                    }
+                  ],
+                  "guid": 264173,
+                  "name": "Demonic Core",
+                  "stackUptime": [
+                    53631,
+                    69790,
+                    65638,
+                    34357,
+                    1995
+                  ],
+                  "totalUptime": 171780,
+                  "totalUses": 67,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_summondemonictyrant.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5306164,
+                      "startTime": 5286143
+                    },
+                    {
+                      "endTime": 5367740,
+                      "startTime": 5347734
+                    },
+                    {
+                      "endTime": 5431858,
+                      "startTime": 5411855
+                    },
+                    {
+                      "endTime": 5497785,
+                      "startTime": 5477768
+                    }
+                  ],
+                  "guid": 265187,
+                  "name": "Summon Demonic Tyrant",
+                  "totalUptime": 80047,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_fireresistancetotem_01.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5299913,
+                      "startTime": 5296907
+                    },
+                    {
+                      "endTime": 5309509,
+                      "startTime": 5302796
+                    },
+                    {
+                      "endTime": 5317986,
+                      "startTime": 5314184
+                    },
+                    {
+                      "endTime": 5336563,
+                      "startTime": 5318524
+                    },
+                    {
+                      "endTime": 5348639,
+                      "startTime": 5344542
+                    },
+                    {
+                      "endTime": 5353050,
+                      "startTime": 5350038
+                    },
+                    {
+                      "endTime": 5356441,
+                      "startTime": 5353433
+                    },
+                    {
+                      "endTime": 5368810,
+                      "startTime": 5358630
+                    },
+                    {
+                      "endTime": 5376600,
+                      "startTime": 5370452
+                    },
+                    {
+                      "endTime": 5392379,
+                      "startTime": 5380634
+                    },
+                    {
+                      "endTime": 5407859,
+                      "startTime": 5397370
+                    },
+                    {
+                      "endTime": 5414638,
+                      "startTime": 5407980
+                    },
+                    {
+                      "endTime": 5433073,
+                      "startTime": 5415834
+                    },
+                    {
+                      "endTime": 5444453,
+                      "startTime": 5436016
+                    },
+                    {
+                      "endTime": 5448262,
+                      "startTime": 5445250
+                    },
+                    {
+                      "endTime": 5452509,
+                      "startTime": 5449503
+                    },
+                    {
+                      "endTime": 5467947,
+                      "startTime": 5456510
+                    },
+                    {
+                      "endTime": 5480238,
+                      "startTime": 5470339
+                    },
+                    {
+                      "endTime": 5485685,
+                      "startTime": 5482663
+                    },
+                    {
+                      "endTime": 5492840,
+                      "startTime": 5486816
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5495663
+                    }
+                  ],
+                  "guid": 462568,
+                  "name": "Elemental Resistance",
+                  "totalUptime": 160163,
+                  "totalUses": 93,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "ability_evoker_rewind.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5382167,
+                      "startTime": 5378711
+                    }
+                  ],
+                  "guid": 363534,
+                  "name": "Rewind",
+                  "totalUptime": 3456,
+                  "totalUses": 1,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "inv_1115_warlock_diabolicritual_pitlord.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5309823,
+                      "startTime": 5302437
+                    },
+                    {
+                      "endTime": 5348893,
+                      "startTime": 5336541
+                    },
+                    {
+                      "endTime": 5377981,
+                      "startTime": 5367979
+                    },
+                    {
+                      "endTime": 5416088,
+                      "startTime": 5408081
+                    },
+                    {
+                      "endTime": 5443915,
+                      "startTime": 5432908
+                    },
+                    {
+                      "endTime": 5480708,
+                      "startTime": 5468715
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5504267
+                    }
+                  ],
+                  "guid": 432816,
+                  "name": "Diabolic Ritual: Pit Lord",
+                  "totalUptime": 63333,
+                  "totalUses": 7,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_evoker_timespiral.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5290833,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5394381,
+                      "startTime": 5383536
+                    }
+                  ],
+                  "guid": 375257,
+                  "name": "Time Spiral",
+                  "totalUptime": 20236,
+                  "totalUses": 2,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "ability_racial_visage.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5322140,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5323918,
+                      "startTime": 5322140
+                    },
+                    {
+                      "endTime": 5339339,
+                      "startTime": 5323918
+                    },
+                    {
+                      "endTime": 5348580,
+                      "startTime": 5339339
+                    },
+                    {
+                      "endTime": 5368980,
+                      "startTime": 5348580
+                    },
+                    {
+                      "endTime": 5370554,
+                      "startTime": 5368980
+                    },
+                    {
+                      "endTime": 5383496,
+                      "startTime": 5381861
+                    },
+                    {
+                      "endTime": 5405408,
+                      "startTime": 5385635
+                    },
+                    {
+                      "endTime": 5407588,
+                      "startTime": 5405408
+                    },
+                    {
+                      "endTime": 5418884,
+                      "startTime": 5407588
+                    },
+                    {
+                      "endTime": 5423396,
+                      "startTime": 5418884
+                    },
+                    {
+                      "endTime": 5440270,
+                      "startTime": 5423396
+                    },
+                    {
+                      "endTime": 5441035,
+                      "startTime": 5440270
+                    },
+                    {
+                      "endTime": 5442482,
+                      "startTime": 5441035
+                    },
+                    {
+                      "endTime": 5445150,
+                      "startTime": 5442482
+                    },
+                    {
+                      "endTime": 5448511,
+                      "startTime": 5445150
+                    },
+                    {
+                      "endTime": 5449560,
+                      "startTime": 5448511
+                    },
+                    {
+                      "endTime": 5460832,
+                      "startTime": 5449560
+                    },
+                    {
+                      "endTime": 5464203,
+                      "startTime": 5460832
+                    },
+                    {
+                      "endTime": 5465767,
+                      "startTime": 5464203
+                    },
+                    {
+                      "endTime": 5466614,
+                      "startTime": 5465767
+                    },
+                    {
+                      "endTime": 5489467,
+                      "startTime": 5466614
+                    },
+                    {
+                      "endTime": 5489524,
+                      "startTime": 5489467
+                    },
+                    {
+                      "endTime": 5500816,
+                      "startTime": 5489524
+                    },
+                    {
+                      "endTime": 5501582,
+                      "startTime": 5500816
+                    },
+                    {
+                      "endTime": 5502333,
+                      "startTime": 5501582
+                    },
+                    {
+                      "endTime": 5505320,
+                      "startTime": 5502333
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5505320
+                    }
+                  ],
+                  "guid": 372014,
+                  "name": "Visage",
+                  "totalUptime": 211965,
+                  "totalUses": 28,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv_12_trinket_raid_dreamrift_gazeofthealnseer.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5315675,
+                      "startTime": 5287444
+                    },
+                    {
+                      "endTime": 5340326,
+                      "startTime": 5328323
+                    },
+                    {
+                      "endTime": 5357103,
+                      "startTime": 5345080
+                    },
+                    {
+                      "endTime": 5394985,
+                      "startTime": 5382978
+                    },
+                    {
+                      "endTime": 5425868,
+                      "startTime": 5413899
+                    },
+                    {
+                      "endTime": 5455535,
+                      "startTime": 5443523
+                    },
+                    {
+                      "endTime": 5471714,
+                      "startTime": 5459700
+                    },
+                    {
+                      "endTime": 5490038,
+                      "startTime": 5478039
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5497735
+                    }
+                  ],
+                  "guid": 1266686,
+                  "name": "Alnsight",
+                  "totalUptime": 121376,
+                  "totalUses": 13,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_fire_elementaldevastation.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5402296,
+                      "startTime": 5282288
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5406854
+                    }
+                  ],
+                  "guid": 1276623,
+                  "name": "Singe Magic",
+                  "totalUptime": 220007,
+                  "totalUses": 2,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "ability_monk_chiexplosion.jpg?cachebust",
+                  "bands": [
+                    {
+                      "endTime": 5308694,
+                      "startTime": 5308342
+                    },
+                    {
+                      "endTime": 5430555,
+                      "startTime": 5430078
+                    }
+                  ],
+                  "guid": 1260681,
+                  "name": "Chi Cocoon",
+                  "totalUptime": 829,
+                  "totalUses": 2,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "achievement_reputation_guardiansofcenarius.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5297702,
+                      "startTime": 5284135
+                    },
+                    {
+                      "endTime": 5300786,
+                      "startTime": 5297703
+                    },
+                    {
+                      "endTime": 5304526,
+                      "startTime": 5302436
+                    },
+                    {
+                      "endTime": 5310725,
+                      "startTime": 5304527
+                    },
+                    {
+                      "endTime": 5334529,
+                      "startTime": 5310725
+                    },
+                    {
+                      "endTime": 5338772,
+                      "startTime": 5337697
+                    },
+                    {
+                      "endTime": 5438291,
+                      "startTime": 5410589
+                    },
+                    {
+                      "endTime": 5440370,
+                      "startTime": 5438292
+                    },
+                    {
+                      "endTime": 5442068,
+                      "startTime": 5440370
+                    },
+                    {
+                      "endTime": 5442169,
+                      "startTime": 5442068
+                    },
+                    {
+                      "endTime": 5457656,
+                      "startTime": 5444608
+                    }
+                  ],
+                  "guid": 1278914,
+                  "name": "Dream Guide",
+                  "totalUptime": 94444,
+                  "totalUses": 11,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "ability_bossmannoroth_empoweredmannorothsgaze.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5311238,
+                      "startTime": 5310023
+                    },
+                    {
+                      "endTime": 5351887,
+                      "startTime": 5349098
+                    },
+                    {
+                      "endTime": 5379296,
+                      "startTime": 5378185
+                    },
+                    {
+                      "endTime": 5417057,
+                      "startTime": 5416312
+                    },
+                    {
+                      "endTime": 5446439,
+                      "startTime": 5444124
+                    },
+                    {
+                      "endTime": 5481803,
+                      "startTime": 5480932
+                    }
+                  ],
+                  "guid": 432795,
+                  "name": "Demonic Art: Pit Lord",
+                  "totalUptime": 9046,
+                  "totalUses": 6,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv__azerite-area-denial.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5328015,
+                      "startTime": 5288967
+                    },
+                    {
+                      "endTime": 5369214,
+                      "startTime": 5330316
+                    },
+                    {
+                      "endTime": 5407195,
+                      "startTime": 5385040
+                    },
+                    {
+                      "endTime": 5437767,
+                      "startTime": 5415319
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5444963
+                    }
+                  ],
+                  "guid": 1266687,
+                  "name": "Alnscorned Essence",
+                  "stackUptime": [
+                    40972,
+                    9192,
+                    7991,
+                    8544,
+                    10128,
+                    13906,
+                    17385,
+                    19647,
+                    20556,
+                    15609,
+                    16443,
+                    16133,
+                    19852,
+                    6244,
+                    2487,
+                    322
+                  ],
+                  "totalUptime": 184439,
+                  "totalUses": 165,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_misc_food.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1285644,
+                  "name": "Hearty Well Fed",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "achievement_boss_argus_shivan.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5302437,
+                      "startTime": 5301312
+                    },
+                    {
+                      "endTime": 5336541,
+                      "startTime": 5334631
+                    },
+                    {
+                      "endTime": 5367979,
+                      "startTime": 5366954
+                    },
+                    {
+                      "endTime": 5412585,
+                      "startTime": 5407058
+                    },
+                    {
+                      "endTime": 5434735,
+                      "startTime": 5432622
+                    },
+                    {
+                      "endTime": 5478410,
+                      "startTime": 5468805
+                    },
+                    {
+                      "endTime": 5504267,
+                      "startTime": 5502662
+                    }
+                  ],
+                  "guid": 432794,
+                  "name": "Demonic Art: Mother of Chaos",
+                  "totalUptime": 22910,
+                  "totalUses": 7,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_holy_wordfortitude.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 21562,
+                  "name": "Power Word: Fortitude",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 2
+                },
+                {
+                  "abilityIcon": "spell_holy_devotionaura.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 465,
+                  "name": "Devotion Aura",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 2
+                },
+                {
+                  "abilityIcon": "spell_holy_healingfocus.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5321248,
+                      "startTime": 5297021
+                    },
+                    {
+                      "endTime": 5333434,
+                      "startTime": 5323417
+                    },
+                    {
+                      "endTime": 5346544,
+                      "startTime": 5336541
+                    },
+                    {
+                      "endTime": 5377981,
+                      "startTime": 5351887
+                    },
+                    {
+                      "endTime": 5389303,
+                      "startTime": 5379296
+                    },
+                    {
+                      "endTime": 5403790,
+                      "startTime": 5393781
+                    },
+                    {
+                      "endTime": 5444751,
+                      "startTime": 5412585
+                    },
+                    {
+                      "endTime": 5456435,
+                      "startTime": 5446439
+                    },
+                    {
+                      "endTime": 5475497,
+                      "startTime": 5465495
+                    },
+                    {
+                      "endTime": 5491805,
+                      "startTime": 5478410
+                    },
+                    {
+                      "endTime": 5503453,
+                      "startTime": 5493435
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5504267
+                    }
+                  ],
+                  "guid": 1269879,
+                  "name": "Mind's Eyes",
+                  "stackUptime": {
+                    "0": 56891,
+                    "1": 130823,
+                    "3": 37697
+                  },
+                  "totalUptime": 168520,
+                  "totalUses": 18,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "ability_monk_soothingmists.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5309091,
+                      "startTime": 5308342
+                    },
+                    {
+                      "endTime": 5319490,
+                      "startTime": 5315376
+                    },
+                    {
+                      "endTime": 5343449,
+                      "startTime": 5343184
+                    },
+                    {
+                      "endTime": 5405279,
+                      "startTime": 5404676
+                    },
+                    {
+                      "endTime": 5430728,
+                      "startTime": 5430078
+                    },
+                    {
+                      "endTime": 5433374,
+                      "startTime": 5432660
+                    }
+                  ],
+                  "guid": 1260617,
+                  "name": "Soothing Mist",
+                  "totalUptime": 7095,
+                  "totalUses": 6,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_holy_magicalsentry.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1459,
+                  "name": "Arcane Intellect",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "ability_monk_renewingmists.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5288496,
+                      "startTime": 5281565
+                    },
+                    {
+                      "endTime": 5297750,
+                      "startTime": 5291491
+                    },
+                    {
+                      "endTime": 5343601,
+                      "startTime": 5304048
+                    },
+                    {
+                      "endTime": 5349123,
+                      "startTime": 5346595
+                    },
+                    {
+                      "endTime": 5367162,
+                      "startTime": 5350385
+                    },
+                    {
+                      "endTime": 5372165,
+                      "startTime": 5367181
+                    },
+                    {
+                      "endTime": 5393133,
+                      "startTime": 5380459
+                    },
+                    {
+                      "endTime": 5406345,
+                      "startTime": 5393861
+                    },
+                    {
+                      "endTime": 5407994,
+                      "startTime": 5406787
+                    },
+                    {
+                      "endTime": 5411061,
+                      "startTime": 5408703
+                    },
+                    {
+                      "endTime": 5422973,
+                      "startTime": 5421562
+                    },
+                    {
+                      "endTime": 5429118,
+                      "startTime": 5425138
+                    },
+                    {
+                      "endTime": 5431050,
+                      "startTime": 5429763
+                    },
+                    {
+                      "endTime": 5437319,
+                      "startTime": 5432591
+                    },
+                    {
+                      "endTime": 5454512,
+                      "startTime": 5439053
+                    },
+                    {
+                      "endTime": 5473525,
+                      "startTime": 5466614
+                    },
+                    {
+                      "endTime": 5485344,
+                      "startTime": 5478319
+                    }
+                  ],
+                  "guid": 119611,
+                  "name": "Renewing Mist",
+                  "totalUptime": 146556,
+                  "totalUses": 17,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_nature_bloodlust.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5321914,
+                      "startTime": 5281909
+                    }
+                  ],
+                  "guid": 2825,
+                  "name": "Bloodlust",
+                  "totalUptime": 40005,
+                  "totalUses": 1,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_shaman_spiritlink.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5397764,
+                      "startTime": 5391438
+                    }
+                  ],
+                  "guid": 325174,
+                  "name": "Spirit Link Totem",
+                  "totalUptime": 6326,
+                  "totalUses": 1,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_buff.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5315574,
+                      "startTime": 5286144
+                    },
+                    {
+                      "endTime": 5370065,
+                      "startTime": 5355031
+                    },
+                    {
+                      "endTime": 5389550,
+                      "startTime": 5374524
+                    },
+                    {
+                      "endTime": 5407000,
+                      "startTime": 5391981
+                    },
+                    {
+                      "endTime": 5461500,
+                      "startTime": 5430696
+                    },
+                    {
+                      "endTime": 5477006,
+                      "startTime": 5461991
+                    },
+                    {
+                      "endTime": 5492425,
+                      "startTime": 5477396
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5496483
+                    }
+                  ],
+                  "guid": 1241715,
+                  "name": "Might of the Void",
+                  "totalUptime": 145727,
+                  "totalUses": 26,
+                  "type": 96
+                },
+                {
+                  "abilityIcon": "ability_warrior_rallyingcry.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5492675
+                    }
+                  ],
+                  "guid": 97463,
+                  "name": "Rallying Cry",
+                  "totalUptime": 14178,
+                  "totalUses": 2,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "warlock_siphonlife.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5302707,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5303706,
+                      "startTime": 5303683
+                    },
+                    {
+                      "endTime": 5304691,
+                      "startTime": 5304664
+                    },
+                    {
+                      "endTime": 5305703,
+                      "startTime": 5305671
+                    },
+                    {
+                      "endTime": 5306682,
+                      "startTime": 5306671
+                    },
+                    {
+                      "endTime": 5307687,
+                      "startTime": 5307687
+                    },
+                    {
+                      "endTime": 5309697,
+                      "startTime": 5308694
+                    },
+                    {
+                      "endTime": 5310168,
+                      "startTime": 5309698
+                    },
+                    {
+                      "endTime": 5311679,
+                      "startTime": 5310709
+                    },
+                    {
+                      "endTime": 5312172,
+                      "startTime": 5311696
+                    },
+                    {
+                      "endTime": 5313713,
+                      "startTime": 5312706
+                    },
+                    {
+                      "endTime": 5314169,
+                      "startTime": 5313714
+                    },
+                    {
+                      "endTime": 5315690,
+                      "startTime": 5314730
+                    },
+                    {
+                      "endTime": 5316154,
+                      "startTime": 5315724
+                    },
+                    {
+                      "endTime": 5317719,
+                      "startTime": 5316732
+                    },
+                    {
+                      "endTime": 5318689,
+                      "startTime": 5317743
+                    },
+                    {
+                      "endTime": 5318951,
+                      "startTime": 5318738
+                    },
+                    {
+                      "endTime": 5320686,
+                      "startTime": 5319746
+                    },
+                    {
+                      "endTime": 5320940,
+                      "startTime": 5320739
+                    },
+                    {
+                      "endTime": 5322716,
+                      "startTime": 5321737
+                    },
+                    {
+                      "endTime": 5322939,
+                      "startTime": 5322740
+                    },
+                    {
+                      "endTime": 5324685,
+                      "startTime": 5323758
+                    },
+                    {
+                      "endTime": 5324944,
+                      "startTime": 5324743
+                    },
+                    {
+                      "endTime": 5326703,
+                      "startTime": 5325740
+                    },
+                    {
+                      "endTime": 5327715,
+                      "startTime": 5326750
+                    },
+                    {
+                      "endTime": 5328702,
+                      "startTime": 5327764
+                    },
+                    {
+                      "endTime": 5329720,
+                      "startTime": 5328770
+                    },
+                    {
+                      "endTime": 5330711,
+                      "startTime": 5329762
+                    },
+                    {
+                      "endTime": 5331694,
+                      "startTime": 5330783
+                    },
+                    {
+                      "endTime": 5332715,
+                      "startTime": 5331786
+                    },
+                    {
+                      "endTime": 5333688,
+                      "startTime": 5332785
+                    },
+                    {
+                      "endTime": 5342703,
+                      "startTime": 5333789
+                    },
+                    {
+                      "endTime": 5343697,
+                      "startTime": 5342836
+                    },
+                    {
+                      "endTime": 5344712,
+                      "startTime": 5343841
+                    },
+                    {
+                      "endTime": 5345689,
+                      "startTime": 5344839
+                    },
+                    {
+                      "endTime": 5346709,
+                      "startTime": 5345848
+                    },
+                    {
+                      "endTime": 5347717,
+                      "startTime": 5346836
+                    },
+                    {
+                      "endTime": 5348713,
+                      "startTime": 5347847
+                    },
+                    {
+                      "endTime": 5349702,
+                      "startTime": 5348849
+                    },
+                    {
+                      "endTime": 5350719,
+                      "startTime": 5349853
+                    },
+                    {
+                      "endTime": 5351705,
+                      "startTime": 5350859
+                    },
+                    {
+                      "endTime": 5352697,
+                      "startTime": 5351856
+                    },
+                    {
+                      "endTime": 5353696,
+                      "startTime": 5352859
+                    },
+                    {
+                      "endTime": 5354681,
+                      "startTime": 5353862
+                    },
+                    {
+                      "endTime": 5355698,
+                      "startTime": 5354871
+                    },
+                    {
+                      "endTime": 5356706,
+                      "startTime": 5355881
+                    },
+                    {
+                      "endTime": 5357691,
+                      "startTime": 5356893
+                    },
+                    {
+                      "endTime": 5358701,
+                      "startTime": 5357899
+                    },
+                    {
+                      "endTime": 5359687,
+                      "startTime": 5358899
+                    },
+                    {
+                      "endTime": 5360695,
+                      "startTime": 5359900
+                    },
+                    {
+                      "endTime": 5361709,
+                      "startTime": 5360908
+                    },
+                    {
+                      "endTime": 5362691,
+                      "startTime": 5361896
+                    },
+                    {
+                      "endTime": 5363688,
+                      "startTime": 5362920
+                    },
+                    {
+                      "endTime": 5364687,
+                      "startTime": 5363921
+                    },
+                    {
+                      "endTime": 5365704,
+                      "startTime": 5364926
+                    },
+                    {
+                      "endTime": 5366693,
+                      "startTime": 5365922
+                    },
+                    {
+                      "endTime": 5367684,
+                      "startTime": 5366935
+                    },
+                    {
+                      "endTime": 5368701,
+                      "startTime": 5367932
+                    },
+                    {
+                      "endTime": 5369694,
+                      "startTime": 5368946
+                    },
+                    {
+                      "endTime": 5370683,
+                      "startTime": 5369950
+                    },
+                    {
+                      "endTime": 5371699,
+                      "startTime": 5370950
+                    },
+                    {
+                      "endTime": 5372683,
+                      "startTime": 5371964
+                    },
+                    {
+                      "endTime": 5373692,
+                      "startTime": 5372965
+                    },
+                    {
+                      "endTime": 5374682,
+                      "startTime": 5373980
+                    },
+                    {
+                      "endTime": 5375693,
+                      "startTime": 5374972
+                    },
+                    {
+                      "endTime": 5376705,
+                      "startTime": 5375983
+                    },
+                    {
+                      "endTime": 5377689,
+                      "startTime": 5376997
+                    },
+                    {
+                      "endTime": 5378710,
+                      "startTime": 5377995
+                    },
+                    {
+                      "endTime": 5380947,
+                      "startTime": 5378999
+                    },
+                    {
+                      "endTime": 5384914,
+                      "startTime": 5380997
+                    },
+                    {
+                      "endTime": 5385894,
+                      "startTime": 5385022
+                    },
+                    {
+                      "endTime": 5386911,
+                      "startTime": 5386060
+                    },
+                    {
+                      "endTime": 5387910,
+                      "startTime": 5387033
+                    },
+                    {
+                      "endTime": 5388893,
+                      "startTime": 5388039
+                    },
+                    {
+                      "endTime": 5389905,
+                      "startTime": 5389048
+                    },
+                    {
+                      "endTime": 5390903,
+                      "startTime": 5390053
+                    },
+                    {
+                      "endTime": 5391884,
+                      "startTime": 5391046
+                    },
+                    {
+                      "endTime": 5392937,
+                      "startTime": 5392050
+                    },
+                    {
+                      "endTime": 5393889,
+                      "startTime": 5393053
+                    },
+                    {
+                      "endTime": 5394891,
+                      "startTime": 5394063
+                    },
+                    {
+                      "endTime": 5395890,
+                      "startTime": 5395068
+                    },
+                    {
+                      "endTime": 5396898,
+                      "startTime": 5396076
+                    },
+                    {
+                      "endTime": 5397888,
+                      "startTime": 5397073
+                    },
+                    {
+                      "endTime": 5398907,
+                      "startTime": 5398079
+                    },
+                    {
+                      "endTime": 5399889,
+                      "startTime": 5399080
+                    },
+                    {
+                      "endTime": 5400896,
+                      "startTime": 5400091
+                    },
+                    {
+                      "endTime": 5401893,
+                      "startTime": 5401098
+                    },
+                    {
+                      "endTime": 5402896,
+                      "startTime": 5402102
+                    },
+                    {
+                      "endTime": 5420565,
+                      "startTime": 5403110
+                    },
+                    {
+                      "endTime": 5421561,
+                      "startTime": 5421189
+                    },
+                    {
+                      "endTime": 5422568,
+                      "startTime": 5422185
+                    },
+                    {
+                      "endTime": 5423568,
+                      "startTime": 5423184
+                    },
+                    {
+                      "endTime": 5424560,
+                      "startTime": 5424209
+                    },
+                    {
+                      "endTime": 5425556,
+                      "startTime": 5425204
+                    },
+                    {
+                      "endTime": 5426572,
+                      "startTime": 5426212
+                    },
+                    {
+                      "endTime": 5427569,
+                      "startTime": 5427200
+                    },
+                    {
+                      "endTime": 5428578,
+                      "startTime": 5428212
+                    },
+                    {
+                      "endTime": 5429554,
+                      "startTime": 5429219
+                    },
+                    {
+                      "endTime": 5430555,
+                      "startTime": 5430225
+                    },
+                    {
+                      "endTime": 5431571,
+                      "startTime": 5431243
+                    },
+                    {
+                      "endTime": 5432566,
+                      "startTime": 5432258
+                    },
+                    {
+                      "endTime": 5433562,
+                      "startTime": 5433259
+                    },
+                    {
+                      "endTime": 5434565,
+                      "startTime": 5434283
+                    },
+                    {
+                      "endTime": 5435570,
+                      "startTime": 5435280
+                    },
+                    {
+                      "endTime": 5436565,
+                      "startTime": 5436276
+                    },
+                    {
+                      "endTime": 5437562,
+                      "startTime": 5437284
+                    },
+                    {
+                      "endTime": 5438571,
+                      "startTime": 5438292
+                    },
+                    {
+                      "endTime": 5439577,
+                      "startTime": 5439287
+                    },
+                    {
+                      "endTime": 5440559,
+                      "startTime": 5440306
+                    },
+                    {
+                      "endTime": 5441577,
+                      "startTime": 5441302
+                    },
+                    {
+                      "endTime": 5442567,
+                      "startTime": 5442335
+                    },
+                    {
+                      "endTime": 5443555,
+                      "startTime": 5443311
+                    },
+                    {
+                      "endTime": 5444569,
+                      "startTime": 5444323
+                    },
+                    {
+                      "endTime": 5445552,
+                      "startTime": 5445327
+                    },
+                    {
+                      "endTime": 5446574,
+                      "startTime": 5446338
+                    },
+                    {
+                      "endTime": 5447584,
+                      "startTime": 5447343
+                    },
+                    {
+                      "endTime": 5448582,
+                      "startTime": 5448352
+                    },
+                    {
+                      "endTime": 5449560,
+                      "startTime": 5449359
+                    },
+                    {
+                      "endTime": 5450557,
+                      "startTime": 5450350
+                    },
+                    {
+                      "endTime": 5451573,
+                      "startTime": 5451363
+                    },
+                    {
+                      "endTime": 5452571,
+                      "startTime": 5452368
+                    },
+                    {
+                      "endTime": 5453575,
+                      "startTime": 5453392
+                    },
+                    {
+                      "endTime": 5454573,
+                      "startTime": 5454386
+                    },
+                    {
+                      "endTime": 5455573,
+                      "startTime": 5455393
+                    },
+                    {
+                      "endTime": 5456564,
+                      "startTime": 5456399
+                    },
+                    {
+                      "endTime": 5465647,
+                      "startTime": 5457409
+                    },
+                    {
+                      "endTime": 5466636,
+                      "startTime": 5466431
+                    },
+                    {
+                      "endTime": 5467640,
+                      "startTime": 5467435
+                    },
+                    {
+                      "endTime": 5468634,
+                      "startTime": 5468444
+                    },
+                    {
+                      "endTime": 5469630,
+                      "startTime": 5469452
+                    },
+                    {
+                      "endTime": 5470640,
+                      "startTime": 5470453
+                    },
+                    {
+                      "endTime": 5471637,
+                      "startTime": 5471457
+                    },
+                    {
+                      "endTime": 5472621,
+                      "startTime": 5472467
+                    },
+                    {
+                      "endTime": 5473632,
+                      "startTime": 5473471
+                    },
+                    {
+                      "endTime": 5474615,
+                      "startTime": 5474470
+                    },
+                    {
+                      "endTime": 5475636,
+                      "startTime": 5475477
+                    },
+                    {
+                      "endTime": 5476619,
+                      "startTime": 5476497
+                    },
+                    {
+                      "endTime": 5477638,
+                      "startTime": 5477482
+                    },
+                    {
+                      "endTime": 5478642,
+                      "startTime": 5478489
+                    },
+                    {
+                      "endTime": 5479619,
+                      "startTime": 5479491
+                    },
+                    {
+                      "endTime": 5480649,
+                      "startTime": 5480516
+                    },
+                    {
+                      "endTime": 5481646,
+                      "startTime": 5481511
+                    },
+                    {
+                      "endTime": 5482631,
+                      "startTime": 5482516
+                    },
+                    {
+                      "endTime": 5483638,
+                      "startTime": 5483515
+                    },
+                    {
+                      "endTime": 5484646,
+                      "startTime": 5484522
+                    },
+                    {
+                      "endTime": 5485637,
+                      "startTime": 5485514
+                    },
+                    {
+                      "endTime": 5486662,
+                      "startTime": 5486525
+                    },
+                    {
+                      "endTime": 5487637,
+                      "startTime": 5487533
+                    },
+                    {
+                      "endTime": 5488647,
+                      "startTime": 5488538
+                    },
+                    {
+                      "endTime": 5489631,
+                      "startTime": 5489549
+                    },
+                    {
+                      "endTime": 5490647,
+                      "startTime": 5490530
+                    },
+                    {
+                      "endTime": 5491656,
+                      "startTime": 5491541
+                    },
+                    {
+                      "endTime": 5492633,
+                      "startTime": 5492544
+                    },
+                    {
+                      "endTime": 5493641,
+                      "startTime": 5493551
+                    },
+                    {
+                      "endTime": 5494623,
+                      "startTime": 5494558
+                    },
+                    {
+                      "endTime": 5495624,
+                      "startTime": 5495564
+                    },
+                    {
+                      "endTime": 5496624,
+                      "startTime": 5496572
+                    },
+                    {
+                      "endTime": 5497643,
+                      "startTime": 5497581
+                    },
+                    {
+                      "endTime": 5498620,
+                      "startTime": 5498573
+                    },
+                    {
+                      "endTime": 5499645,
+                      "startTime": 5499583
+                    },
+                    {
+                      "endTime": 5500635,
+                      "startTime": 5500598
+                    },
+                    {
+                      "endTime": 5501633,
+                      "startTime": 5501603
+                    },
+                    {
+                      "endTime": 5506604,
+                      "startTime": 5502595
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5506627
+                    }
+                  ],
+                  "guid": 108366,
+                  "name": "Soul Leech",
+                  "totalUptime": 142790,
+                  "totalUses": 164,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_10_elementalcombinedfoozles_purifiedshadowflame.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5338904,
+                      "startTime": 5330905
+                    },
+                    {
+                      "endTime": 5365769,
+                      "startTime": 5341770
+                    },
+                    {
+                      "endTime": 5377058,
+                      "startTime": 5369063
+                    },
+                    {
+                      "endTime": 5417002,
+                      "startTime": 5396994
+                    },
+                    {
+                      "endTime": 5444751,
+                      "startTime": 5434734
+                    },
+                    {
+                      "endTime": 5455278,
+                      "startTime": 5445289
+                    },
+                    {
+                      "endTime": 5473327,
+                      "startTime": 5465335
+                    },
+                    {
+                      "endTime": 5505896,
+                      "startTime": 5497896
+                    }
+                  ],
+                  "guid": 445740,
+                  "name": "Enkindle",
+                  "totalUptime": 95999,
+                  "totalUses": 18,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "inv_icon_feather06a.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5301491,
+                      "startTime": 5286488
+                    },
+                    {
+                      "endTime": 5426935,
+                      "startTime": 5411920
+                    }
+                  ],
+                  "guid": 1250508,
+                  "name": "Emberwing Heatwave",
+                  "totalUptime": 30018,
+                  "totalUses": 2,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "inv_1115_warlock_diabolicritual_shivan.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5301116,
+                      "startTime": 5293589
+                    },
+                    {
+                      "endTime": 5334422,
+                      "startTime": 5323417
+                    },
+                    {
+                      "endTime": 5366749,
+                      "startTime": 5359749
+                    },
+                    {
+                      "endTime": 5406864,
+                      "startTime": 5393781
+                    },
+                    {
+                      "endTime": 5432420,
+                      "startTime": 5425415
+                    },
+                    {
+                      "endTime": 5468603,
+                      "startTime": 5456051
+                    },
+                    {
+                      "endTime": 5502450,
+                      "startTime": 5493435
+                    }
+                  ],
+                  "guid": 432815,
+                  "name": "Diabolic Ritual: Mother of Chaos",
+                  "totalUptime": 67187,
+                  "totalUses": 7,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_holy_powerinfusion.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5301361,
+                      "startTime": 5286355
+                    },
+                    {
+                      "endTime": 5426977,
+                      "startTime": 5411963
+                    }
+                  ],
+                  "guid": 10060,
+                  "name": "Power Infusion",
+                  "totalUptime": 30020,
+                  "totalUses": 2,
+                  "type": 2
+                },
+                {
+                  "abilityIcon": "ability_evoker_dreambreath.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5409955,
+                      "startTime": 5391027
+                    }
+                  ],
+                  "guid": 355941,
+                  "name": "Dream Breath",
+                  "totalUptime": 18928,
+                  "totalUses": 2,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "ability_evoker_masterytimewalker.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5504072,
+                      "startTime": 5493227
+                    }
+                  ],
+                  "guid": 413984,
+                  "name": "Shifting Sands",
+                  "totalUptime": 10845,
+                  "totalUses": 1,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "inv_1115_warlock_diabolicritual_felguard.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5292864,
+                      "startTime": 5282288
+                    },
+                    {
+                      "endTime": 5322250,
+                      "startTime": 5311238
+                    },
+                    {
+                      "endTime": 5358185,
+                      "startTime": 5350181
+                    },
+                    {
+                      "endTime": 5391940,
+                      "startTime": 5379296
+                    },
+                    {
+                      "endTime": 5425078,
+                      "startTime": 5417056
+                    },
+                    {
+                      "endTime": 5455598,
+                      "startTime": 5444587
+                    },
+                    {
+                      "endTime": 5489487,
+                      "startTime": 5481803
+                    }
+                  ],
+                  "guid": 431944,
+                  "name": "Diabolic Ritual: Overlord",
+                  "totalUptime": 68953,
+                  "totalUses": 7,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_evoker_echo.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5364016,
+                      "startTime": 5347808
+                    },
+                    {
+                      "endTime": 5492524,
+                      "startTime": 5488238
+                    },
+                    {
+                      "endTime": 5499023,
+                      "startTime": 5497861
+                    }
+                  ],
+                  "guid": 364343,
+                  "name": "Echo",
+                  "totalUptime": 21656,
+                  "totalUses": 3,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "achievement_raidprimalist_windelemental.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 462854,
+                  "name": "Skyfury",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "spell_sarkareth.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5349319,
+                      "startTime": 5283664
+                    },
+                    {
+                      "endTime": 5382243,
+                      "startTime": 5352594
+                    },
+                    {
+                      "endTime": 5408776,
+                      "startTime": 5382243
+                    },
+                    {
+                      "endTime": 5434857,
+                      "startTime": 5413220
+                    },
+                    {
+                      "endTime": 5505910,
+                      "startTime": 5437831
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5506645
+                    }
+                  ],
+                  "guid": 395152,
+                  "name": "Ebon Might",
+                  "totalUptime": 211761,
+                  "totalUses": 8,
+                  "type": 12
+                },
+                {
+                  "abilityIcon": "spell_shaman_giftearthmother.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5312331,
+                      "startTime": 5303331
+                    },
+                    {
+                      "endTime": 5330849,
+                      "startTime": 5314319
+                    },
+                    {
+                      "endTime": 5367781,
+                      "startTime": 5358760
+                    },
+                    {
+                      "endTime": 5377094,
+                      "startTime": 5368118
+                    },
+                    {
+                      "endTime": 5391266,
+                      "startTime": 5381132
+                    },
+                    {
+                      "endTime": 5413627,
+                      "startTime": 5400102
+                    },
+                    {
+                      "endTime": 5451717,
+                      "startTime": 5436136
+                    },
+                    {
+                      "endTime": 5465648,
+                      "startTime": 5456623
+                    },
+                    {
+                      "endTime": 5488458,
+                      "startTime": 5470472
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5497882
+                    }
+                  ],
+                  "guid": 382024,
+                  "name": "Earthliving Weapon",
+                  "totalUptime": 118749,
+                  "totalUses": 20,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv_12_dh_void_ability_soulfragments.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5282949,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5290126,
+                      "startTime": 5288881
+                    },
+                    {
+                      "endTime": 5300551,
+                      "startTime": 5298878
+                    },
+                    {
+                      "endTime": 5309888,
+                      "startTime": 5308873
+                    },
+                    {
+                      "endTime": 5319034,
+                      "startTime": 5318874
+                    },
+                    {
+                      "endTime": 5329005,
+                      "startTime": 5328872
+                    },
+                    {
+                      "endTime": 5339645,
+                      "startTime": 5338869
+                    },
+                    {
+                      "endTime": 5348923,
+                      "startTime": 5348893
+                    },
+                    {
+                      "endTime": 5359819,
+                      "startTime": 5358863
+                    },
+                    {
+                      "endTime": 5368910,
+                      "startTime": 5368866
+                    },
+                    {
+                      "endTime": 5379353,
+                      "startTime": 5378875
+                    },
+                    {
+                      "endTime": 5390268,
+                      "startTime": 5388869
+                    },
+                    {
+                      "endTime": 5399394,
+                      "startTime": 5398870
+                    },
+                    {
+                      "endTime": 5411359,
+                      "startTime": 5408870
+                    },
+                    {
+                      "endTime": 5418970,
+                      "startTime": 5418873
+                    },
+                    {
+                      "endTime": 5430696,
+                      "startTime": 5428870
+                    },
+                    {
+                      "endTime": 5441036,
+                      "startTime": 5438872
+                    },
+                    {
+                      "endTime": 5449725,
+                      "startTime": 5448868
+                    },
+                    {
+                      "endTime": 5458891,
+                      "startTime": 5458881
+                    },
+                    {
+                      "endTime": 5470373,
+                      "startTime": 5468885
+                    },
+                    {
+                      "endTime": 5480162,
+                      "startTime": 5478874
+                    },
+                    {
+                      "endTime": 5489523,
+                      "startTime": 5488872
+                    },
+                    {
+                      "endTime": 5501415,
+                      "startTime": 5498866
+                    }
+                  ],
+                  "guid": 1287425,
+                  "name": "Void-Touched Orbs",
+                  "totalUptime": 23359,
+                  "totalUses": 23,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "spell_warlock_demonwrath.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5306164,
+                      "startTime": 5286143
+                    },
+                    {
+                      "endTime": 5367726,
+                      "startTime": 5347734
+                    },
+                    {
+                      "endTime": 5431858,
+                      "startTime": 5411855
+                    },
+                    {
+                      "endTime": 5497763,
+                      "startTime": 5477767
+                    }
+                  ],
+                  "guid": 1276767,
+                  "name": "Tyrant's Oblation",
+                  "totalUptime": 80012,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_pet_inquisitoreye.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5287871,
+                      "startTime": 5287383
+                    },
+                    {
+                      "endTime": 5288692,
+                      "startTime": 5287871
+                    },
+                    {
+                      "endTime": 5293292,
+                      "startTime": 5288692
+                    },
+                    {
+                      "endTime": 5297021,
+                      "startTime": 5293292
+                    },
+                    {
+                      "endTime": 5298663,
+                      "startTime": 5298068
+                    },
+                    {
+                      "endTime": 5301577,
+                      "startTime": 5298663
+                    },
+                    {
+                      "endTime": 5302437,
+                      "startTime": 5301577
+                    },
+                    {
+                      "endTime": 5305580,
+                      "startTime": 5304993
+                    },
+                    {
+                      "endTime": 5309092,
+                      "startTime": 5305580
+                    },
+                    {
+                      "endTime": 5310145,
+                      "startTime": 5309092
+                    },
+                    {
+                      "endTime": 5311238,
+                      "startTime": 5310145
+                    },
+                    {
+                      "endTime": 5318393,
+                      "startTime": 5317875
+                    },
+                    {
+                      "endTime": 5321157,
+                      "startTime": 5318393
+                    },
+                    {
+                      "endTime": 5323417,
+                      "startTime": 5321157
+                    },
+                    {
+                      "endTime": 5329405,
+                      "startTime": 5328953
+                    },
+                    {
+                      "endTime": 5332745,
+                      "startTime": 5329405
+                    },
+                    {
+                      "endTime": 5336541,
+                      "startTime": 5332745
+                    },
+                    {
+                      "endTime": 5340112,
+                      "startTime": 5339609
+                    },
+                    {
+                      "endTime": 5349344,
+                      "startTime": 5340112
+                    },
+                    {
+                      "endTime": 5350452,
+                      "startTime": 5349344
+                    },
+                    {
+                      "endTime": 5351887,
+                      "startTime": 5350452
+                    },
+                    {
+                      "endTime": 5356347,
+                      "startTime": 5355867
+                    },
+                    {
+                      "endTime": 5359749,
+                      "startTime": 5356347
+                    },
+                    {
+                      "endTime": 5364266,
+                      "startTime": 5363720
+                    },
+                    {
+                      "endTime": 5365494,
+                      "startTime": 5364266
+                    },
+                    {
+                      "endTime": 5367979,
+                      "startTime": 5365494
+                    },
+                    {
+                      "endTime": 5371545,
+                      "startTime": 5371010
+                    },
+                    {
+                      "endTime": 5374063,
+                      "startTime": 5371545
+                    },
+                    {
+                      "endTime": 5379296,
+                      "startTime": 5374063
+                    },
+                    {
+                      "endTime": 5385383,
+                      "startTime": 5384934
+                    },
+                    {
+                      "endTime": 5392282,
+                      "startTime": 5385383
+                    },
+                    {
+                      "endTime": 5393781,
+                      "startTime": 5392282
+                    },
+                    {
+                      "endTime": 5399772,
+                      "startTime": 5399339
+                    },
+                    {
+                      "endTime": 5412585,
+                      "startTime": 5399772
+                    },
+                    {
+                      "endTime": 5414297,
+                      "startTime": 5413822
+                    },
+                    {
+                      "endTime": 5415927,
+                      "startTime": 5414297
+                    },
+                    {
+                      "endTime": 5417056,
+                      "startTime": 5415927
+                    },
+                    {
+                      "endTime": 5423547,
+                      "startTime": 5422897
+                    },
+                    {
+                      "endTime": 5424234,
+                      "startTime": 5423547
+                    },
+                    {
+                      "endTime": 5425738,
+                      "startTime": 5424234
+                    },
+                    {
+                      "endTime": 5426810,
+                      "startTime": 5425738
+                    },
+                    {
+                      "endTime": 5431243,
+                      "startTime": 5430635
+                    },
+                    {
+                      "endTime": 5433185,
+                      "startTime": 5431243
+                    },
+                    {
+                      "endTime": 5434735,
+                      "startTime": 5433185
+                    },
+                    {
+                      "endTime": 5438669,
+                      "startTime": 5438204
+                    },
+                    {
+                      "endTime": 5444818,
+                      "startTime": 5438669
+                    },
+                    {
+                      "endTime": 5446439,
+                      "startTime": 5444818
+                    },
+                    {
+                      "endTime": 5453794,
+                      "startTime": 5453273
+                    },
+                    {
+                      "endTime": 5456303,
+                      "startTime": 5453794
+                    },
+                    {
+                      "endTime": 5465495,
+                      "startTime": 5456304
+                    },
+                    {
+                      "endTime": 5469170,
+                      "startTime": 5468584
+                    },
+                    {
+                      "endTime": 5478410,
+                      "startTime": 5469170
+                    },
+                    {
+                      "endTime": 5480755,
+                      "startTime": 5480104
+                    },
+                    {
+                      "endTime": 5481803,
+                      "startTime": 5480756
+                    },
+                    {
+                      "endTime": 5486401,
+                      "startTime": 5485886
+                    },
+                    {
+                      "endTime": 5487428,
+                      "startTime": 5486401
+                    },
+                    {
+                      "endTime": 5489892,
+                      "startTime": 5487428
+                    },
+                    {
+                      "endTime": 5493435,
+                      "startTime": 5489892
+                    },
+                    {
+                      "endTime": 5496959,
+                      "startTime": 5496431
+                    },
+                    {
+                      "endTime": 5502169,
+                      "startTime": 5496959
+                    },
+                    {
+                      "endTime": 5504267,
+                      "startTime": 5502169
+                    }
+                  ],
+                  "guid": 1269643,
+                  "name": "Demonic Oculi",
+                  "stackUptime": [
+                    82619,
+                    136006,
+                    4982,
+                    1804
+                  ],
+                  "totalUptime": 142792,
+                  "totalUses": 98,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "inv_helm_cloth_pvpwarlock_o_01.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5344009,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5404403,
+                      "startTime": 5345278
+                    },
+                    {
+                      "endTime": 5409324,
+                      "startTime": 5405836
+                    },
+                    {
+                      "endTime": 5421724,
+                      "startTime": 5411111
+                    },
+                    {
+                      "endTime": 5458228,
+                      "startTime": 5422060
+                    },
+                    {
+                      "endTime": 5467284,
+                      "startTime": 5458621
+                    },
+                    {
+                      "endTime": 5506053,
+                      "startTime": 5468716
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5506075
+                    }
+                  ],
+                  "guid": 1281559,
+                  "name": "Hellbent Commander",
+                  "stackUptime": [
+                    6672,
+                    14531,
+                    5737,
+                    9033,
+                    3694,
+                    5456,
+                    14973,
+                    21094,
+                    12444,
+                    19832,
+                    13577,
+                    25775,
+                    8147,
+                    18718,
+                    6467,
+                    13154,
+                    11007,
+                    1518,
+                    904,
+                    4050,
+                    3353,
+                    994,
+                    1240,
+                    28,
+                    21,
+                    399,
+                    755,
+                    1414,
+                    424
+                  ],
+                  "totalUptime": 218739,
+                  "totalUses": 55,
+                  "type": 36
+                },
+                {
+                  "abilityIcon": "achievement_raid_argusraid.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5302356,
+                      "startTime": 5288352
+                    },
+                    {
+                      "endTime": 5367582,
+                      "startTime": 5353584
+                    },
+                    {
+                      "endTime": 5427846,
+                      "startTime": 5413842
+                    },
+                    {
+                      "endTime": 5498736,
+                      "startTime": 5484745
+                    }
+                  ],
+                  "guid": 1282502,
+                  "name": "Dominion of Argus: Grand Warlock Alythess",
+                  "totalUptime": 55997,
+                  "totalUses": 4,
+                  "type": 36
+                },
+                {
+                  "abilityIcon": "inv_achievement_raid_voidspire.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1269406,
+                  "name": "Singular Focus",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "monk_stance_whitetiger.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 166646,
+                  "name": "Windwalking",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "spell_fire_felpyroblast.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5312764,
+                      "startTime": 5311333
+                    },
+                    {
+                      "endTime": 5353584,
+                      "startTime": 5351994
+                    },
+                    {
+                      "endTime": 5383705,
+                      "startTime": 5379409
+                    },
+                    {
+                      "endTime": 5420892,
+                      "startTime": 5417170
+                    },
+                    {
+                      "endTime": 5448290,
+                      "startTime": 5446524
+                    },
+                    {
+                      "endTime": 5484734,
+                      "startTime": 5481903
+                    }
+                  ],
+                  "guid": 433885,
+                  "name": "Ruination",
+                  "totalUptime": 15636,
+                  "totalUses": 6,
+                  "type": 36
+                },
+                {
+                  "abilityIcon": "70_inscription_vantus_rune_tomb.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5306164,
+                      "startTime": 5286143
+                    },
+                    {
+                      "endTime": 5367726,
+                      "startTime": 5347733
+                    },
+                    {
+                      "endTime": 5431858,
+                      "startTime": 5411855
+                    },
+                    {
+                      "endTime": 5497763,
+                      "startTime": 5477767
+                    }
+                  ],
+                  "guid": 456323,
+                  "name": "Abyssal Dominion",
+                  "totalUptime": 80013,
+                  "totalUses": 4,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "ability_evoker_prescience.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5316928,
+                      "startTime": 5294502
+                    },
+                    {
+                      "endTime": 5375269,
+                      "startTime": 5352833
+                    }
+                  ],
+                  "guid": 410089,
+                  "name": "Prescience",
+                  "totalUptime": 44862,
+                  "totalUses": 2,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "inv_10_enchanting_crystal_color2.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 1264426,
+                  "name": "Void-Touched",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "ability_monk_chargingoxwave.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5297701,
+                      "startTime": 5291491
+                    },
+                    {
+                      "endTime": 5361709,
+                      "startTime": 5361455
+                    },
+                    {
+                      "endTime": 5371699,
+                      "startTime": 5371306
+                    },
+                    {
+                      "endTime": 5492633,
+                      "startTime": 5491955
+                    }
+                  ],
+                  "guid": 443113,
+                  "name": "Strength of the Black Ox",
+                  "totalUptime": 7535,
+                  "totalUses": 4,
+                  "type": 8
+                },
+                {
+                  "abilityIcon": "inv12_apextalent_warlock_dominionofargus.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5311158,
+                      "startTime": 5286143
+                    },
+                    {
+                      "endTime": 5372730,
+                      "startTime": 5347734
+                    },
+                    {
+                      "endTime": 5436844,
+                      "startTime": 5411855
+                    },
+                    {
+                      "endTime": 5502761,
+                      "startTime": 5477767
+                    }
+                  ],
+                  "guid": 1276166,
+                  "name": "Dominion of Argus",
+                  "stackUptime": [
+                    125417,
+                    52467,
+                    47527
+                  ],
+                  "totalUptime": 99994,
+                  "totalUses": 26,
+                  "type": 36
+                },
+                {
+                  "abilityIcon": "inv_elemental_primal_mana.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5321800,
+                      "startTime": 5301800
+                    },
+                    {
+                      "endTime": 5360331,
+                      "startTime": 5340314
+                    },
+                    {
+                      "endTime": 5428087,
+                      "startTime": 5361394
+                    },
+                    {
+                      "endTime": 5493996,
+                      "startTime": 5473999
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5503344
+                    }
+                  ],
+                  "guid": 1229746,
+                  "name": "Arcanoweave Insight",
+                  "totalUptime": 130216,
+                  "totalUses": 13,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "ability_evoker_blessingofthebronze.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5281565
+                    }
+                  ],
+                  "guid": 381757,
+                  "name": "Blessing of the Bronze",
+                  "totalUptime": 225288,
+                  "totalUses": 1,
+                  "type": 64
+                },
+                {
+                  "abilityIcon": "ability_creature_felfrenzy.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5297021,
+                      "startTime": 5293062
+                    },
+                    {
+                      "endTime": 5323417,
+                      "startTime": 5322451
+                    },
+                    {
+                      "endTime": 5359749,
+                      "startTime": 5358395
+                    },
+                    {
+                      "endTime": 5393781,
+                      "startTime": 5392138
+                    },
+                    {
+                      "endTime": 5426810,
+                      "startTime": 5425265
+                    },
+                    {
+                      "endTime": 5465495,
+                      "startTime": 5455795
+                    },
+                    {
+                      "endTime": 5493435,
+                      "startTime": 5489705
+                    }
+                  ],
+                  "guid": 428524,
+                  "name": "Demonic Art: Overlord",
+                  "totalUptime": 22897,
+                  "totalUses": 7,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_deathpact.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5297815,
+                      "startTime": 5281442
+                    },
+                    {
+                      "endTime": 5454108,
+                      "startTime": 5451157
+                    },
+                    {
+                      "endTime": 5506853,
+                      "startTime": 5502243
+                    }
+                  ],
+                  "guid": 108416,
+                  "name": "Dark Pact",
+                  "totalUptime": 23934,
+                  "totalUses": 3,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "spell_shadow_demonictactics.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5385960,
+                      "startTime": 5377960
+                    }
+                  ],
+                  "guid": 104773,
+                  "name": "Unending Resolve",
+                  "totalUptime": 8000,
+                  "totalUses": 1,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_imp3_purple.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5302290,
+                      "startTime": 5282288
+                    },
+                    {
+                      "endTime": 5426857,
+                      "startTime": 5406854
+                    }
+                  ],
+                  "guid": 1288945,
+                  "name": "Imp Lord",
+                  "totalUptime": 40005,
+                  "totalUses": 2,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_deathwing_sealarmorbreachtga.jpg",
+                  "bands": [
+                    {
+                      "endTime": 5395033,
+                      "startTime": 5389465
+                    },
+                    {
+                      "endTime": 5408645,
+                      "startTime": 5405613
+                    }
+                  ],
+                  "guid": 111400,
+                  "name": "Burning Rush",
+                  "totalUptime": 8600,
+                  "totalUses": 2,
+                  "type": 4
+                }
+              ],
+              "endTime": 14805794,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 225411,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -127,6 +127,56 @@ def test_no_warning_banner_when_absent() -> None:
     assert "⚠️" not in text
 
 
+# -- T2.1: matched/relaxed covariate declaration --------------------------------
+
+
+def test_matched_covariates_rendered_with_checkmarks() -> None:
+    header = _header(
+        matched_covariates=("item_level", "has_augmentation", "duration±7%"),
+        relaxed_covariates=(),
+    )
+    text = render_report(header, [])
+    assert "**Coorte:**" in text
+    assert "ilvl ±5 ✅" in text
+    assert "Augmentation ✅" in text
+    assert "duração ±7% ✅" in text
+
+
+def test_no_covariates_line_when_matched_covariates_empty() -> None:
+    """Pre-T2.1 callers (none left in this codebase, but defends the
+    default) never populate matched_covariates — no line, no crash.
+    """
+    header = _header(matched_covariates=(), relaxed_covariates=())
+    text = render_report(header, [])
+    assert "**Coorte:**" not in text
+
+
+def test_relaxed_covariate_gets_generic_not_matched_warning() -> None:
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("item_level",))
+    text = render_report(header, [])
+    assert "⚠️ ilvl ±5 não pareado (amostra insuficiente)" in text
+
+
+def test_relaxed_has_augmentation_shows_the_support_buff_warning() -> None:
+    """T2.1 acceptance: when has_augmentation is relaxed, the report must
+    contain the specific support-buff warning, not the generic one.
+    """
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("has_augmentation",))
+    text = render_report(header, [])
+    assert (
+        "⚠️ Buffs de suporte não pareados — parte do gap de dano por cast "
+        "pode não ser controlável por você." in text
+    )
+    assert "Augmentation não pareado" not in text
+
+
+def test_talent_cluster_pre_relaxed_shows_generic_warning() -> None:
+    """D-24: talent_cluster is always pre-relaxed until T2.2 exists."""
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("talent_cluster",))
+    text = render_report(header, [])
+    assert "⚠️ talentos: mesma build não pareado (amostra insuficiente)" in text
+
+
 def test_no_parse_med_field_anywhere() -> None:
     """achado 3.10: characterRankings não tem `percentile`; o campo antigo some de vez."""
     header = _header(player_dps=1000.0, player_percentile=50.0, cohort_median_dps=2000.0)

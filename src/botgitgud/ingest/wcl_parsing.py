@@ -7,6 +7,8 @@ parsing logic is unit-testable without any network mocking.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +26,37 @@ class PlayerMatch:
     region: str | None
     role: str
     item_level: float | None
+    talent_hash: str | None
+    tier_pieces: int | None
+
+
+def compute_talent_hash(talent_tree: list[dict[str, Any]]) -> str | None:
+    """T2.2's own build-identity hash (docs/implementacao.md T2.2 step 1):
+    sha256 of the sorted (nodeID, rank) set from combatantInfo.talentTree
+    (docs/schema_confirmado.md §4 — combatantInfo.talents comes back
+    empty; the real loadout is in talentTree).
+    """
+    pairs = sorted(
+        (int(t["nodeID"]), int(t["rank"]))
+        for t in talent_tree
+        if isinstance(t, dict) and "nodeID" in t and "rank" in t
+    )
+    if not pairs:
+        return None
+    payload = json.dumps(pairs, separators=(",", ":"))
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def count_tier_pieces(gear: list[dict[str, Any]]) -> int | None:
+    """docs/schema_confirmado.md §4 (verified live, T2.1): `gear[].setID` is
+    non-null exactly for the raid's current tier-set pieces — no curated,
+    patch-specific bonusID table needed. None (not 0) only when `gear`
+    itself is missing/malformed, so a genuine zero-tier-pieces build is
+    never confused with "no data available".
+    """
+    if not isinstance(gear, list):
+        return None
+    return sum(1 for item in gear if isinstance(item, dict) and item.get("setID") is not None)
 
 
 def find_player_in_details(player_details: dict[str, Any], player: str) -> PlayerMatch | None:
@@ -55,6 +88,12 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                     if specs and isinstance(specs[0], dict)
                     else (specs[0] if specs else None)
                 )
+                combatant_info = p.get("combatantInfo")
+                talent_hash = None
+                tier_pieces = None
+                if isinstance(combatant_info, dict):
+                    talent_hash = compute_talent_hash(combatant_info.get("talentTree") or [])
+                    tier_pieces = count_tier_pieces(combatant_info.get("gear") or [])
                 return PlayerMatch(
                     player_id=p["id"],
                     class_name=p.get("type") or "Unknown",
@@ -63,6 +102,8 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                     region=p.get("region"),
                     role=mapped_role,
                     item_level=p.get("maxItemLevel"),
+                    talent_hash=talent_hash,
+                    tier_pieces=tier_pieces,
                 )
     return None
 
@@ -120,3 +161,14 @@ def parse_cast_events(
         rel_sec = round((ev.get("timestamp", start_time_ms) - start_time_ms) / 1000.0, 1)
         timeline.setdefault(int(spell_id), []).append(rel_sec)
     return timeline
+
+
+def parse_aura_ids(buffs_data: dict[str, Any]) -> frozenset[int]:
+    """T2.1: guids of every aura the player had (self-buffs and anything
+    applied by others) — see wcl/queries.py's QUERY_PLAYER_BUFFS docstring
+    for why `sourceID` on the Buffs table gives exactly this.
+    """
+    auras = buffs_data.get("auras") if isinstance(buffs_data, dict) else None
+    if not isinstance(auras, list):
+        return frozenset()
+    return frozenset(int(a["guid"]) for a in auras if isinstance(a, dict) and "guid" in a)

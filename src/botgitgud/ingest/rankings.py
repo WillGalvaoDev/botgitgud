@@ -11,8 +11,6 @@ adapter between a page of ranking candidates and LogFetcher.fetch_many().
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import structlog
 
 from botgitgud.analysis.cohort import (
@@ -23,21 +21,13 @@ from botgitgud.analysis.cohort import (
     classify_cohort_size,
     within_sanity_band,
 )
-from botgitgud.domain.models import PlayerLog
+from botgitgud.domain.models import PlayerLog, RankingCandidate
 from botgitgud.errors import ApiError, DataError, InsufficientCohort, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
 from botgitgud.wcl.client import WclClient
 from botgitgud.wcl.queries import QUERY_RANKINGS_PAGE, QUERY_ZONE_PARTITIONS
 
 log = structlog.get_logger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class RankingCandidate:
-    report_code: str
-    fight_id: int
-    player_name: str
-    duration_s: float
 
 
 def get_current_partition(client: WclClient, encounter_id: int) -> int:

@@ -9,10 +9,10 @@ from botgitgud.domain.models import (
     AbilityDamage,
     Cohort,
     CohortCriteria,
-    CohortProfile,
     FightRef,
     PlayerBuild,
     PlayerLog,
+    RankingCandidate,
     SpellProfile,
 )
 
@@ -157,18 +157,20 @@ def test_cohort_bundles_criteria_and_members() -> None:
     assert len(cohort.members) == 1
 
 
-# -- SpellProfile / CohortProfile --------------------------------------------------
+# -- SpellProfile / RankingCandidate -------------------------------------------
 
 
-def test_cohort_profile_holds_spell_profiles_by_id() -> None:
+def test_spell_profile_holds_its_reference_timings() -> None:
     spell = SpellProfile(
         spell_id=104316, presence=1.0, ref_times=(10.0, 130.0, 250.0), n_usages_median=4.0
     )
-    profile = CohortProfile(
-        cohort_id="abc123",
-        n_members=10,
-        built_at=datetime.now(UTC),
-        spells={104316: spell},
+    assert spell.presence == 1.0
+    assert spell.ref_times == (10.0, 130.0, 250.0)
+
+
+def test_ranking_candidate_holds_report_identity() -> None:
+    candidate = RankingCandidate(
+        report_code="ABCDEFGHIJKLMNOP", fight_id=1, player_name="Zarad", duration_s=345.1
     )
-    assert profile.spells[104316].presence == 1.0
-    assert profile.spells[104316].ref_times == (10.0, 130.0, 250.0)
+    assert candidate.report_code == "ABCDEFGHIJKLMNOP"
+    assert candidate.duration_s == 345.1

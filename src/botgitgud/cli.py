@@ -150,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_analyze.set_defaults(func=_cmd_analyze)
 
     p_build_cohort = sub.add_parser(
-        "build-cohort", help="Constrói/persiste CohortProfile(s) para um encontro/spec."
+        "build-cohort", help="Aquece o(s) pool(s) de candidatos de coorte para um encontro/spec."
     )
     p_build_cohort.add_argument("--encounter", required=True, type=int, help="encounterID da WCL.")
     # docs/desvios.md D-13: a especificação do documento não inclui --class,

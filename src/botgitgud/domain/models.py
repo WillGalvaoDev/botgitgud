@@ -42,6 +42,7 @@ class PlayerBuild:
     talent_hash: str | None
     tier_pieces: int | None
     external_buffs: frozenset[int] = frozenset()  # spell_ids of received external buffs (T2.1)
+    has_augmentation: bool = False  # an Augmentation Evoker buffed this player (T2.1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,22 @@ class Cohort:
 
 
 @dataclass(frozen=True, slots=True)
+class RankingCandidate:
+    """T1.6: one characterRankings leaderboard entry, resolved to a
+    report/fight/player identity fetchable via LogFetcher. Lives here
+    (not ingest/rankings.py, which used to define it) so T2.1's
+    ingest/store.py can persist a candidate pool per cohort_id without
+    importing ingest/rankings.py — that would cycle back through
+    ingest/log_fetcher.py, which already imports ingest/store.py.
+    """
+
+    report_code: str
+    fight_id: int
+    player_name: str
+    duration_s: float
+
+
+@dataclass(frozen=True, slots=True)
 class SpellProfile:
     """T1.3 (docs/desvios.md D-12(b)): one spell's aggregate stats across a
     cohort — formalizes the shape build_cd_reference_profile() (Fase 0,
@@ -108,14 +125,6 @@ class SpellProfile:
     presence: float
     ref_times: tuple[float, ...]
     n_usages_median: float
-
-
-@dataclass(frozen=True, slots=True)
-class CohortProfile:
-    cohort_id: str
-    n_members: int
-    built_at: datetime
-    spells: Mapping[int, SpellProfile]
 
 
 @dataclass(frozen=True, slots=True)
