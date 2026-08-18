@@ -79,6 +79,7 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         result.manifest,
         result.build_divergence,
         result.performance,
+        result.dps_gap,
     )
     sys.stdout.write(report_text + "\n")
     return 0

@@ -77,6 +77,7 @@ def _run_analyze(job: Job, deps: Deps) -> str:
         result.manifest,
         result.build_divergence,
         result.performance,
+        result.dps_gap,
     )
 
 

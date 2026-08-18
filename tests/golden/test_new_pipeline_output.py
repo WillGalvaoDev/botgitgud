@@ -77,7 +77,12 @@ def _run_new_pipeline(tmp_path: Path) -> str:
     # make this a flaky snapshot, not a golden one. It has its own
     # dedicated (non-snapshot) coverage in test_runmanifest.py.
     return render_report(
-        result.header, result.comparisons, None, result.build_divergence, result.performance
+        result.header,
+        result.comparisons,
+        None,
+        result.build_divergence,
+        result.performance,
+        result.dps_gap,
     )
 
 

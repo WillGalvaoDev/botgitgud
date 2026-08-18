@@ -193,6 +193,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             result.manifest,
             result.build_divergence,
             result.performance,
+            result.dps_gap,
         )
         chunk_max = deps.settings.discord_chunk_max_len
         for chunk in chunk_report_for_discord(report_text, max_len=chunk_max):

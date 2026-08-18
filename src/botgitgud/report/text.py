@@ -26,18 +26,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from botgitgud.analysis.alignment import AlignmentKind
 from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
+from botgitgud.analysis.dps_gap import DpsGapReport
 from botgitgud.analysis.performance_features import PerformanceFindings
 from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
 from botgitgud.report.build_divergence_text import render_build_divergence
-from botgitgud.report.grading_text import (
-    compute_minor_deviation_keys,
-    render_match_step_line,
-    render_minor_deviations_section,
-)
+from botgitgud.report.cd_sections_text import render_cd_sections
+from botgitgud.report.dps_gap_text import render_dps_gap_section
 from botgitgud.report.performance_text import (
     render_active_time_section,
     render_deaths_downtime_section,
@@ -149,55 +146,6 @@ def _render_header(header: ReportHeader) -> list[str]:
     return lines
 
 
-def _render_missed_usage_section(comparisons: Sequence[SpellComparison]) -> list[str]:
-    with_missed = [c for c in comparisons if c.alignment.n_missed > 0]
-    if not with_missed:
-        return []
-
-    lines = ["", "⛔ **USOS PERDIDOS**", "-" * 42]
-    for c in with_missed:
-        missed_times = [s.ref_time for s in c.alignment.steps if s.kind is AlignmentKind.MISSED]
-        times_fmt = ", ".join(f"{t:.1f}s" for t in missed_times)
-        lines.append(
-            f"**{c.spell.name}**: {c.alignment.n_missed} uso(s) perdido(s) "
-            f"— esperado(s) aos {times_fmt}"
-        )
-    return lines
-
-
-def _render_spell_block(
-    c: SpellComparison, minor_keys: set[tuple[int, int]], c_idx: int
-) -> list[str]:
-    n_user = c.alignment.n_matched + c.alignment.n_extra
-    n_ref_median = c.cadence.n_usages_median
-    lines = [
-        "",
-        f"**{c.spell.name}** (Tipo: {c.cd_type} | Pres: {c.presence * 100:.0f}%)",
-        f"Usos: {n_user} (coorte: {n_ref_median:.1f})",
-        "-" * 30,
-    ]
-    for s_idx, step in enumerate(c.alignment.steps):
-        idx = s_idx + 1
-        if step.kind is AlignmentKind.MATCH:
-            if (c_idx, s_idx) in minor_keys:
-                continue  # T2.3: rendered in the collapsed section instead
-            assert step.user_time is not None
-            assert step.ref_time is not None
-            assert step.delta is not None
-            grade = c.step_grades[s_idx]
-            assert grade is not None
-            lines.append(
-                render_match_step_line(idx, step.user_time, step.ref_time, step.delta, grade)
-            )
-        elif step.kind is AlignmentKind.MISSED:
-            assert step.ref_time is not None
-            lines.append(f"Uso #{idx} | Esperado ~{step.ref_time:.1f}s | NÃO USADO ⛔")
-        else:  # EXTRA
-            assert step.user_time is not None
-            lines.append(f"Uso #{idx} | Player: {step.user_time:.1f}s | Uso extra")
-    return lines
-
-
 def _render_manifest_footer(manifest: RunManifest | None) -> list[str]:
     if manifest is None:
         return []
@@ -216,13 +164,15 @@ def render_report(
     manifest: RunManifest | None = None,
     build_divergence: BuildDivergence | None = None,
     performance: PerformanceFindings | None = None,
+    dps_gap: DpsGapReport | None = None,
 ) -> str:
-    """T3.1: section order is normative (docs/implementacao.md T3.1) — 1.
-    Build (`build_divergence`, above the header) 2. Mortes/downtime 3.
-    Active time 4. Uptimes 5. Waste de recurso 6. Usos perdidos de CD 7.
-    Timing de CD (the two CD sections below, unchanged since T0.7/T2.3).
-    Items 2-5 render even when there are no CD comparisons at all — they
-    are independent features, not contingent on eligible cooldowns.
+    """Section order (interim, pre-T3.3 — the final normative order, Top 3
+    then this same content, is T3.3's own job): 1. Build (`build_divergence`,
+    above the header) 2. De onde veio o gap de DPS (T3.2, `dps_gap`) 3.
+    Mortes/downtime 4. Active time 5. Uptimes 6. Waste de recurso 7. Usos
+    perdidos de CD 8. Timing de CD (`render_cd_sections`). Every section
+    from `dps_gap` onward renders even with zero CD comparisons — none of
+    them are contingent on eligible cooldowns.
     """
     lines: list[str] = []
     if build_divergence is not None:
@@ -230,6 +180,8 @@ def render_report(
         lines.append("")
     lines.extend(_render_header(header))
 
+    if dps_gap is not None:
+        lines.extend(render_dps_gap_section(dps_gap))
     if performance is not None:
         lines.extend(render_deaths_downtime_section(performance.deaths, performance.downtime))
         lines.extend(render_active_time_section(performance.active_time))
@@ -243,31 +195,7 @@ def render_report(
         lines.append(_SEPARATOR)
         return "\n".join(lines)
 
-    lines.extend(_render_missed_usage_section(comparisons))
-
-    # T2.3: BH runs over the WHOLE report's yellow/red steps before any
-    # spell block renders, so major/minor ordering doesn't bias which
-    # findings survive.
-    minor_keys = compute_minor_deviation_keys(comparisons)
-    indexed = list(enumerate(comparisons))
-    major = [(i, c) for i, c in indexed if c.cd_type == "MAJOR"]
-    minor = [(i, c) for i, c in indexed if c.cd_type == "MINOR"]
-
-    if major:
-        lines.append("")
-        lines.append("🔥 **OFFENSIVE MAJOR CDS**")
-        lines.append("-" * 42)
-        for i, c in major:
-            lines.extend(_render_spell_block(c, minor_keys, i))
-
-    if minor:
-        lines.append("")
-        lines.append("⚡ **MINOR CDS / BURST UTILITIES**")
-        lines.append("-" * 42)
-        for i, c in minor:
-            lines.extend(_render_spell_block(c, minor_keys, i))
-
-    lines.extend(render_minor_deviations_section(comparisons, minor_keys))
+    lines.extend(render_cd_sections(comparisons))
     lines.extend(_render_manifest_footer(manifest))
     lines.append("")
     lines.append(_SEPARATOR)

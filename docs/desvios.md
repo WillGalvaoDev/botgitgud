@@ -639,3 +639,35 @@ de um projeto pessoal/comunidade pequena).
   fica negativo nem subestima um wipe; avg_targets_per_cast nunca finge um valor para uma
   habilidade sem casts). Testado em `tests/unit/test_performance_parsing.py` e
   `tests/unit/test_damage_aggregation.py`, incluindo o caso do wipe sem revive.
+
+## D-30 — Seção "de onde veio o gap de DPS" do snapshot dourado reflete coorte com eventos truncados (limitação de fixture, não bug)
+
+- **Tarefa:** T3.2
+- **Documento diz:** nenhum critério de aceite da T3.2 exige verificação contra a fixture real
+  (diferente da T3.1, que tem um teste de reconciliação obrigatório) — todos os 5 critérios da T3.2
+  são sintéticos/Hypothesis.
+- **Realidade:** D-29/T3.1 já truncou (pós-gravação) os cassetes de `events(dataType: DamageDone)`
+  de toda referência que não é o próprio fixture, para conter o tamanho do diretório —
+  `_MAX_RECORDED_EVENTS_PER_PAGE = 25`. Como **toda referência é do mesmo class/spec do fixture**
+  (Demonology Warlock, exigido pela própria `CohortCriteria` da T1.5), toda referência também tem
+  muitos pets e um volume de eventos de dano comparável ao de Zarad (dezenas de milhares) — truncar
+  para 25 deixa `damage_by_ability` de CADA log de referência gravemente incompleto (só as
+  primeiras habilidades cronologicamente atingidas pelo pull sobrevivem). Isso é inofensivo para
+  toda feature da T3.1 (nenhuma delas depende de `damage_by_ability` de logs de referência — só a
+  reconciliação usa o fixture, que fica intacto) mas corrompe as medianas de coorte `c_r(a)`/`p_r(a)`
+  da T3.2, produzindo uma seção "DE ONDE VEIO O GAP DE DPS" no snapshot dourado com números
+  pequenos/ruidosos que não refletem uma decomposição real.
+- **Ação tomada:** aceito como limitação de fixture, documentada aqui — não é um bug de
+  `analysis/dps_gap.py` (a matemática da decomposição é verificada isoladamente e exaustivamente:
+  identidade fechada em 1000 casos via Hypothesis, mais os 4 casos sintéticos de valor conhecido
+  exigidos pelo documento, `tests/unit/test_dps_gap.py`). Não regravei os cassetes com um limite
+  maior porque não há tamanho de truncamento que sirva bem aos dois objetivos ao mesmo tempo
+  (fidelidade de coorte vs. tamanho de repositório) para uma coorte inteiramente pet-heavy — um
+  valor "razoável" hoje ainda seria arbitrário e ficaria obsoleto assim que outro fixture de spec
+  diferente for gravado. Quando a T3.2/T3.3 precisarem de um relatório real colado em
+  `docs/progresso.md` com um Top 3 crível (portão de saída da Fase 3), a extração deve rodar contra
+  a API ao vivo (como já foi feito para os relatórios reais colados nos portões de saída da Fase 0
+  e Fase 1), não contra este fixture truncado.
+- **Impacto:** nenhum teste trava por causa disso — o snapshot dourado captura o que quer que o
+  código produza de forma autoconsistente (função normal de teste de regressão), e nenhum critério
+  de aceite da T3.2 depende de os números da coorte no fixture serem realistas.

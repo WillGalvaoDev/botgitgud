@@ -40,6 +40,7 @@ from botgitgud.analysis.cohort import (
 )
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
+from botgitgud.analysis.dps_gap import DpsGapReport, analyze_dps_gap
 from botgitgud.analysis.performance_features import (
     PerformanceFindings,
     analyze_performance_features,
@@ -88,6 +89,7 @@ class AnalysisResult:
     manifest: RunManifest
     build_divergence: BuildDivergence | None = None
     performance: PerformanceFindings | None = None
+    dps_gap: DpsGapReport | None = None
 
 
 def run_analysis(
@@ -174,6 +176,18 @@ def run_analysis(
     duration_max_s = max(durations) if durations else player_log.fight.duration_s
     cohort_size_status = classify_cohort_size(len(matched_logs))
 
+    # T3.2: rules 1/2 of the diagnosis need to know whether a buff-related
+    # covariate was relaxed — the SAME match_cohort() output T2.1 already
+    # produced, not a new query.
+    buffs_relaxed = bool(set(match_report.relaxed) & {"has_augmentation", "external_buffs"})
+    dps_gap = analyze_dps_gap(
+        player_log,
+        matched_logs,
+        cohort_median_dps=cohort_median_dps,
+        catalog=deps.catalog,
+        buffs_relaxed=buffs_relaxed,
+    )
+
     eligible_ids = discover_eligible_spell_ids(profile)
     comparisons = compare_all_spells(
         player_log,
@@ -229,4 +243,5 @@ def run_analysis(
         manifest=manifest,
         build_divergence=build_divergence,
         performance=performance,
+        dps_gap=dps_gap,
     )
