@@ -17,10 +17,20 @@ exists so that migration has one place to land.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_SECRET_FIELDS: set[str] = {
+    "discord_token",
+    "wcl_client_id",
+    "wcl_client_secret",
+    "blizzard_client_id",
+    "blizzard_client_secret",
+}
 
 
 class Settings(BaseSettings):
@@ -79,3 +89,14 @@ class Settings(BaseSettings):
     cohort_min_warn: int = 20
     cohort_max: int = 100
     max_ranking_pages: int = 10
+
+    def settings_hash(self) -> str:
+        """T1.5: content hash of every non-credential field — feeds
+        RunManifest.settings_hash so a report can be traced back to the
+        analysis parameters that produced it. Credential fields are
+        excluded on purpose: they must never be hashed into anything that
+        ends up in a rendered report or a DuckDB row.
+        """
+        data = self.model_dump(mode="json", exclude=_SECRET_FIELDS)
+        payload = json.dumps(data, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode()).hexdigest()[:12]

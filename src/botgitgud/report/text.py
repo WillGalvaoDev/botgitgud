@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from botgitgud.analysis.alignment import AlignmentKind
 from botgitgud.analysis.comparison import SpellComparison
+from botgitgud.domain.models import RunManifest
 
 _GREEN_THRESHOLD_S = 10.0
 _YELLOW_THRESHOLD_S = 25.0
@@ -138,12 +139,29 @@ def _render_spell_block(c: SpellComparison) -> list[str]:
     return lines
 
 
-def render_report(header: ReportHeader, comparisons: Sequence[SpellComparison]) -> str:
+def _render_manifest_footer(manifest: RunManifest | None) -> list[str]:
+    if manifest is None:
+        return []
+    return [
+        "",
+        (
+            f"_Cohort: {manifest.cohort_id} | Versão: {manifest.code_version} "
+            f"| Gerado: {manifest.generated_at.isoformat()}_"
+        ),
+    ]
+
+
+def render_report(
+    header: ReportHeader,
+    comparisons: Sequence[SpellComparison],
+    manifest: RunManifest | None = None,
+) -> str:
     lines = _render_header(header)
 
     if not comparisons:
         lines.append("")
         lines.append("⚡ Nenhum Major/Minor CD elegível encontrado.")
+        lines.extend(_render_manifest_footer(manifest))
         lines.append(_SEPARATOR)
         return "\n".join(lines)
 
@@ -166,6 +184,7 @@ def render_report(header: ReportHeader, comparisons: Sequence[SpellComparison]) 
         for c in minor:
             lines.extend(_render_spell_block(c))
 
+    lines.extend(_render_manifest_footer(manifest))
     lines.append("")
     lines.append(_SEPARATOR)
     return "\n".join(lines)

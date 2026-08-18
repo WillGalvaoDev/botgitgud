@@ -10,6 +10,7 @@ from botgitgud.domain.models import (
     FightRef,
     PlayerBuild,
     PlayerLog,
+    RunManifest,
     SpellProfile,
 )
 from botgitgud.ingest.store import Store
@@ -212,6 +213,48 @@ def test_write_profile_upserts_same_cohort_id(tmp_path: Path) -> None:
         latest = store.read_profile("samehash00000001")
         assert latest is not None
         assert latest.n_members == 9
+
+
+def test_write_run_persists_manifest_row(tmp_path: Path) -> None:
+    manifest = RunManifest(
+        cohort_id="deadbeefdeadbeef",
+        code_version="abc1234",
+        generated_at=datetime.now(UTC),
+        n_members=17,
+        wcl_partition=4,
+        settings_hash="feedface1234",
+    )
+    with Store(tmp_path) as store:
+        store.write_run(manifest)
+        rows = store.query(
+            "SELECT cohort_id, code_version, n_members, wcl_partition, settings_hash FROM runs"
+        )
+    assert rows["cohort_id"][0] == "deadbeefdeadbeef"
+    assert rows["code_version"][0] == "abc1234"
+    assert rows["n_members"][0] == 17
+    assert rows["wcl_partition"][0] == 4
+    assert rows["settings_hash"][0] == "feedface1234"
+
+
+def test_write_run_twice_keeps_both_rows(tmp_path: Path) -> None:
+    """Insert-only audit log (D-12c immutability rationale): repeated runs
+    of the same cohort must not overwrite each other.
+    """
+    manifest = RunManifest(
+        cohort_id="samecohort000001",
+        code_version="abc1234",
+        generated_at=datetime.now(UTC),
+        n_members=17,
+        wcl_partition=4,
+        settings_hash="feedface1234",
+    )
+    with Store(tmp_path) as store:
+        store.write_run(manifest)
+        store.write_run(manifest)
+        rows = store.query(
+            "SELECT count(*) AS n FROM runs WHERE cohort_id = $c", c="samecohort000001"
+        )
+    assert rows["n"][0] == 2
 
 
 def test_reopening_store_reuses_existing_tables(tmp_path: Path) -> None:

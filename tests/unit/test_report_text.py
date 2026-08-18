@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from botgitgud.analysis.comparison import compare_spell_usage
+from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
 
@@ -140,6 +143,48 @@ def test_reference_count_shown_explicitly() -> None:
 def test_empty_comparisons_still_renders_header_and_notice() -> None:
     text = render_report(_header(), [])
     assert "Nenhum Major/Minor CD elegível encontrado" in text
+
+
+# -- T1.5: manifest footer -----------------------------------------------------
+
+
+def _manifest(**overrides: object) -> RunManifest:
+    defaults: dict[str, object] = {
+        "cohort_id": "deadbeefdeadbeef",
+        "code_version": "abc1234",
+        "generated_at": datetime.now(UTC),
+        "n_members": 17,
+        "wcl_partition": 4,
+        "settings_hash": "feedface1234",
+    }
+    defaults.update(overrides)
+    return RunManifest(**defaults)  # type: ignore[arg-type]
+
+
+def test_manifest_footer_contains_cohort_id_and_code_version_with_comparisons() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Dark Pact"),
+        presence=0.9,
+        user_times=[10.0, 40.0],
+        ref_times=[10.0, 40.0],
+        n_usages_median=2.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison], _manifest())
+    assert "deadbeefdeadbeef" in text
+    assert "abc1234" in text
+
+
+def test_manifest_footer_contains_cohort_id_and_code_version_without_comparisons() -> None:
+    text = render_report(_header(), [], _manifest())
+    assert "deadbeefdeadbeef" in text
+    assert "abc1234" in text
+
+
+def test_manifest_footer_absent_when_manifest_not_given() -> None:
+    text = render_report(_header(), [])
+    assert "Cohort:" not in text
+    assert "Versão:" not in text
 
 
 # -- chunking ------------------------------------------------------------------

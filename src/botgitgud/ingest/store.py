@@ -41,6 +41,7 @@ from botgitgud.domain.models import (
     FightRef,
     PlayerBuild,
     PlayerLog,
+    RunManifest,
     SpellProfile,
 )
 
@@ -78,6 +79,16 @@ CREATE TABLE IF NOT EXISTS spells (
 # read/write methods for it (SpellCatalog, T0.4, still owns spell data via
 # its own JSON file) — left empty and unused until a later task wires it up.
 
+_CREATE_RUNS_TABLE = """
+CREATE TABLE IF NOT EXISTS runs (
+    cohort_id VARCHAR, code_version VARCHAR, generated_at TIMESTAMP,
+    n_members INTEGER, wcl_partition INTEGER, settings_hash VARCHAR
+)
+"""
+# T1.5: insert-only audit log of every report generated — no PK, same
+# immutability rationale as `logs` (D-12c): a repeated run is a new fact,
+# not a duplicate to reject.
+
 
 class Store:
     def __init__(self, data_dir: Path) -> None:
@@ -91,6 +102,7 @@ class Store:
         self._conn.execute(_CREATE_LOGS_TABLE)
         self._conn.execute(_CREATE_COHORTS_TABLE)
         self._conn.execute(_CREATE_SPELLS_TABLE)
+        self._conn.execute(_CREATE_RUNS_TABLE)
 
     def close(self) -> None:
         self._conn.close()
@@ -200,6 +212,25 @@ class Store:
                 built_at = excluded.built_at
             """,
             [profile.cohort_id, "{}", profile.n_members, profile.built_at, "unknown"],
+        )
+
+    # -- run manifests --------------------------------------------------------------
+
+    def write_run(self, manifest: RunManifest) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO runs (
+                cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                manifest.cohort_id,
+                manifest.code_version,
+                manifest.generated_at,
+                manifest.n_members,
+                manifest.wcl_partition,
+                manifest.settings_hash,
+            ],
         )
 
     # -- generic SQL --------------------------------------------------------------

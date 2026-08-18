@@ -116,3 +116,18 @@ class CohortProfile:
     n_members: int
     built_at: datetime
     spells: Mapping[int, SpellProfile]
+
+
+@dataclass(frozen=True, slots=True)
+class RunManifest:
+    """T1.5: every rendered report and every persisted cohort carries this,
+    so any result can be traced back to the exact cohort, code, and
+    settings that produced it (docs/implementacao.md T1.5).
+    """
+
+    cohort_id: str
+    code_version: str
+    generated_at: datetime
+    n_members: int
+    wcl_partition: int | None
+    settings_hash: str

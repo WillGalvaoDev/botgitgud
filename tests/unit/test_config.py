@@ -83,3 +83,27 @@ def test_settings_field_values_match_fase0_constants() -> None:
     a_default = align([0.0], [100.0])
     a_explicit = align([0.0], [100.0], gap_penalty=settings.gap_penalty_s)
     assert a_default.total_cost == a_explicit.total_cost
+
+
+# -- T1.5: settings_hash() -----------------------------------------------------
+
+
+def test_settings_hash_deterministic_for_equal_settings() -> None:
+    assert _settings().settings_hash() == _settings().settings_hash()
+
+
+def test_settings_hash_changes_when_a_non_secret_field_changes() -> None:
+    base = _settings().settings_hash()
+    changed = _settings(cohort_min_hard=99).settings_hash()
+    assert base != changed
+
+
+def test_settings_hash_ignores_credential_values() -> None:
+    """settings_hash exists to detect drift in analysis parameters, not to
+    fingerprint credentials — two Settings differing only in secrets must
+    hash identically, and the raw secret values must never appear in the
+    hash input at all (they're excluded before hashing, not merely hashed).
+    """
+    a = _settings(wcl_client_secret="secret-one").settings_hash()
+    b = _settings(wcl_client_secret="secret-two").settings_hash()
+    assert a == b
