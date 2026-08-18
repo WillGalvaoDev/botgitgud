@@ -365,3 +365,90 @@ de um projeto pessoal/comunidade pequena).
   T1.7 expôs (nenhuma tarefa anterior precisava distinguir esgotamento de orçamento de uma falha
   pontual). Testado com regressões dedicadas em `test_log_fetcher.py`, `test_rankings.py` e
   `test_cohort_builder.py`.
+
+## D-19 — "writer único serializado... thread dedicada" implementado como lock, não fila+thread
+
+- **Tarefa:** T1.8
+- **Documento diz:** "Toda escrita passa por um **writer único serializado** (uma thread dedicada
+  consumindo uma fila de escritas). Leituras concorrentes são permitidas. **Nunca** abra conexões
+  de escrita a partir dos workers."
+- **Realidade:** o requisito real por trás dessa frase é que `duckdb.Connection` não é segura para
+  uso concorrente entre threads — a garantia que importa é "nunca duas threads tocam a conexão ao
+  mesmo tempo", não especificamente "existe uma thread nomeada consumindo uma fila". Implementar um
+  `ThreadPoolExecutor(max_workers=1)`/fila dedicada introduz risco real de deadlock se qualquer
+  método de `Store` chamar outro método de `Store` enquanto já executa dentro da própria thread
+  writer (submissão aninhada no único worker, que está ocupado esperando por si mesmo).
+- **Ação tomada:** `Store` ganhou um único `threading.RLock` guardando **todo** acesso a
+  `self._conn` — leituras inclusive (não só escritas: DuckDB também desaconselha uso concorrente
+  para leitura na mesma conexão). `bot/jobs.py`'s `JobQueue` reusa a mesma conexão/lock via
+  `Store.execute`/`execute_returning`, então toda escrita no processo — logs, cohorts, runs, jobs —
+  serializa pelo mesmo mecanismo. O critério de aceite ("8 workers escrevendo simultaneamente, zero
+  exceção, todos os registros presentes") é sobre o **comportamento observável**, não sobre a
+  mecânica interna, e um lock produz exatamente essa garantia com uma implementação mais simples e
+  sem risco de deadlock.
+- **Impacto:** nenhum no comportamento observável (testado em
+  `test_store.py::test_eight_threads_writing_concurrently_never_raises_and_all_records_land`).
+
+## D-20 — `jobs` precisa de uma coluna `job_type`, ausente do DDL literal da T1.8
+
+- **Tarefa:** T1.8
+- **Documento diz:** o `CREATE TABLE jobs` da especificação não tem coluna para distinguir o tipo
+  de job.
+- **Realidade:** o item 5 do mesmo T1.8 exige explicitamente "duas filas com prioridade" entre
+  análises (rápidas) e construções de coorte fria — impossível sem alguma coluna que identifique o
+  tipo de cada job na hora de escolher qual reivindicar (`claim_next`) e para decidir se o
+  orçamento atual permite aquele tipo (item 3, reserva de 25%).
+- **Ação tomada:** adicionada `job_type VARCHAR` (`"analyze" | "build_cohort"`) ao DDL em
+  `bot/job_models.py`.
+- **Impacto:** nenhum na metodologia — apenas completa uma coluna que a lógica adjacente do próprio
+  documento já pressupunha existir.
+
+## D-21 — Piso de abortagem (1000) é maior que a reserva de 25% para a conta real (3600/h)
+
+- **Tarefa:** T1.8
+- **Realidade:** com o `limitPerHour` real confirmado da conta (3600, `docs/schema_confirmado.md`
+  §2), 25% de reserva = 900 pontos — **menor** que o piso padrão de abortagem da T0.3 (1000). Como
+  `BudgetStatus.allows()` aplica o piso incondicionalmente antes de checar a reserva por tipo de
+  job, isso significa que, com os números literais desta conta, o piso sempre barra tudo antes que
+  a distinção "reserva bloqueia só coorte fria" chegue a importar — não há uma faixa intermediária
+  real onde só jobs de coorte pausam enquanto análises continuam.
+- **Ação tomada:** a lógica em camadas (piso absoluto → reserva por tipo) foi implementada como
+  especificada e continua correta em geral — qualquer conta com `limitPerHour` alto o suficiente
+  para que a reserva supere o piso tem a faixa intermediária real. Documentado no docstring de
+  `BudgetStatus` para que isso não pareça um bug ao ler o código depois. O teste que exercita essa
+  camada (`test_cold_cohort_jobs_pause_below_reserve_while_analyze_jobs_continue`) usa um
+  `BudgetStatus` com piso customizado menor, deliberadamente, para exercitar a lógica em seus
+  próprios termos.
+- **Impacto:** nenhum na metodologia — comportamento correto para qualquer conta cujos números
+  componham como o documento pressupõe; apenas não é observável com o `limitPerHour` real desta
+  conta específica hoje.
+
+## D-22 — Nenhum teste unitário para `bot/discord_bot.py`
+
+- **Tarefa:** T1.8
+- **Realidade:** `bot/discord_bot.py` (a cola assíncrona do Discord — comandos, loop de workers,
+  notificações) nunca foi testada no nível de unidade em nenhuma tarefa desta sessão, desde que o
+  arquivo foi criado na T1.6 — não existe infraestrutura no projeto para simular um
+  `discord.ext.commands.Bot`/event loop real, e construir uma do zero para testar código que é, em
+  sua maioria, roteamento fino (parsear → chamar lógica já testada → formatar → enviar) não parecia
+  proporcional ao valor.
+- **Ação tomada:** toda a lógica de negócio que os comandos chamam (`run_analysis`, `JobQueue`,
+  `run_claimed_job`, `BudgetStatus`) tem cobertura de unidade completa e é exercitada isoladamente.
+  `discord_bot.py` em si foi revisado manualmente com cuidado (fluxo de exceções, ordem de
+  operações, wiring do worker loop) mas fica de fora da cobertura automatizada — consistente com o
+  precedente já estabelecido desde a T1.6.
+- **Impacto:** cobertura total do repositório (86%) continua bem acima do piso de 75% exigido pelo
+  portão de saída da Fase 1, mesmo com `discord_bot.py` em 0%.
+
+## D-23 — Nenhuma tarefa liga `build_bot()` a um processo executável de fato
+
+- **Tarefa:** T1.8
+- **Realidade:** desde que `bot/discord_bot.py`'s `build_bot(deps)` foi criada na T1.6, nenhuma
+  tarefa do documento (T1.6, T1.7 ou T1.8) jamais a chamou de fato — não havia `bot.run(token)` em
+  lugar nenhum do código após a remoção de `bot.py` da raiz. O bot Discord literalmente não tinha
+  como ser iniciado como processo real.
+- **Ação tomada:** adicionado o subcomando `serve` a `cli.py` (`python -m botgitgud.cli serve`),
+  que constrói `Deps` e chama `build_bot(deps).run(token)` — o único lugar que efetivamente inicia
+  o processo de longa duração do bot.
+- **Impacto:** nenhum na metodologia. Sem isso, toda a infraestrutura da T1.8 (fila, orçamento,
+  justiça entre usuários) não teria como rodar de verdade fora dos testes.

@@ -196,6 +196,69 @@ def test_transport_error_retries_then_raises_transient() -> None:
     assert len(sleeps) == 3  # 3 retries after the first failed attempt
 
 
+def test_points_limit_and_remaining_populated_after_a_query() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "rateLimitData": {
+                            "limitPerHour": 3600,
+                            "pointsSpentThisHour": 100,
+                            "pointsResetIn": 3500,
+                        }
+                    }
+                },
+            )
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(_config(), transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+    assert client.points_limit is None  # nothing queried yet
+
+    client.query("query { x }", {}, op_name="op")
+
+    assert client.points_limit == 3600
+    assert client.points_remaining == 3500
+
+
+def test_refresh_budget_never_raises_even_below_floor() -> None:
+    """T1.8: the job scheduler needs raw numbers to decide policy, not an
+    exception — unlike _ensure_budget (exercised via query()).
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "rateLimitData": {
+                            "limitPerHour": 3600,
+                            "pointsSpentThisHour": 3200,  # only 400 remaining
+                            "pointsResetIn": 60,
+                        }
+                    }
+                },
+            )
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(
+        _config(api_points_floor=1000.0),
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _s: None,
+    )
+
+    client.refresh_budget()  # must not raise
+
+    assert client.points_remaining == 400
+    assert client.points_limit == 3600
+
+
 def test_client_uses_expected_wcl_endpoint() -> None:
     """Sanity check the module points at the real WCL v2 endpoint."""
     assert API_URL == "https://www.warcraftlogs.com/api/v2/client"

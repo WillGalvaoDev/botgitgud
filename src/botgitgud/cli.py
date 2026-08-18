@@ -121,6 +121,24 @@ def _cmd_backfill(_args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_serve(_args: argparse.Namespace) -> int:
+    """T1.8 (docs/desvios.md D-23): no task in the plan ever wires
+    bot/discord_bot.py's build_bot() into an actual entrypoint — this is
+    the only place that starts the long-running Discord bot process.
+    """
+    settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
+    deps = _build_deps(settings)
+    from botgitgud.bot.discord_bot import build_bot
+
+    bot = build_bot(deps)
+    try:
+        bot.run(settings.discord_token.get_secret_value())
+    finally:
+        deps.store.close()
+        deps.client.close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="botgitgud")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -160,6 +178,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_backfill = sub.add_parser("backfill", help="Placeholder sem especificação (D-13).")
     p_backfill.set_defaults(func=_cmd_backfill)
+
+    p_serve = sub.add_parser("serve", help="Inicia o bot do Discord (processo de longa duração).")
+    p_serve.set_defaults(func=_cmd_serve)
 
     return parser
 

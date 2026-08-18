@@ -22,10 +22,22 @@ directly queryable by DuckDB. The `logs` table holds only the flat,
 indexable summary fields plus a pointer to the parquet file. The actual
 Parquet (de)serialization lives in ingest/parquet_codec.py (T1.6 split,
 to keep this file under the 300-line limit).
+
+T1.8: a single duckdb.Connection isn't safe to use concurrently from
+multiple threads. Every access — reads included — goes through
+self._lock, serializing them onto whichever thread happens to hold it at
+the time. This satisfies T1.8's "toda escrita passa por um writer único
+serializado... nunca abra conexões a partir dos workers" requirement: a
+worker thread calling write_log()/enqueue_job() never touches the
+connection directly outside the lock, and the lock (not a literal
+dedicated thread + work queue) is what actually enforces one-at-a-time
+access — see docs/desvios.md D-19 for why this achieves the same
+contract with a simpler, deadlock-free mechanism.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -95,6 +107,7 @@ class Store:
         self._raw_dir.mkdir(parents=True, exist_ok=True)
         self._profiles_dir.mkdir(parents=True, exist_ok=True)
         self._db_path = data_dir / "warehouse.duckdb"
+        self._lock = threading.RLock()
         self._conn = duckdb.connect(str(self._db_path))
         self._conn.execute(_CREATE_LOGS_TABLE)
         self._conn.execute(_CREATE_COHORTS_TABLE)
@@ -113,22 +126,25 @@ class Store:
     # -- logs -------------------------------------------------------------------
 
     def has_log(self, report_code: str, fight_id: int, player: str) -> bool:
-        row = self._conn.execute(
-            "SELECT 1 FROM logs WHERE report_code = ? AND fight_id = ? AND player_name = ? LIMIT 1",
-            [report_code, fight_id, player],
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM logs WHERE report_code = ? AND fight_id = ? "
+                "AND player_name = ? LIMIT 1",
+                [report_code, fight_id, player],
+            ).fetchone()
         return row is not None
 
     def read_log(self, report_code: str, fight_id: int, player: str) -> PlayerLog | None:
-        row = self._conn.execute(
-            """
-            SELECT parquet_path FROM logs
-            WHERE report_code = ? AND fight_id = ? AND player_name = ?
-            ORDER BY ingested_at DESC
-            LIMIT 1
-            """,
-            [report_code, fight_id, player],
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT parquet_path FROM logs
+                WHERE report_code = ? AND fight_id = ? AND player_name = ?
+                ORDER BY ingested_at DESC
+                LIMIT 1
+                """,
+                [report_code, fight_id, player],
+            ).fetchone()
         if row is None:
             return None
         return read_parquet_log(Path(row[0]))
@@ -156,38 +172,39 @@ class Store:
         parquet_path = raw_dir / filename
         write_parquet_log(log, parquet_path)
 
-        self._conn.execute(
-            """
-            INSERT INTO logs (
-                report_code, fight_id, player_name, server, encounter_id, difficulty, partition,
-                class_name, spec_name, role, duration_s, dps, percentile,
-                item_level, talent_hash, tier_pieces, active_time_pct, deaths,
-                parquet_path, ingested_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                fight.report_code,
-                fight.fight_id,
-                build.character_name,
-                build.server,
-                fight.encounter_id,
-                fight.difficulty,
-                fight.partition,
-                build.class_name,
-                build.spec_name,
-                build.role,
-                fight.duration_s,
-                log.dps,
-                log.percentile,
-                build.item_level,
-                build.talent_hash,
-                build.tier_pieces,
-                log.active_time_pct,
-                log.deaths,
-                str(parquet_path),
-                datetime.fromtimestamp(ingested_at_ms / 1000.0, tz=UTC),
-            ],
-        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO logs (
+                    report_code, fight_id, player_name, server, encounter_id, difficulty,
+                    partition, class_name, spec_name, role, duration_s, dps, percentile,
+                    item_level, talent_hash, tier_pieces, active_time_pct, deaths,
+                    parquet_path, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    fight.report_code,
+                    fight.fight_id,
+                    build.character_name,
+                    build.server,
+                    fight.encounter_id,
+                    fight.difficulty,
+                    fight.partition,
+                    build.class_name,
+                    build.spec_name,
+                    build.role,
+                    fight.duration_s,
+                    log.dps,
+                    log.percentile,
+                    build.item_level,
+                    build.talent_hash,
+                    build.tier_pieces,
+                    log.active_time_pct,
+                    log.deaths,
+                    str(parquet_path),
+                    datetime.fromtimestamp(ingested_at_ms / 1000.0, tz=UTC),
+                ],
+            )
 
     # -- cohort profiles ----------------------------------------------------------
 
@@ -200,37 +217,49 @@ class Store:
     def write_profile(self, profile: CohortProfile) -> None:
         path = self._profiles_dir / f"{profile.cohort_id}.parquet"
         write_parquet_profile(profile, path)
-        self._conn.execute(
-            """
-            INSERT INTO cohorts (cohort_id, criteria_json, n_members, built_at, code_version)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (cohort_id) DO UPDATE SET
-                n_members = excluded.n_members,
-                built_at = excluded.built_at
-            """,
-            [profile.cohort_id, "{}", profile.n_members, profile.built_at, "unknown"],
-        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO cohorts (cohort_id, criteria_json, n_members, built_at, code_version)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (cohort_id) DO UPDATE SET
+                    n_members = excluded.n_members,
+                    built_at = excluded.built_at
+                """,
+                [profile.cohort_id, "{}", profile.n_members, profile.built_at, "unknown"],
+            )
 
     # -- run manifests --------------------------------------------------------------
 
     def write_run(self, manifest: RunManifest) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO runs (
-                cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                manifest.cohort_id,
-                manifest.code_version,
-                manifest.generated_at,
-                manifest.n_members,
-                manifest.wcl_partition,
-                manifest.settings_hash,
-            ],
-        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO runs (
+                    cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    manifest.cohort_id,
+                    manifest.code_version,
+                    manifest.generated_at,
+                    manifest.n_members,
+                    manifest.wcl_partition,
+                    manifest.settings_hash,
+                ],
+            )
 
-    # -- generic SQL --------------------------------------------------------------
+    # -- generic SQL (T1.8: also used by bot/jobs.py's JobQueue for the `jobs`
+    # table, so every DB access in the process shares this one lock) -------------
 
     def query(self, sql: str, **params: Any) -> pl.DataFrame:
-        return self._conn.execute(sql, params).pl()
+        with self._lock:
+            return self._conn.execute(sql, params).pl()
+
+    def execute(self, sql: str, params: list[Any] | None = None) -> None:
+        with self._lock:
+            self._conn.execute(sql, params or [])
+
+    def execute_returning(self, sql: str, params: list[Any] | None = None) -> list[tuple[Any, ...]]:
+        with self._lock:
+            return self._conn.execute(sql, params or []).fetchall()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -263,3 +264,39 @@ def test_reopening_store_reuses_existing_tables(tmp_path: Path) -> None:
 
     with Store(tmp_path) as store:
         assert store.has_log("ABCDEFGHIJKLMNOP", 1, "Zarad") is True
+
+
+# -- T1.8: concurrent write safety ------------------------------------------------
+
+
+def test_eight_threads_writing_concurrently_never_raises_and_all_records_land(
+    tmp_path: Path,
+) -> None:
+    """T1.8's own acceptance criterion: 8 workers writing simultaneously ->
+    no DuckDB concurrent-access exception, every record present. The
+    single-connection Store is only safe under concurrency because every
+    access goes through self._lock (see module docstring).
+    """
+    n_threads = 8
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(n_threads)
+
+    def _writer(i: int) -> None:
+        try:
+            barrier.wait(timeout=5)  # maximize actual overlap
+            store.write_log(_log(character_name=f"Concurrent{i}"))
+        except BaseException as exc:  # captured for the main thread to assert on
+            errors.append(exc)
+
+    with Store(tmp_path) as store:
+        threads = [threading.Thread(target=_writer, args=(i,)) for i in range(n_threads)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert errors == []
+        rows = store.query("SELECT count(*) AS n FROM logs")
+        assert rows["n"][0] == n_threads
+        for i in range(n_threads):
+            assert store.has_log("ABCDEFGHIJKLMNOP", 1, f"Concurrent{i}") is True

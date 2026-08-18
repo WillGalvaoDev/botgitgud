@@ -23,7 +23,7 @@ def test_analyze_missing_required_flag_exits_nonzero() -> None:
         parser.parse_args(["analyze", "--report", "ABCDEFGHIJKLMNOP"])
 
 
-@pytest.mark.parametrize("command", ["probe-schema", "backfill"])
+@pytest.mark.parametrize("command", ["probe-schema", "backfill", "serve"])
 def test_every_no_arg_subcommand_exists(command: str) -> None:
     parser = build_parser()
     args = parser.parse_args([command])

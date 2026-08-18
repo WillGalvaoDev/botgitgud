@@ -109,6 +109,24 @@ class WclClient:
             return None
         return self._points_remaining
 
+    @property
+    def points_limit(self) -> float | None:
+        return self._points_limit
+
+    def refresh_budget(self) -> None:
+        """T1.8: forces a rateLimitData check now, ignoring the cache TTL —
+        never raises RateLimitBudgetExceeded (unlike _ensure_budget, called
+        internally by query()); the job scheduler needs the raw numbers to
+        decide which job types are currently allowed, not an exception.
+        """
+        token = self._get_token()
+        headers = {
+            "Content-Type": "application/json",
+            "Accept-Language": "en-US",
+            "Authorization": f"Bearer {token}",
+        }
+        self._refresh_rate_limit(headers)
+
     def close(self) -> None:
         self._client.close()
 
