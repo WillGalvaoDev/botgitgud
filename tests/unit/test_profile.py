@@ -7,7 +7,12 @@ from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, SpellProfile
 
 
-def _log(duration_s: float, cast_timeline: dict[int, tuple[float, ...]]) -> PlayerLog:
+def _log(
+    duration_s: float,
+    cast_timeline: dict[int, tuple[float, ...]],
+    *,
+    phase_cast_timeline: dict[int, dict[tuple[int, int], tuple[float, ...]]] | None = None,
+) -> PlayerLog:
     fight = FightRef(
         report_code="ABCDEFGHIJKLMNOP",
         fight_id=1,
@@ -28,7 +33,12 @@ def _log(duration_s: float, cast_timeline: dict[int, tuple[float, ...]]) -> Play
         tier_pieces=None,
     )
     return PlayerLog(
-        fight=fight, build=build, dps=100000.0, percentile=50.0, cast_timeline=cast_timeline
+        fight=fight,
+        build=build,
+        dps=100000.0,
+        percentile=50.0,
+        cast_timeline=cast_timeline,
+        phase_cast_timeline=phase_cast_timeline or {},
     )
 
 
@@ -99,6 +109,77 @@ def test_zero_positional_logs_yields_zero_n_usages_median() -> None:
     assert n_positional == 0
     assert profile[1].n_usages_median == 0.0
     assert profile[1].ref_times == ()
+
+
+# -- T2.4: phase-keyed profile ---------------------------------------------------
+
+
+def test_phase_ref_times_keeps_occurrences_separate() -> None:
+    """T2.4 acceptance: casts from different occurrences of the same
+    phase_id never get averaged/merged together.
+    """
+    logs = [
+        _log(
+            300.0,
+            {1: (10.0, 60.0)},
+            phase_cast_timeline={1: {(1, 0): (10.0,), (1, 1): (60.0,)}},
+        ),
+        _log(
+            300.0,
+            {1: (12.0, 62.0)},
+            phase_cast_timeline={1: {(1, 0): (12.0,), (1, 1): (62.0,)}},
+        ),
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    sp = profile[1]
+    assert sp.phase_ref_times[(1, 0)] == (11.0,)
+    assert sp.phase_ref_times[(1, 1)] == (61.0,)
+
+
+def test_reference_with_fewer_phase_occurrences_only_contributes_to_intervals_it_has() -> None:
+    """T2.4 point 6: a faster kill (fewer cycles) contributes only to the
+    intervals it actually reached — never padded/faked for the late ones.
+    """
+    logs = [
+        _log(
+            300.0,
+            {1: (10.0, 60.0, 110.0)},
+            phase_cast_timeline={1: {(1, 0): (10.0,), (2, 0): (60.0,), (1, 1): (110.0,)}},
+        ),
+        _log(  # faster kill: never reached (1,1)
+            280.0,
+            {1: (10.0, 60.0)},
+            phase_cast_timeline={1: {(1, 0): (10.0,), (2, 0): (60.0,)}},
+        ),
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    sp = profile[1]
+    assert len(sp.phase_ref_times[(1, 0)]) == 1  # one median value, from 2 contributing logs
+    assert len(sp.phase_slot_ref_times[(1, 0)][0]) == 2  # both logs contributed here
+    assert len(sp.phase_slot_ref_times[(1, 1)][0]) == 1  # only the slower log reached (1,1)
+
+
+def test_phase_slot_ref_times_holds_the_raw_distribution_per_phase_key() -> None:
+    logs = [
+        _log(300.0, {1: (10.0,)}, phase_cast_timeline={1: {(1, 0): (10.0,)}}),
+        _log(300.0, {1: (14.0,)}, phase_cast_timeline={1: {(1, 0): (14.0,)}}),
+        _log(300.0, {1: (18.0,)}, phase_cast_timeline={1: {(1, 0): (18.0,)}}),
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    sp = profile[1]
+    assert set(sp.phase_slot_ref_times[(1, 0)][0]) == {10.0, 14.0, 18.0}
+    assert sp.phase_ref_times[(1, 0)] == (14.0,)  # median of the raw distribution
+
+
+def test_no_phase_cast_timeline_yields_empty_phase_ref_times() -> None:
+    """Backward compatibility: a log with no phase_cast_timeline (the
+    zero-value default) contributes nothing to the phase-keyed profile,
+    without crashing.
+    """
+    logs = [_log(300.0, {1: (10.0,)})]  # phase_cast_timeline defaults to {}
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].phase_ref_times == {}
+    assert profile[1].phase_slot_ref_times == {}
 
 
 # -- discover_eligible_spell_ids ------------------------------------------------

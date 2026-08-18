@@ -8,15 +8,21 @@ issues a GraphQL query and counts it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import structlog
 
 from botgitgud.domain.external_buffs import AUGMENTATION_BUFF_IDS, EXTERNAL_BUFF_IDS
+from botgitgud.domain.models import PhaseInterval, PhaseKey
 from botgitgud.errors import ApiError
-from botgitgud.ingest.wcl_parsing import find_matching_rank_percent, parse_aura_ids
-from botgitgud.wcl.queries import QUERY_PLAYER_BUFFS, QUERY_PLAYER_PERCENTILE
+from botgitgud.ingest.wcl_parsing import (
+    find_matching_rank_percent,
+    parse_aura_ids,
+    parse_cast_events,
+    parse_cast_events_by_phase,
+)
+from botgitgud.wcl.queries import QUERY_PLAYER_BUFFS, QUERY_PLAYER_EVENTS, QUERY_PLAYER_PERCENTILE
 
 log = structlog.get_logger(__name__)
 
@@ -84,3 +90,63 @@ def fetch_augmentation_and_external_buffs(
     has_augmentation = bool(aura_ids & AUGMENTATION_BUFF_IDS)
     external_buffs = aura_ids & EXTERNAL_BUFF_IDS
     return has_augmentation, external_buffs
+
+
+def fetch_cast_timelines(
+    query_fn: QueryFn,
+    *,
+    report_code: str,
+    fight_id: int,
+    player_id: int,
+    start_time_ms: float,
+    end_time_ms: float,
+    intervals: Sequence[PhaseInterval],
+) -> tuple[dict[int, tuple[float, ...]], dict[int, dict[PhaseKey, tuple[float, ...]]]]:
+    """T1.4/T2.4: pages through GetPlayerEvents once, building BOTH the
+    flat (relative-to-fight-start) and phase-keyed (relative-to-interval-
+    start) timelines from the same events — never fetched twice.
+    """
+    flat_by_id: dict[int, list[float]] = {}
+    phase_by_id: dict[int, dict[PhaseKey, list[float]]] = {}
+    current_start = start_time_ms
+    while current_start < end_time_ms:
+        try:
+            ev_res_json = query_fn(
+                QUERY_PLAYER_EVENTS,
+                {
+                    "code": report_code,
+                    "fightIDs": [fight_id],
+                    "startTime": current_start,
+                    "endTime": end_time_ms,
+                },
+                op_name="fetch_player_events",
+            )
+        except ApiError:
+            break
+
+        ev_data = (
+            ev_res_json.get("data", {}).get("reportData", {}).get("report", {}).get("events", {})
+        )
+        raw_events = ev_data.get("data", [])
+
+        page_flat = parse_cast_events(raw_events, player_id, start_time_ms)
+        for spell_id, times in page_flat.items():
+            flat_by_id.setdefault(spell_id, []).extend(times)
+
+        page_phase = parse_cast_events_by_phase(raw_events, player_id, intervals)
+        for spell_id, by_key in page_phase.items():
+            dest = phase_by_id.setdefault(spell_id, {})
+            for key, times in by_key.items():
+                dest.setdefault(key, []).extend(times)
+
+        next_page = ev_data.get("nextPageTimestamp")
+        if not next_page or next_page <= current_start or next_page >= end_time_ms:
+            break
+        current_start = next_page
+
+    flat = {sid: tuple(times) for sid, times in flat_by_id.items()}
+    phased = {
+        sid: {key: tuple(times) for key, times in by_key.items()}
+        for sid, by_key in phase_by_id.items()
+    }
+    return flat, phased

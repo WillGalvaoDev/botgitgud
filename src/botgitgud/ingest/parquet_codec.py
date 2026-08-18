@@ -13,7 +13,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from botgitgud.domain.models import AbilityDamage, FightRef, PlayerBuild, PlayerLog
+from botgitgud.domain.models import AbilityDamage, FightRef, PhaseInterval, PlayerBuild, PlayerLog
 
 
 def write_parquet_log(log: PlayerLog, path: Path) -> None:
@@ -30,6 +30,18 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
     uptimes_json = json.dumps({str(k): v for k, v in log.uptimes.items()})
     resource_waste_json = json.dumps(dict(log.resource_waste))
     talent_pairs_json = json.dumps([list(p) for p in sorted(build.talent_pairs)])
+    phase_intervals_json = json.dumps(
+        [[iv.phase_id, iv.occurrence, iv.start_ms, iv.end_ms] for iv in fight.phase_intervals]
+    )
+    phase_cast_timeline_json = json.dumps(
+        {
+            str(spell_id): [
+                [phase_id, occurrence, list(times)]
+                for (phase_id, occurrence), times in by_key.items()
+            ]
+            for spell_id, by_key in log.phase_cast_timeline.items()
+        }
+    )
 
     table = pa.table(
         {
@@ -60,6 +72,8 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
             "uptimes_json": [uptimes_json],
             "resource_waste_json": [resource_waste_json],
             "talent_pairs_json": [talent_pairs_json],
+            "phase_intervals_json": [phase_intervals_json],
+            "phase_cast_timeline_json": [phase_cast_timeline_json],
         }
     )
     pq.write_table(table, path)
@@ -68,6 +82,10 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
 def read_parquet_log(path: Path) -> PlayerLog:
     row = pq.read_table(path).to_pylist()[0]
 
+    phase_intervals = tuple(
+        PhaseInterval(phase_id=p[0], occurrence=p[1], start_ms=p[2], end_ms=p[3])
+        for p in json.loads(row.get("phase_intervals_json") or "[]")
+    )
     fight = FightRef(
         report_code=row["report_code"],
         fight_id=row["fight_id"],
@@ -77,6 +95,7 @@ def read_parquet_log(path: Path) -> PlayerLog:
         duration_s=row["duration_s"],
         kill=row["kill"],
         partition=row["partition"],
+        phase_intervals=phase_intervals,
     )
     build = PlayerBuild(
         character_name=row["character_name"],
@@ -99,6 +118,10 @@ def read_parquet_log(path: Path) -> PlayerLog:
     }
     uptimes = {int(k): v for k, v in json.loads(row["uptimes_json"]).items()}
     resource_waste = json.loads(row["resource_waste_json"])
+    phase_cast_timeline = {
+        int(spell_id): {(p[0], p[1]): tuple(p[2]) for p in entries}
+        for spell_id, entries in json.loads(row.get("phase_cast_timeline_json") or "{}").items()
+    }
 
     return PlayerLog(
         fight=fight,
@@ -111,4 +134,5 @@ def read_parquet_log(path: Path) -> PlayerLog:
         uptimes=uptimes,
         resource_waste=resource_waste,
         deaths=row["deaths"],
+        phase_cast_timeline=phase_cast_timeline,
     )

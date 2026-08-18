@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from botgitgud.analysis.alignment import AlignmentKind
-from botgitgud.analysis.comparison import compare_spell_usage
+from botgitgud.analysis.comparison import compare_spell_usage, compare_spell_usage_by_phase
+from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.spells import SpellInfo
 
 
@@ -122,3 +123,89 @@ def test_thin_slot_distribution_grades_insufficient_not_red() -> None:
     )
     match_grade = next(g for g in comparison.step_grades if g is not None)
     assert match_grade.grade == "insufficient"
+
+
+# -- T2.4: phase-partitioned alignment (achado 3.2, rotação-fantasma) --------------
+
+
+def test_a_cast_never_pairs_with_an_expected_usage_from_another_phase() -> None:
+    """T2.4 acceptance: a fight with (at least) 2 phases -> independent
+    alignments per phase; the player's cast in phase 2 must match phase
+    2's own expected usage, never phase 1's — even though both are
+    numerically 10.0s relative to their own interval's start.
+    """
+    intervals = derive_phase_intervals(
+        [{"id": 1, "startTime": 0}, {"id": 2, "startTime": 100}],
+        fight_start_ms=0,
+        fight_end_ms=200,
+    )
+    comparison = compare_spell_usage_by_phase(
+        spell=_spell(),
+        presence=1.0,
+        user_phase_times={(2, 0): [10.0]},  # nothing cast in phase (1,0)
+        ref_phase_times={(1, 0): [10.0], (2, 0): [10.0]},
+        intervals=intervals,
+        n_usages_median=1.0,
+        reference_n=5,
+    )
+    assert comparison.alignment.n_matched == 1
+    assert comparison.alignment.n_missed == 1
+    assert comparison.alignment.n_extra == 0
+    # Chronological merge order: phase (1,0)'s MISSED first, then phase
+    # (2,0)'s MATCH — never a match "borrowed" from the wrong phase.
+    kinds = [s.kind for s in comparison.alignment.steps]
+    assert kinds == [AlignmentKind.MISSED, AlignmentKind.MATCH]
+
+
+def test_phase_less_fight_matches_the_flat_alignment_exactly() -> None:
+    """T2.4 acceptance: a fight without phases must produce an IDENTICAL
+    result to the flat (pre-T2.4) alignment — no regression.
+    """
+    intervals = derive_phase_intervals([], fight_start_ms=0, fight_end_ms=400)
+    user_times = [10.0, 40.0, 70.0]
+    ref_times = [10.0, 40.0]
+
+    phase_comparison = compare_spell_usage_by_phase(
+        spell=_spell(),
+        presence=0.8,
+        user_phase_times={(0, 0): user_times},
+        ref_phase_times={(0, 0): ref_times},
+        intervals=intervals,
+        n_usages_median=2.0,
+        reference_n=8,
+        flat_ref_times=ref_times,
+    )
+    flat_comparison = compare_spell_usage(
+        spell=_spell(),
+        presence=0.8,
+        user_times=user_times,
+        ref_times=ref_times,
+        n_usages_median=2.0,
+        reference_n=8,
+    )
+    assert phase_comparison.alignment == flat_comparison.alignment
+    assert phase_comparison.cd_type == flat_comparison.cd_type
+
+
+def test_reference_with_fewer_occurrences_contributes_only_to_the_phases_it_reached() -> None:
+    """T2.4 point 6: a phase key present only in ref_phase_times (a faster
+    reference kill never reached it, so the TARGET's own missing data for
+    that key is fine) doesn't crash — it's just an all-MISSED sub-alignment
+    if the player also has no casts there.
+    """
+    intervals = derive_phase_intervals(
+        [{"id": 1, "startTime": 0}, {"id": 1, "startTime": 100}],
+        fight_start_ms=0,
+        fight_end_ms=200,
+    )
+    comparison = compare_spell_usage_by_phase(
+        spell=_spell(),
+        presence=1.0,
+        user_phase_times={(1, 0): [10.0]},
+        ref_phase_times={(1, 0): [10.0], (1, 1): [10.0]},  # only reached by some references
+        intervals=intervals,
+        n_usages_median=1.0,
+        reference_n=5,
+    )
+    assert comparison.alignment.n_matched == 1  # (1,0)
+    assert comparison.alignment.n_missed == 1  # (1,1): expected but the player never got there

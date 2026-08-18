@@ -54,6 +54,7 @@ def _meta_response(
     combatant_info: dict[str, Any] | None = None,
     no_player: bool = False,
     no_fight: bool = False,
+    phase_transitions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if no_fight:
         fights: list[Any] = []
@@ -67,6 +68,7 @@ def _meta_response(
                 "endTime": end,
                 "kill": kill,
                 "difficulty": difficulty,
+                "phaseTransitions": phase_transitions or [],
             }
         ]
 
@@ -294,6 +296,47 @@ def test_fetch_populates_talent_hash_and_tier_pieces_from_combatant_info(tmp_pat
 
     assert result.build.talent_hash is not None
     assert result.build.tier_pieces == 1
+
+
+# -- T2.4: phase-aware fetching --------------------------------------------------
+
+
+def test_fetch_derives_phase_intervals_and_phase_cast_timeline(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["meta"] = [
+        _meta_response(
+            end=90_000,
+            phase_transitions=[{"id": 1, "startTime": 0}, {"id": 2, "startTime": 45_000}],
+        )
+    ]
+    responses["events"] = [
+        _events_response(
+            [
+                {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 10_000},
+                {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 60_000},
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert [iv.key for iv in result.fight.phase_intervals] == [(1, 0), (2, 0)]
+    phase_times = result.phase_cast_timeline[104316]
+    assert phase_times[(1, 0)] == (10.0,)
+    assert phase_times[(2, 0)] == (15.0,)  # 60_000 - 45_000, relative to (2,0)'s own start
+
+
+def test_fetch_falls_back_to_a_single_phase_when_the_fight_has_no_phase_data(
+    tmp_path: Path,
+) -> None:
+    fetcher, _transport, _store = _make_fetcher(tmp_path, _default_responses())
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert len(result.fight.phase_intervals) == 1
+    assert result.fight.phase_intervals[0].key == (0, 0)
+    assert result.phase_cast_timeline[104316][(0, 0)] == result.cast_timeline[104316]
 
 
 def test_fetch_persists_to_store(tmp_path: Path) -> None:

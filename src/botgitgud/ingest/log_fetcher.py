@@ -15,11 +15,13 @@ from dataclasses import dataclass
 
 import structlog
 
+from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher_aux import (
     fetch_augmentation_and_external_buffs,
+    fetch_cast_timelines,
     fetch_percentile,
 )
 from botgitgud.ingest.store import Store
@@ -27,10 +29,9 @@ from botgitgud.ingest.wcl_parsing import (
     extract_damage_total,
     find_player_in_details,
     learn_spells_from_casts_table,
-    parse_cast_events,
 )
 from botgitgud.wcl.client import WclClient
-from botgitgud.wcl.queries import QUERY_PLAYER_EVENTS, QUERY_PLAYER_META
+from botgitgud.wcl.queries import QUERY_PLAYER_META
 
 log = structlog.get_logger(__name__)
 
@@ -179,8 +180,19 @@ class LogFetcher:
         casts_entries = report.get("castsTable", {}).get("data", {}).get("entries", [])
         learn_spells_from_casts_table(casts_entries, match.player_id, self._catalog)
 
-        cast_timeline = self._fetch_cast_timeline(
-            report_code, fight_id, match.player_id, start_time_ms, end_time_ms
+        phase_intervals = derive_phase_intervals(
+            raw_fight.get("phaseTransitions") or [],
+            fight_start_ms=start_time_ms,
+            fight_end_ms=end_time_ms,
+        )
+        cast_timeline, phase_cast_timeline = fetch_cast_timelines(
+            self._query,
+            report_code=report_code,
+            fight_id=fight_id,
+            player_id=match.player_id,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            intervals=phase_intervals,
         )
         dps = (damage_total / duration_s) if (damage_total and duration_s > 0) else None
 
@@ -206,6 +218,7 @@ class LogFetcher:
             difficulty=raw_fight.get("difficulty") or 0,
             duration_s=duration_s,
             kill=bool(raw_fight.get("kill")),
+            phase_intervals=phase_intervals,
         )
         build = PlayerBuild(
             character_name=player,
@@ -226,46 +239,5 @@ class LogFetcher:
             dps=dps,
             percentile=percentile,
             cast_timeline=cast_timeline,
+            phase_cast_timeline=phase_cast_timeline,
         )
-
-    def _fetch_cast_timeline(
-        self,
-        report_code: str,
-        fight_id: int,
-        player_id: int,
-        start_time_ms: float,
-        end_time_ms: float,
-    ) -> dict[int, tuple[float, ...]]:
-        timeline_by_id: dict[int, list[float]] = {}
-        current_start = start_time_ms
-        while current_start < end_time_ms:
-            try:
-                ev_res_json = self._query(
-                    QUERY_PLAYER_EVENTS,
-                    {
-                        "code": report_code,
-                        "fightIDs": [fight_id],
-                        "startTime": current_start,
-                        "endTime": end_time_ms,
-                    },
-                    op_name="fetch_player_events",
-                )
-            except ApiError:
-                break
-
-            ev_data = (
-                ev_res_json.get("data", {})
-                .get("reportData", {})
-                .get("report", {})
-                .get("events", {})
-            )
-            page_timeline = parse_cast_events(ev_data.get("data", []), player_id, start_time_ms)
-            for spell_id, times in page_timeline.items():
-                timeline_by_id.setdefault(spell_id, []).extend(times)
-
-            next_page = ev_data.get("nextPageTimestamp")
-            if not next_page or next_page <= current_start or next_page >= end_time_ms:
-                break
-            current_start = next_page
-
-        return {sid: tuple(times) for sid, times in timeline_by_id.items()}

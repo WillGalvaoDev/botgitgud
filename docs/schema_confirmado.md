@@ -158,6 +158,13 @@ Chaves de `data`: `auras, endTime, gameVersion, logVersion, startTime, totalTime
 **`(phase_id, ocorrência)`** — ex.: `(1,0), (2,0), (1,1), (2,1), (1,2)` — e alinhe dentro de cada
 intervalo. Chavear só por `phase_id` misturaria a primeira e a terceira ocorrência da fase 1.
 
+✅ **`phaseTransitions[0].startTime` == `fights[].startTime`** (verificado ao vivo: ambos
+`1026037` para este fight) — a luta sempre começa exatamente no início da sua primeira fase, sem
+gap. O último intervalo se estende até `fights[].endTime` (`1371183`, não incluído em
+`phaseTransitions` — é implícito). `analysis/phases.py`'s `derive_phase_intervals` deriva os
+limites de intervalo dessa forma: cada transição marca o início do seu próprio intervalo e o fim
+do anterior; a última se estende até `endTime`.
+
 ---
 
 ## 8. `worldData.encounter.characterRankings` ⚠️ DESCOBERTAS CRÍTICAS

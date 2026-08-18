@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.ingest.wcl_parsing import (
     compute_talent_hash,
@@ -12,6 +13,7 @@ from botgitgud.ingest.wcl_parsing import (
     learn_spells_from_casts_table,
     parse_aura_ids,
     parse_cast_events,
+    parse_cast_events_by_phase,
 )
 
 
@@ -190,3 +192,97 @@ def test_find_matching_rank_percent_matches_report_and_fight() -> None:
 
 def test_find_matching_rank_percent_none_when_character_missing() -> None:
     assert find_matching_rank_percent(None, "ABC", 1) is None
+
+
+# -- T2.4: phase-aware cast parsing --------------------------------------------
+
+
+def test_a_three_phase_fight_never_pairs_casts_across_phase_boundaries() -> None:
+    """T2.4 acceptance: a fight with 3 phases -> independent groups per
+    phase; a late cast from phase 1 lands in a different key than a
+    phase 2 cast, never mixed together.
+    """
+    intervals = derive_phase_intervals(
+        [
+            {"id": 1, "startTime": 0},
+            {"id": 2, "startTime": 100_000},
+            {"id": 3, "startTime": 200_000},
+        ],
+        fight_start_ms=0,
+        fight_end_ms=300_000,
+    )
+    events = [
+        {"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 90_000},  # phase 1
+        {"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 150_000},  # phase 2
+        {"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 250_000},  # phase 3
+    ]
+    timeline = parse_cast_events_by_phase(events, player_id=6, intervals=intervals)
+    assert set(timeline[1].keys()) == {(1, 0), (2, 0), (3, 0)}
+    assert timeline[1][(1, 0)] == [90.0]
+    assert timeline[1][(2, 0)] == [50.0]  # 150_000 - 100_000, relative to (2,0)'s own start
+    assert timeline[1][(3, 0)] == [50.0]  # 250_000 - 200_000
+
+
+def test_zarad_fixture_third_occurrence_of_phase_1_never_aggregates_with_the_first() -> None:
+    """T2.4 acceptance, with the real fixture's own 5 intervals: a cast in
+    the 3rd occurrence of phase 1 lands under (1,2), never merged into
+    (1,0)'s bucket.
+    """
+    transitions = [
+        {"id": 1, "startTime": 1026037},
+        {"id": 2, "startTime": 1128366},
+        {"id": 1, "startTime": 1148363},
+        {"id": 2, "startTime": 1249977},
+        {"id": 1, "startTime": 1269978},
+    ]
+    intervals = derive_phase_intervals(transitions, fight_start_ms=1026037, fight_end_ms=1371183)
+    events = [
+        {"sourceID": 6, "type": "cast", "abilityGameID": 999, "timestamp": 1030000},  # (1,0)
+        {"sourceID": 6, "type": "cast", "abilityGameID": 999, "timestamp": 1300000},  # (1,2)
+    ]
+    timeline = parse_cast_events_by_phase(events, player_id=6, intervals=intervals)
+    assert set(timeline[999].keys()) == {(1, 0), (1, 2)}
+    assert len(timeline[999][(1, 0)]) == 1
+    assert len(timeline[999][(1, 2)]) == 1
+
+
+def test_phase_less_fight_puts_every_cast_in_the_single_fallback_phase() -> None:
+    """T2.4's mandatory fallback: no phase data -> identical grouping to
+    the flat T0.7 behavior (one bucket for the whole fight)."""
+    intervals = derive_phase_intervals([], fight_start_ms=0, fight_end_ms=1000)
+    events = [
+        {"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 100},
+        {"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 500},
+    ]
+    timeline = parse_cast_events_by_phase(events, player_id=6, intervals=intervals)
+    assert set(timeline[1].keys()) == {(0, 0)}
+    assert timeline[1][(0, 0)] == [0.1, 0.5]
+
+
+def test_parse_cast_events_by_phase_filters_by_source_and_type() -> None:
+    intervals = derive_phase_intervals([], fight_start_ms=1000, fight_end_ms=2000)
+    events = [
+        {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300},
+        {"sourceID": 7, "type": "cast", "abilityGameID": 999, "timestamp": 1300},  # wrong source
+        {"sourceID": 6, "type": "damage", "abilityGameID": 104316, "timestamp": 1300},  # wrong type
+    ]
+    timeline = parse_cast_events_by_phase(events, player_id=6, intervals=intervals)
+    assert timeline == {104316: {(0, 0): [0.3]}}
+
+
+def test_parse_cast_events_by_phase_skips_events_without_a_spell_id() -> None:
+    intervals = derive_phase_intervals([], fight_start_ms=1000, fight_end_ms=2000)
+    events = [{"sourceID": 6, "type": "cast", "timestamp": 1000}]
+    assert parse_cast_events_by_phase(events, player_id=6, intervals=intervals) == {}
+
+
+def test_parse_cast_events_by_phase_drops_a_timestamp_outside_every_interval() -> None:
+    intervals = derive_phase_intervals([], fight_start_ms=1000, fight_end_ms=2000)
+    events = [{"sourceID": 6, "type": "cast", "abilityGameID": 1, "timestamp": 500}]
+    assert parse_cast_events_by_phase(events, player_id=6, intervals=intervals) == {}
+
+
+def test_parse_cast_events_by_phase_skips_events_without_a_timestamp() -> None:
+    intervals = derive_phase_intervals([], fight_start_ms=1000, fight_end_ms=2000)
+    events = [{"sourceID": 6, "type": "cast", "abilityGameID": 1}]
+    assert parse_cast_events_by_phase(events, player_id=6, intervals=intervals) == {}

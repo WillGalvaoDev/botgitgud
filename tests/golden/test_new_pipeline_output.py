@@ -101,3 +101,21 @@ def test_new_pipeline_never_fabricates_parse_med(tmp_path: Path) -> None:
     """achado 3.10: o campo antigo 'Parse méd: 99' nunca deve reaparecer."""
     report_text = _run_new_pipeline(tmp_path)
     assert "Parse méd" not in report_text
+
+
+def test_zarad_fixture_produces_exactly_five_phase_intervals(tmp_path: Path) -> None:
+    """T2.4 acceptance, against the real fixture end-to-end (not just the
+    hardcoded data in test_phases.py): the Zarad fight produces exactly 5
+    intervals, with keys (1,0), (2,0), (1,1), (2,1), (1,2) — verified live,
+    docs/schema_confirmado.md §7.
+    """
+    deps = _build_deps(tmp_path)
+    player_log = deps.fetcher.fetch(FIXTURE_REPORT_CODE, FIXTURE_FIGHT_ID, FIXTURE_CHARACTER)
+
+    assert [iv.key for iv in player_log.fight.phase_intervals] == [
+        (1, 0),
+        (2, 0),
+        (1, 1),
+        (2, 1),
+        (1, 2),
+    ]

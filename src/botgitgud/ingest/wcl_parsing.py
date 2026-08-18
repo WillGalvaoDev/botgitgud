@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from botgitgud.analysis.phases import find_interval
+from botgitgud.domain.models import PhaseInterval, PhaseKey
 from botgitgud.domain.spells import SpellCatalog
 
 _ROLE_GROUP_TO_ROLE = {"dps": "dps", "healers": "healer", "tanks": "tank"}
@@ -176,6 +179,35 @@ def parse_cast_events(
             continue
         rel_sec = round((ev.get("timestamp", start_time_ms) - start_time_ms) / 1000.0, 1)
         timeline.setdefault(int(spell_id), []).append(rel_sec)
+    return timeline
+
+
+def parse_cast_events_by_phase(
+    events: list[dict[str, Any]], player_id: int, intervals: Sequence[PhaseInterval]
+) -> dict[int, dict[PhaseKey, list[float]]]:
+    """T2.4: like parse_cast_events, but keyed by (spell_id, phase_key)
+    instead of flat relative-to-fight-start seconds —
+    spell_id -> {(phase_id, occurrence): [relative_to_INTERVAL_start
+    seconds, ...]}. A cast whose timestamp falls outside every interval
+    (find_interval returns None — shouldn't happen for a well-formed
+    fight, but WCL data has surprised this project before) is silently
+    dropped rather than crashing the whole fetch.
+    """
+    timeline: dict[int, dict[PhaseKey, list[float]]] = {}
+    for ev in events:
+        if ev.get("sourceID") != player_id or ev.get("type") != "cast":
+            continue
+        spell_id = ev.get("abilityGameID") or ev.get("ability")
+        if not spell_id:
+            continue
+        ts = ev.get("timestamp")
+        if ts is None:
+            continue
+        interval = find_interval(intervals, ts)
+        if interval is None:
+            continue
+        rel_sec = round((ts - interval.start_ms) / 1000.0, 1)
+        timeline.setdefault(int(spell_id), {}).setdefault(interval.key, []).append(rel_sec)
     return timeline
 
 

@@ -26,7 +26,24 @@ from botgitgud.analysis.cohort import (
     within_positional_band,
 )
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
-from botgitgud.domain.models import PlayerLog, SpellProfile
+from botgitgud.domain.models import PhaseKey, PlayerLog, SpellProfile
+
+
+def _sorted_slot_distributions(
+    raw_slots: Sequence[Sequence[float]],
+) -> tuple[list[float], tuple[tuple[float, ...], ...]]:
+    """ref_times must be ascending for alignment.align() (§0.5's own
+    _require_sorted) — slot_ref_times is re-paired through the same sort
+    so slot_ref_times[i] stays the raw distribution behind ref_times[i]
+    (T2.3: grading/bootstrap CI need that raw data).
+    """
+    by_median = sorted(
+        ((statistics.median(times), tuple(times)) for times in raw_slots if times),
+        key=lambda pair: pair[0],
+    )
+    medians = [median for median, _times in by_median]
+    distributions = tuple(times for _median, times in by_median)
+    return medians, distributions
 
 
 def build_cd_reference_profile(
@@ -48,6 +65,11 @@ def build_cd_reference_profile(
 
     presence_count: dict[int, int] = defaultdict(int)
     slot_timings: dict[int, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
+    # T2.4: spell_id -> phase_key -> slot_idx (within THAT key's own
+    # sequence) -> times — never merged across phase_id/occurrence.
+    phase_slot_timings: dict[int, dict[PhaseKey, dict[int, list[float]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
 
     for ref in reference_logs:
         for spell_id in ref.cast_timeline:
@@ -57,6 +79,10 @@ def build_cd_reference_profile(
         for spell_id, times in ref.cast_timeline.items():
             for idx, t in enumerate(times):
                 slot_timings[spell_id][idx].append(t)
+        for spell_id, by_key in ref.phase_cast_timeline.items():
+            for key, times in by_key.items():
+                for idx, t in enumerate(times):
+                    phase_slot_timings[spell_id][key][idx].append(t)
 
     rates_by_spell: dict[int, list[float]] = defaultdict(list)
     for ref in positional_logs:
@@ -68,16 +94,15 @@ def build_cd_reference_profile(
         presence = presence_count[spell_id] / num_logs
 
         raw_slots = [times for _slot, times in sorted(slot_timings.get(spell_id, {}).items())]
-        # ref_times must be ascending for alignment.align() (§0.5's own
-        # _require_sorted) — slot_ref_times is re-paired through the same
-        # sort so slot_ref_times[i] stays the raw distribution behind
-        # ref_times[i] (T2.3: grading/bootstrap CI need that raw data).
-        by_median = sorted(
-            ((statistics.median(times), tuple(times)) for times in raw_slots if times),
-            key=lambda pair: pair[0],
-        )
-        slot_medians = [median for median, _times in by_median]
-        slot_ref_times = tuple(times for _median, times in by_median)
+        slot_medians, slot_ref_times = _sorted_slot_distributions(raw_slots)
+
+        phase_ref_times: dict[PhaseKey, tuple[float, ...]] = {}
+        phase_slot_ref_times: dict[PhaseKey, tuple[tuple[float, ...], ...]] = {}
+        for key, by_slot in phase_slot_timings.get(spell_id, {}).items():
+            key_raw_slots = [times for _slot, times in sorted(by_slot.items())]
+            key_medians, key_distributions = _sorted_slot_distributions(key_raw_slots)
+            phase_ref_times[key] = tuple(key_medians)
+            phase_slot_ref_times[key] = key_distributions
 
         if positional_logs:
             # Spells the positional subset never cast still contribute an
@@ -96,6 +121,8 @@ def build_cd_reference_profile(
             ref_times=tuple(slot_medians),
             n_usages_median=n_usages_median,
             slot_ref_times=slot_ref_times,
+            phase_ref_times=phase_ref_times,
+            phase_slot_ref_times=phase_slot_ref_times,
         )
 
     return profile, num_positional

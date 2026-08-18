@@ -12,6 +12,7 @@ query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {
     report(code: $code) {
       fights(fightIDs: $fightIDs) {
         id encounterID name startTime endTime kill difficulty
+        phaseTransitions { id startTime }
       }
       table(fightIDs: $fightIDs, dataType: Summary, translate: true)
       castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)

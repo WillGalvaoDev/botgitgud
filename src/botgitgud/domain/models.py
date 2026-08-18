@@ -18,6 +18,29 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Literal
 
+PhaseKey = tuple[int, int]  # (phase_id, occurrence) — see PhaseInterval
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseInterval:
+    """T2.4: one occurrence of one phase. `phase_id` alone is NOT a valid
+    key — WCL's phases repeat in a cycle (docs/schema_confirmado.md §7),
+    so the 1st and 3rd occurrence of phase_id=1 are different intervals.
+    Lives here, not analysis/phases.py (which derives/looks these up), so
+    FightRef/PlayerLog — domain/'s own types — can reference it without
+    domain/ depending on analysis/ (analysis/ already depends on domain/,
+    never the other way).
+    """
+
+    phase_id: int
+    occurrence: int  # 0-based: how many times this phase_id was seen before this one
+    start_ms: float
+    end_ms: float
+
+    @property
+    def key(self) -> PhaseKey:
+        return (self.phase_id, self.occurrence)
+
 
 @dataclass(frozen=True, slots=True)
 class FightRef:
@@ -29,6 +52,10 @@ class FightRef:
     duration_s: float
     kill: bool
     partition: int | None = None  # zone/patch metadata; see docs/desvios.md D-12(a)
+    # T2.4: always populated by ingest (single fallback interval spanning
+    # the whole fight for phase-less encounters) — never empty in a
+    # PlayerLog that came from LogFetcher.
+    phase_intervals: tuple[PhaseInterval, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +93,12 @@ class PlayerLog:
     uptimes: Mapping[int, float] = field(default_factory=dict)
     resource_waste: Mapping[str, float] = field(default_factory=dict)
     deaths: int = 0
+    # T2.4: spell_id -> {(phase_id, occurrence): sorted times relative to
+    # THAT interval's own start} — cast_timeline above stays flat/relative
+    # to fight start, unchanged, for every pre-T2.4 consumer.
+    phase_cast_timeline: Mapping[int, Mapping[PhaseKey, tuple[float, ...]]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +164,14 @@ class SpellProfile:
     # position, the empirical distribution grading/bootstrap CI need
     # (ref_times[i] is just that distribution's median).
     slot_ref_times: tuple[tuple[float, ...], ...] = ()
+    # T2.4: the same ref_times/slot_ref_times shape, but partitioned by
+    # (phase_id, occurrence) first — each key's times are relative to
+    # THAT interval's own start, never mixed with another phase or
+    # occurrence (achado 3.2, rotação-fantasma).
+    phase_ref_times: Mapping[PhaseKey, tuple[float, ...]] = field(default_factory=dict)
+    phase_slot_ref_times: Mapping[PhaseKey, tuple[tuple[float, ...], ...]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True, slots=True)

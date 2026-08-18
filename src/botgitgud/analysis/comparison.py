@@ -12,6 +12,16 @@ T2.3: each MATCH step also gets a StepGrade — quantile-relative grading
 against that position's own raw reference distribution
 (SpellProfile.slot_ref_times), replacing the old fixed 10s/25s thresholds
 that used to live in report/text.py.
+
+T2.4 (corrige achado 3.2, rotação-fantasma): compare_all_spells now aligns
+PER PHASE INTERVAL (never across a phase/occurrence boundary) via
+compare_spell_usage_by_phase, merging the per-interval sub-alignments back
+into one chronologically-ordered Alignment. A fight with no declared
+phases has exactly one interval spanning the whole fight (analysis/
+phases.py's fallback), so this is a strict superset of the old flat
+behavior — identical output for phase-less fights, never a regression.
+compare_spell_usage (flat, phase-unaware) stays as-is for direct/simple
+callers — it's still exercised by its own test suite and needs no change.
 """
 
 from __future__ import annotations
@@ -29,7 +39,7 @@ from botgitgud.analysis.grading import (
     empirical_quantile,
     grade_deviation,
 )
-from botgitgud.domain.models import PlayerLog, SpellProfile
+from botgitgud.domain.models import PhaseInterval, PhaseKey, PlayerLog, SpellProfile
 from botgitgud.domain.spells import SpellCatalog, SpellInfo
 
 
@@ -113,6 +123,72 @@ def compare_spell_usage(
     )
 
 
+def compare_spell_usage_by_phase(
+    spell: SpellInfo,
+    presence: float,
+    user_phase_times: Mapping[PhaseKey, Sequence[float]],
+    ref_phase_times: Mapping[PhaseKey, Sequence[float]],
+    intervals: Sequence[PhaseInterval],
+    n_usages_median: float,
+    reference_n: int,
+    *,
+    base_cooldown: float | None = None,
+    gap_penalty: float = 25.0,
+    phase_slot_ref_times: Mapping[PhaseKey, Sequence[Sequence[float]]] | None = None,
+    flat_ref_times: Sequence[float] = (),
+) -> SpellComparison:
+    """T2.4: aligns `user_phase_times` against `ref_phase_times`
+    independently within each `(phase_id, occurrence)` key — a cast in one
+    interval is NEVER paired against an expected usage from another (the
+    "rotação-fantasma" achado 3.2 exists to eliminate), then merges the
+    per-interval sub-alignments into one Alignment ordered by `intervals`'
+    own chronological order. `flat_ref_times` (whole-fight, phase-agnostic)
+    still drives cd_type classification — a spell's MAJOR/MINOR nature
+    isn't a per-phase property.
+    """
+    phase_slot_ref_times = phase_slot_ref_times or {}
+    order = {iv.key: idx for idx, iv in enumerate(intervals)}
+    all_keys = sorted(
+        set(user_phase_times) | set(ref_phase_times),
+        key=lambda k: order.get(k, len(intervals)),
+    )
+
+    sub_alignments: list[Alignment] = []
+    all_grades: list[StepGrade | None] = []
+    total_cost = 0.0
+    n_matched = n_missed = n_extra = 0
+    for key in all_keys:
+        u = sorted(user_phase_times.get(key, ()))
+        r = sorted(ref_phase_times.get(key, ()))
+        sub = align(u, r, gap_penalty=gap_penalty)
+        sub_alignments.append(sub)
+        total_cost += sub.total_cost
+        n_matched += sub.n_matched
+        n_missed += sub.n_missed
+        n_extra += sub.n_extra
+        all_grades.extend(_grade_match_steps(sub, phase_slot_ref_times.get(key, ())))
+
+    merged = Alignment(
+        steps=tuple(step for sub in sub_alignments for step in sub.steps),
+        total_cost=total_cost,
+        n_matched=n_matched,
+        n_missed=n_missed,
+        n_extra=n_extra,
+    )
+    cadence = compute_cadence(
+        flat_ref_times, n_usages_median=n_usages_median, base_cooldown=base_cooldown
+    )
+    return SpellComparison(
+        spell=spell,
+        cd_type=classify_cd_type(cadence),
+        cadence=cadence,
+        presence=presence,
+        alignment=merged,
+        reference_n=reference_n,
+        step_grades=tuple(all_grades),
+    )
+
+
 def compare_all_spells(
     player_log: PlayerLog,
     profile: Mapping[int, SpellProfile],
@@ -121,24 +197,28 @@ def compare_all_spells(
     catalog: SpellCatalog,
     reference_n: int,
 ) -> list[SpellComparison]:
-    """T1.6: replaces bot.py's compare_all_spells — one SpellComparison per
-    eligible spell, in the given order (discover_eligible_spell_ids' own
-    descending-presence order). Zero-usage abilities are never skipped
-    (see this module's docstring).
+    """T1.6/T2.4: replaces bot.py's compare_all_spells — one SpellComparison
+    per eligible spell, in the given order (discover_eligible_spell_ids'
+    own descending-presence order). Zero-usage abilities are never skipped
+    (see this module's docstring). Alignment is phase-partitioned
+    (compare_spell_usage_by_phase) — player_log.fight.phase_intervals is
+    always populated (single fallback interval for phase-less fights), so
+    this is the one production code path, not a special case.
     """
     comparisons: list[SpellComparison] = []
     for spell_id in eligible_spell_ids:
         sp = profile[spell_id]
-        user_times = sorted(player_log.cast_timeline.get(spell_id, ()))
         comparisons.append(
-            compare_spell_usage(
+            compare_spell_usage_by_phase(
                 spell=catalog.get(spell_id),
                 presence=sp.presence,
-                user_times=user_times,
-                ref_times=sp.ref_times,
+                user_phase_times=player_log.phase_cast_timeline.get(spell_id, {}),
+                ref_phase_times=sp.phase_ref_times,
+                intervals=player_log.fight.phase_intervals,
                 n_usages_median=sp.n_usages_median,
                 reference_n=reference_n,
-                slot_ref_times=sp.slot_ref_times,
+                phase_slot_ref_times=sp.phase_slot_ref_times,
+                flat_ref_times=sp.ref_times,
             )
         )
     return comparisons

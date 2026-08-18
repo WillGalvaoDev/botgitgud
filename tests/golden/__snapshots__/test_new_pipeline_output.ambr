@@ -21,12 +21,12 @@
   
   ⛔ **USOS PERDIDOS**
   ------------------------------------------
-  **Dark Pact**: 4 uso(s) perdido(s) — esperado(s) aos 185.8s, 247.9s, 250.4s, 318.1s
-  **Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 56.4s, 187.8s, 293.7s, 319.4s, 348.3s
-  **Spell #434506**: 2 uso(s) perdido(s) — esperado(s) aos 322.9s, 326.9s
-  **Spell #434635**: 3 uso(s) perdido(s) — esperado(s) aos 183.8s, 296.4s, 348.3s
-  **Burning Rush**: 5 uso(s) perdido(s) — esperado(s) aos 152.4s, 238.0s, 245.7s, 260.4s, 339.1s
-  **Unending Resolve**: 1 uso(s) perdido(s) — esperado(s) aos 193.5s
+  **Dark Pact**: 6 uso(s) perdido(s) — esperado(s) aos 1.1s, 51.3s, 100.0s, 2.3s, 34.2s, 96.0s
+  **Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 56.4s, 4.2s, 100.3s, 51.4s, 1.7s
+  **Spell #434506**: 4 uso(s) perdido(s) — esperado(s) aos 88.1s, 93.7s, 87.3s, 78.6s
+  **Spell #434635**: 5 uso(s) perdido(s) — esperado(s) aos 100.9s, 61.9s, 95.9s, 51.9s, 2.2s
+  **Burning Rush**: 6 uso(s) perdido(s) — esperado(s) aos 5.6s, 84.7s, 3.4s, 8.7s, 31.0s, 94.6s
+  **Unending Resolve**: 4 uso(s) perdido(s) — esperado(s) aos 33.0s, 6.4s, 36.7s, 3.7s
   **Grimoire: Imp Lord**: 1 uso(s) perdido(s) — esperado(s) aos 2.5s
   
   🔥 **OFFENSIVE MAJOR CDS**
@@ -36,27 +36,30 @@
   Usos: 2 (coorte: 1.5)
   ------------------------------
   Uso #1 | Player: 4.7s | Ideal: 3.5s (IC90: 2-5s) | Delta: +1.2s ⚪ amostra insuficiente (n=6)
-  Uso #2 | Player: 319.9s | Ideal: 307.0s (IC90: 306-309s) | Delta: +12.9s ⚪ amostra insuficiente (n=3)
+  Uso #2 | Player: 76.0s | Ideal: 62.4s (IC90: 61-64s) | Delta: +13.6s ⚪ amostra insuficiente (n=3)
   
   **Unending Resolve** (Tipo: MAJOR | Pres: 80%)
   Usos: 1 (coorte: 1.0)
   ------------------------------
-  Uso #1 | Esperado ~193.5s | NÃO USADO ⛔
-  Uso #2 | Player: 338.1s | Ideal: 302.3s (IC90: 281-323s) | Delta: +35.8s ⚪ amostra insuficiente (n=2)
+  Uso #1 | Esperado ~33.0s | NÃO USADO ⛔
+  Uso #2 | Esperado ~6.4s | NÃO USADO ⛔
+  Uso #3 | Player: 94.2s | Uso extra
+  Uso #4 | Esperado ~36.7s | NÃO USADO ⛔
+  Uso #5 | Esperado ~3.7s | NÃO USADO ⛔
   
   **Spell #1250508** (Tipo: MAJOR | Pres: 80%)
   Usos: 3 (coorte: 2.9)
   ------------------------------
   Uso #1 | Player: 4.7s | Ideal: 3.9s (IC90: 1-6s) | Delta: +0.8s ⚪ amostra insuficiente (n=4)
-  Uso #2 | Player: 131.3s | Ideal: 128.3s (IC90: 125-130s) | Delta: +3.0s ⚪ amostra insuficiente (n=4)
-  Uso #3 | Player: 256.2s | Ideal: 251.2s (IC90: 248-255s) | Delta: +5.0s ⚪ amostra insuficiente (n=4)
+  Uso #2 | Player: 9.0s | Ideal: 6.4s (IC90: 3-8s) | Delta: +2.6s ⚪ amostra insuficiente (n=4)
+  Uso #3 | Player: 12.2s | Ideal: 6.7s (IC90: 3-11s) | Delta: +5.5s ⚪ amostra insuficiente (n=4)
   
   **Grimoire: Imp Lord** (Tipo: MAJOR | Pres: 80%)
   Usos: 2 (coorte: 3.0)
   ------------------------------
   Uso #1 | Esperado ~2.5s | NÃO USADO ⛔
-  Uso #2 | Player: 126.0s | Ideal: 126.4s (IC90: 125-128s) | Delta: -0.4s ⚪ amostra insuficiente (n=5)
-  Uso #3 | Player: 249.3s | Ideal: 250.2s (IC90: 248-251s) | Delta: -0.9s ⚪ amostra insuficiente (n=5)
+  Uso #2 | Player: 3.7s | Ideal: 4.3s (IC90: 3-6s) | Delta: -0.6s ⚪ amostra insuficiente (n=5)
+  Uso #3 | Player: 5.4s | Ideal: 5.6s (IC90: 3-6s) | Delta: -0.2s ⚪ amostra insuficiente (n=5)
   
   ⚡ **MINOR CDS / BURST UTILITIES**
   ------------------------------------------
@@ -68,29 +71,31 @@
   Uso #2 | Player: 22.2s | Ideal: 21.9s (IC90: 21-31s) | Delta: +0.3s ⚪ amostra insuficiente (n=6)
   Uso #3 | Player: 43.1s | Ideal: 42.7s (IC90: 42-53s) | Delta: +0.4s ⚪ amostra insuficiente (n=6)
   Uso #4 | Player: 63.2s | Ideal: 63.2s (IC90: 62-73s) | Delta: +0.0s ⚪ amostra insuficiente (n=6)
-  Uso #5 | Player: 83.7s | Ideal: 83.9s (IC90: 82-94s) | Delta: -0.2s ⚪ amostra insuficiente (n=6)
-  Uso #6 | Player: 105.1s | Ideal: 104.6s (IC90: 103-114s) | Delta: +0.5s ⚪ amostra insuficiente (n=6)
-  Uso #7 | Player: 128.6s | Ideal: 126.2s (IC90: 124-136s) | Delta: +2.4s ⚪ amostra insuficiente (n=6)
-  Uso #8 | Player: 149.7s | Ideal: 146.9s (IC90: 145-156s) | Delta: +2.8s ⚪ amostra insuficiente (n=6)
-  Uso #9 | Player: 170.0s | Ideal: 167.4s (IC90: 165-177s) | Delta: +2.6s ⚪ amostra insuficiente (n=6)
-  Uso #10 | Player: 190.8s | Ideal: 188.2s (IC90: 185-198s) | Delta: +2.6s ⚪ amostra insuficiente (n=6)
-  Uso #11 | Player: 212.1s | Ideal: 209.3s (IC90: 207-218s) | Delta: +2.8s ⚪ amostra insuficiente (n=6)
-  Uso #12 | Player: 233.3s | Ideal: 229.7s (IC90: 227-239s) | Delta: +3.7s ⚪ amostra insuficiente (n=6)
-  Uso #13 | Player: 253.4s | Ideal: 251.8s (IC90: 248-260s) | Delta: +1.6s ⚪ amostra insuficiente (n=6)
-  Uso #14 | Player: 274.3s | Ideal: 272.7s (IC90: 268-281s) | Delta: +1.6s ⚪ amostra insuficiente (n=6)
-  Uso #15 | Player: 294.4s | Ideal: 293.6s (IC90: 289-302s) | Delta: +0.8s ⚪ amostra insuficiente (n=6)
-  Uso #16 | Player: 314.5s | Ideal: 313.6s (IC90: 310-322s) | Delta: +0.9s ⚪ amostra insuficiente (n=6)
-  Uso #17 | Player: 335.0s | Ideal: 333.4s (IC90: 328-335s) | Delta: +1.6s ⚪ amostra insuficiente (n=4)
+  Uso #5 | Player: 83.7s | Ideal: 83.8s (IC90: 81-88s) | Delta: -0.1s ⚪ amostra insuficiente (n=5)
+  Uso #6 | Player: 2.8s | Ideal: 1.9s (IC90: 1-5s) | Delta: +0.9s ⚪ amostra insuficiente (n=6)
+  Uso #7 | Player: 6.3s | Ideal: 3.0s (IC90: 2-6s) | Delta: +3.2s ⚪ amostra insuficiente (n=6)
+  Uso #8 | Player: 27.3s | Ideal: 24.1s (IC90: 23-27s) | Delta: +3.2s ⚪ amostra insuficiente (n=6)
+  Uso #9 | Player: 47.7s | Ideal: 44.6s (IC90: 43-47s) | Delta: +3.1s ⚪ amostra insuficiente (n=6)
+  Uso #10 | Player: 68.5s | Ideal: 65.2s (IC90: 63-67s) | Delta: +3.3s ⚪ amostra insuficiente (n=6)
+  Uso #11 | Player: 89.8s | Ideal: 86.6s (IC90: 85-88s) | Delta: +3.2s ⚪ amostra insuficiente (n=6)
+  Uso #12 | Player: 9.4s | Ideal: 4.2s (IC90: 3-6s) | Delta: +5.2s ⚪ amostra insuficiente (n=6)
+  Uso #13 | Player: 9.5s | Ideal: 5.5s (IC90: 3-8s) | Delta: +4.0s ⚪ amostra insuficiente (n=6)
+  Uso #14 | Player: 30.4s | Ideal: 26.6s (IC90: 24-28s) | Delta: +3.8s ⚪ amostra insuficiente (n=6)
+  Uso #15 | Player: 50.4s | Ideal: 47.0s (IC90: 44-50s) | Delta: +3.4s ⚪ amostra insuficiente (n=6)
+  Uso #16 | Player: 70.5s | Ideal: 67.9s (IC90: 65-70s) | Delta: +2.6s ⚪ amostra insuficiente (n=6)
+  Uso #17 | Player: 91.1s | Ideal: 88.0s (IC90: 83-90s) | Delta: +3.1s ⚪ amostra insuficiente (n=5)
   
   **Dark Pact** (Tipo: MINOR | Pres: 100%)
   Usos: 2 (coorte: 3.1)
   ------------------------------
-  Uso #1 | Player: 31.3s | Ideal: 63.8s (IC90: 43-89s) | Delta: -32.5s ⚪ amostra insuficiente (n=6)
+  Uso #1 | Player: 31.3s | Ideal: 51.2s (IC90: 34-79s) | Delta: -19.9s ⚪ amostra insuficiente (n=5)
   Uso #2 | Player: 99.5s | Uso extra
-  Uso #3 | Esperado ~185.8s | NÃO USADO ⛔
-  Uso #4 | Esperado ~247.9s | NÃO USADO ⛔
-  Uso #5 | Esperado ~250.4s | NÃO USADO ⛔
-  Uso #6 | Esperado ~318.1s | NÃO USADO ⛔
+  Uso #3 | Esperado ~1.1s | NÃO USADO ⛔
+  Uso #4 | Esperado ~51.3s | NÃO USADO ⛔
+  Uso #5 | Esperado ~100.0s | NÃO USADO ⛔
+  Uso #6 | Esperado ~2.3s | NÃO USADO ⛔
+  Uso #7 | Esperado ~34.2s | NÃO USADO ⛔
+  Uso #8 | Esperado ~96.0s | NÃO USADO ⛔
   
   **Implosion** (Tipo: MINOR | Pres: 100%)
   Usos: 17 (coorte: 19.8)
@@ -100,72 +105,77 @@
   Uso #3 | Player: 44.5s | Ideal: 40.9s (IC90: 39-45s) | Delta: +3.6s ⚪ amostra insuficiente (n=6)
   Uso #4 | Esperado ~56.4s | NÃO USADO ⛔
   Uso #5 | Player: 78.0s | Ideal: 73.5s (IC90: 72-86s) | Delta: +4.5s ⚪ amostra insuficiente (n=6)
-  Uso #6 | Player: 94.3s | Ideal: 89.8s (IC90: 89-108s) | Delta: +4.5s ⚪ amostra insuficiente (n=6)
-  Uso #7 | Player: 121.9s | Ideal: 106.2s (IC90: 105-124s) | Delta: +15.7s ⚪ amostra insuficiente (n=6)
-  Uso #8 | Player: 138.0s | Ideal: 129.8s (IC90: 120-148s) | Delta: +8.2s ⚪ amostra insuficiente (n=6)
-  Uso #9 | Player: 153.6s | Ideal: 148.2s (IC90: 141-168s) | Delta: +5.4s ⚪ amostra insuficiente (n=6)
-  Uso #10 | Player: 176.4s | Ideal: 167.4s (IC90: 157-192s) | Delta: +9.0s ⚪ amostra insuficiente (n=6)
-  Uso #11 | Esperado ~187.8s | NÃO USADO ⛔
-  Uso #12 | Player: 200.7s | Ideal: 204.9s (IC90: 188-231s) | Delta: -4.2s ⚪ amostra insuficiente (n=6)
-  Uso #13 | Player: 216.1s | Ideal: 222.1s (IC90: 203-247s) | Delta: -6.0s ⚪ amostra insuficiente (n=6)
-  Uso #14 | Player: 234.6s | Ideal: 237.7s (IC90: 222-266s) | Delta: -3.1s ⚪ amostra insuficiente (n=6)
-  Uso #15 | Player: 260.7s | Ideal: 262.1s (IC90: 241-292s) | Delta: -1.4s ⚪ amostra insuficiente (n=6)
-  Uso #16 | Player: 280.8s | Ideal: 278.6s (IC90: 258-307s) | Delta: +2.2s ⚪ amostra insuficiente (n=6)
-  Uso #17 | Esperado ~293.7s | NÃO USADO ⛔
-  Uso #18 | Player: 305.0s | Ideal: 308.9s (IC90: 285-342s) | Delta: -3.9s ⚪ amostra insuficiente (n=5)
-  Uso #19 | Esperado ~319.4s | NÃO USADO ⛔
-  Uso #20 | Player: 323.4s | Ideal: 322.6s (IC90: 315-330s) | Delta: +0.8s ⚪ amostra insuficiente (n=2)
-  Uso #21 | Player: 342.9s | Ideal: 339.3s (IC90: 331-347s) | Delta: +3.6s ⚪ amostra insuficiente (n=2)
-  Uso #22 | Esperado ~348.3s | NÃO USADO ⛔
+  Uso #6 | Player: 94.3s | Ideal: 89.6s (IC90: 88-90s) | Delta: +4.7s ⚪ amostra insuficiente (n=4)
+  Uso #7 | Esperado ~4.2s | NÃO USADO ⛔
+  Uso #8 | Player: 19.6s | Ideal: 18.4s (IC90: 17-19s) | Delta: +1.2s ⚪ amostra insuficiente (n=3)
+  Uso #9 | Player: 15.7s | Ideal: 17.8s (IC90: 10-20s) | Delta: -2.1s ⚪ amostra insuficiente (n=6)
+  Uso #10 | Player: 31.3s | Ideal: 33.8s (IC90: 26-38s) | Delta: -2.4s ⚪ amostra insuficiente (n=6)
+  Uso #11 | Player: 54.1s | Ideal: 50.4s (IC90: 43-59s) | Delta: +3.7s ⚪ amostra insuficiente (n=6)
+  Uso #12 | Player: 78.4s | Ideal: 68.9s (IC90: 66-75s) | Delta: +9.5s ⚪ amostra insuficiente (n=6)
+  Uso #13 | Player: 93.8s | Ideal: 88.2s (IC90: 81-95s) | Delta: +5.6s ⚪ amostra insuficiente (n=6)
+  Uso #14 | Esperado ~100.3s | NÃO USADO ⛔
+  Uso #15 | Player: 10.7s | Ideal: 12.6s (IC90: 10-14s) | Delta: -1.9s ⚪ amostra insuficiente (n=6)
+  Uso #16 | Player: 16.8s | Ideal: 15.6s (IC90: 8-18s) | Delta: +1.2s ⚪ amostra insuficiente (n=6)
+  Uso #17 | Player: 36.9s | Ideal: 33.5s (IC90: 25-36s) | Delta: +3.4s ⚪ amostra insuficiente (n=6)
+  Uso #18 | Esperado ~51.4s | NÃO USADO ⛔
+  Uso #19 | Player: 61.1s | Ideal: 66.6s (IC90: 60-74s) | Delta: -5.5s ⚪ amostra insuficiente (n=6)
+  Uso #20 | Player: 79.5s | Ideal: 80.4s (IC90: 71-86s) | Delta: -0.9s ⚪ amostra insuficiente (n=5)
+  Uso #21 | Player: 98.9s | Ideal: 92.2s (IC90: 87-98s) | Delta: +6.7s ⚪ amostra insuficiente (n=2)
+  Uso #22 | Esperado ~1.7s | NÃO USADO ⛔
   
   **Summon Demonic Tyrant** (Tipo: MINOR | Pres: 100%)
   Usos: 6 (coorte: 6.0)
   ------------------------------
   Uso #1 | Player: 3.6s | Ideal: 3.2s (IC90: 2-5s) | Delta: +0.4s ⚪ amostra insuficiente (n=6)
   Uso #2 | Player: 65.9s | Ideal: 65.2s (IC90: 64-68s) | Delta: +0.8s ⚪ amostra insuficiente (n=6)
-  Uso #3 | Player: 131.3s | Ideal: 128.8s (IC90: 126-131s) | Delta: +2.6s ⚪ amostra insuficiente (n=6)
-  Uso #4 | Player: 193.4s | Ideal: 190.3s (IC90: 188-193s) | Delta: +3.1s ⚪ amostra insuficiente (n=6)
-  Uso #5 | Player: 256.1s | Ideal: 253.1s (IC90: 250-255s) | Delta: +3.0s ⚪ amostra insuficiente (n=6)
-  Uso #6 | Player: 318.4s | Ideal: 315.2s (IC90: 312-317s) | Delta: +3.2s ⚪ amostra insuficiente (n=6)
+  Uso #3 | Player: 9.0s | Ideal: 6.8s (IC90: 4-9s) | Delta: +2.2s ⚪ amostra insuficiente (n=6)
+  Uso #4 | Player: 71.1s | Ideal: 68.3s (IC90: 66-71s) | Delta: +2.8s ⚪ amostra insuficiente (n=6)
+  Uso #5 | Player: 12.2s | Ideal: 8.6s (IC90: 6-11s) | Delta: +3.6s ⚪ amostra insuficiente (n=6)
+  Uso #6 | Player: 74.5s | Ideal: 70.7s (IC90: 68-72s) | Delta: +3.8s ⚪ amostra insuficiente (n=6)
   
   **Spell #434506** (Tipo: MINOR | Pres: 100%)
   Usos: 8 (coorte: 9.1)
   ------------------------------
   Uso #1 | Player: 26.2s | Ideal: 23.2s (IC90: 15-25s) | Delta: +2.9s ⚪ amostra insuficiente (n=6)
   Uso #2 | Player: 74.1s | Ideal: 60.5s (IC90: 43-64s) | Delta: +13.6s ⚪ amostra insuficiente (n=6)
-  Uso #3 | Player: 115.8s | Ideal: 93.7s (IC90: 74-97s) | Delta: +22.1s ⚪ amostra insuficiente (n=6)
-  Uso #4 | Player: 140.2s | Ideal: 134.6s (IC90: 111-138s) | Delta: +5.6s ⚪ amostra insuficiente (n=6)
-  Uso #5 | Player: 190.4s | Ideal: 168.2s (IC90: 152-173s) | Delta: +22.2s ⚪ amostra insuficiente (n=6)
-  Uso #6 | Player: 226.7s | Ideal: 209.3s (IC90: 194-214s) | Delta: +17.4s ⚪ amostra insuficiente (n=6)
-  Uso #7 | Player: 267.5s | Ideal: 251.7s (IC90: 224-258s) | Delta: +15.8s ⚪ amostra insuficiente (n=6)
-  Uso #8 | Player: 299.7s | Ideal: 281.6s (IC90: 262-290s) | Delta: +18.1s ⚪ amostra insuficiente (n=6)
-  Uso #9 | Esperado ~322.9s | NÃO USADO ⛔
-  Uso #10 | Esperado ~326.9s | NÃO USADO ⛔
+  Uso #3 | Esperado ~88.1s | NÃO USADO ⛔
+  Uso #4 | Esperado ~93.7s | NÃO USADO ⛔
+  Uso #5 | Player: 13.4s | Uso extra
+  Uso #6 | Player: 17.9s | Ideal: 12.9s (IC90: 10-16s) | Delta: +4.9s ⚪ amostra insuficiente (n=6)
+  Uso #7 | Player: 68.1s | Ideal: 49.9s (IC90: 42-57s) | Delta: +18.2s ⚪ amostra insuficiente (n=6)
+  Uso #8 | Esperado ~87.3s | NÃO USADO ⛔
+  Uso #9 | Player: 2.7s | Ideal: 6.4s (IC90: 6-6s) | Delta: -3.7s ⚪ amostra insuficiente (n=1)
+  Uso #10 | Player: 23.5s | Ideal: 12.3s (IC90: 3-17s) | Delta: +11.2s ⚪ amostra insuficiente (n=6)
+  Uso #11 | Player: 55.8s | Ideal: 42.2s (IC90: 35-50s) | Delta: +13.5s ⚪ amostra insuficiente (n=6)
+  Uso #12 | Esperado ~78.6s | NÃO USADO ⛔
   
   **Spell #434635** (Tipo: MINOR | Pres: 100%)
   Usos: 7 (coorte: 9.0)
   ------------------------------
   Uso #1 | Player: 36.4s | Ideal: 30.8s (IC90: 29-34s) | Delta: +5.6s ⚪ amostra insuficiente (n=6)
   Uso #2 | Player: 76.8s | Ideal: 72.9s (IC90: 71-75s) | Delta: +3.9s ⚪ amostra insuficiente (n=6)
-  Uso #3 | Player: 117.1s | Ideal: 108.9s (IC90: 105-112s) | Delta: +8.2s ⚪ amostra insuficiente (n=6)
-  Uso #4 | Player: 152.1s | Ideal: 143.1s (IC90: 141-147s) | Delta: +9.0s ⚪ amostra insuficiente (n=6)
-  Uso #5 | Esperado ~183.8s | NÃO USADO ⛔
-  Uso #6 | Player: 241.2s | Ideal: 223.0s (IC90: 214-226s) | Delta: +18.2s ⚪ amostra insuficiente (n=6)
-  Uso #7 | Player: 274.3s | Ideal: 262.4s (IC90: 254-264s) | Delta: +11.9s ⚪ amostra insuficiente (n=6)
-  Uso #8 | Esperado ~296.4s | NÃO USADO ⛔
-  Uso #9 | Player: 312.9s | Ideal: 329.4s (IC90: 312-334s) | Delta: -16.5s ⚪ amostra insuficiente (n=5)
-  Uso #10 | Esperado ~348.3s | NÃO USADO ⛔
+  Uso #3 | Esperado ~100.9s | NÃO USADO ⛔
+  Uso #4 | Player: 14.8s | Ideal: 7.5s (IC90: 3-10s) | Delta: +7.3s ⚪ amostra insuficiente (n=5)
+  Uso #5 | Player: 29.8s | Ideal: 21.1s (IC90: 19-25s) | Delta: +8.7s ⚪ amostra insuficiente (n=6)
+  Uso #6 | Esperado ~61.9s | NÃO USADO ⛔
+  Uso #7 | Esperado ~95.9s | NÃO USADO ⛔
+  Uso #8 | Player: 17.3s | Ideal: 2.3s (IC90: 1-3s) | Delta: +15.0s ⚪ amostra insuficiente (n=2)
+  Uso #9 | Player: 30.4s | Ideal: 17.7s (IC90: 9-19s) | Delta: +12.7s ⚪ amostra insuficiente (n=6)
+  Uso #10 | Esperado ~51.9s | NÃO USADO ⛔
+  Uso #11 | Player: 69.0s | Ideal: 84.9s (IC90: 67-89s) | Delta: -15.9s ⚪ amostra insuficiente (n=5)
+  Uso #12 | Esperado ~2.2s | NÃO USADO ⛔
   
   **Burning Rush** (Tipo: MINOR | Pres: 90%)
   Usos: 2 (coorte: 3.4)
   ------------------------------
-  Uso #1 | Player: 30.8s | Uso extra
-  Uso #2 | Player: 101.8s | Ideal: 94.0s (IC90: 32-215s) | Delta: +7.8s ⚪ amostra insuficiente (n=6)
-  Uso #3 | Esperado ~152.4s | NÃO USADO ⛔
-  Uso #4 | Esperado ~238.0s | NÃO USADO ⛔
-  Uso #5 | Esperado ~245.7s | NÃO USADO ⛔
-  Uso #6 | Esperado ~260.4s | NÃO USADO ⛔
-  Uso #7 | Esperado ~339.1s | NÃO USADO ⛔
+  Uso #1 | Player: 30.8s | Ideal: 32.5s (IC90: 31-80s) | Delta: -1.7s ⚪ amostra insuficiente (n=3)
+  Uso #2 | Player: 101.8s | Ideal: 96.1s (IC90: 96-96s) | Delta: +5.7s ⚪ amostra insuficiente (n=1)
+  Uso #3 | Esperado ~5.6s | NÃO USADO ⛔
+  Uso #4 | Esperado ~84.7s | NÃO USADO ⛔
+  Uso #5 | Esperado ~3.4s | NÃO USADO ⛔
+  Uso #6 | Esperado ~8.7s | NÃO USADO ⛔
+  Uso #7 | Esperado ~31.0s | NÃO USADO ⛔
+  Uso #8 | Esperado ~94.6s | NÃO USADO ⛔
   
   ==========================================
   '''

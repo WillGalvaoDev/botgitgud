@@ -548,3 +548,29 @@ de um projeto pessoal/comunidade pequena).
   árvore no jogo), só menos legível do que o texto de exemplo do documento. Se a resolução de
   nomes se tornar valiosa, uma tarefa futura deve investigar o endpoint correto (não encontrado
   aqui) antes de construir um catálogo dedicado.
+
+## D-27 — T2.4 não amplia o pool posicional para o pool inteiro de rankings
+
+- **Tarefa:** T2.4
+- **Documento diz:** "com o tempo normalizado por intervalo de fase, as métricas posicionais
+  deixam de exigir kills de duração parecida. Isto é o que permite usar o pool inteiro de
+  rankings (T0.8) para a terceira classe de métricas, em vez de restringir a ±12%" — descrito
+  como "ganho colateral" e "efeito colateral desejado", nunca como um passo numerado obrigatório
+  (os passos 1-6 da tarefa não mencionam alterar `within_positional_band`/`POSITIONAL_BAND_PCT`).
+- **Realidade:** ampliar o pool posicional interage com bastante coisa já testada e estável
+  (T0.8's `classify_cohort_size`, os avisos de amostra pequena da T1.6/T1.7, a supressão por `n`
+  da T2.3) — uma mudança de escopo real, não uma consequência automática de ter fases. Os
+  critérios de aceite literais da T2.4 (3 fases → alinhamentos independentes; luta sem fases →
+  idêntico à T0.7; fixture real → 5 intervalos com as chaves documentadas) não dependem dela.
+- **Ação tomada:** implementado exatamente o que os passos 1-6 pedem — normalização temporal por
+  `(phase_id, ocorrência)`, chaveamento do perfil de referência, alinhamento independente por
+  intervalo (`analysis/comparison.py`'s `compare_spell_usage_by_phase`, usado por
+  `compare_all_spells` como o único caminho de produção agora, já que
+  `player_log.fight.phase_intervals` está sempre populado — luta sem fase é só o caso degenerado
+  de 1 intervalo). `analysis/cohort.py`'s `within_positional_band`/`POSITIONAL_BAND_PCT` **não**
+  foram tocados — a restrição de banda posicional continua exatamente como a T0.8/T1.6 a
+  deixaram.
+- **Impacto:** nenhum nos critérios de aceite da T2.4 (todos passam, incluindo contra a fixture
+  real). O "efeito colateral desejado" de ampliar o pool fica como trabalho futuro explícito, não
+  perdido — se uma tarefa posterior quiser essa ampliação, o chaveamento por fase já existe e
+  está testado; só falta decidir a nova política de banda.
