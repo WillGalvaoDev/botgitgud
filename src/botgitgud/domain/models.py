@@ -28,6 +28,7 @@ class FightRef:
     difficulty: int
     duration_s: float
     kill: bool
+    partition: int | None = None  # zone/patch metadata; see docs/desvios.md D-12(a)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,3 +95,24 @@ class Cohort:
     criteria: CohortCriteria
     members: tuple[PlayerLog, ...]
     built_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class SpellProfile:
+    """T1.3 (docs/desvios.md D-12(b)): one spell's aggregate stats across a
+    cohort — formalizes the shape build_cd_reference_profile() (Fase 0,
+    bot.py) already produces ad-hoc as a dict.
+    """
+
+    spell_id: int
+    presence: float
+    ref_times: tuple[float, ...]
+    n_usages_median: float
+
+
+@dataclass(frozen=True, slots=True)
+class CohortProfile:
+    cohort_id: str
+    n_members: int
+    built_at: datetime
+    spells: Mapping[int, SpellProfile]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -8,9 +9,11 @@ from botgitgud.domain.models import (
     AbilityDamage,
     Cohort,
     CohortCriteria,
+    CohortProfile,
     FightRef,
     PlayerBuild,
     PlayerLog,
+    SpellProfile,
 )
 
 
@@ -66,6 +69,16 @@ def test_dataclasses_are_frozen() -> None:
 def test_player_build_default_external_buffs_is_empty_frozenset() -> None:
     build = _build()
     assert build.external_buffs == frozenset()
+
+
+def test_fight_ref_partition_defaults_to_none() -> None:
+    """docs/desvios.md D-12(a): partition is nullable — resolved separately
+    at ingestion time, not always known when a FightRef is first built.
+    """
+    fight = _fight()
+    assert fight.partition is None
+    with_partition = replace(fight, partition=4)
+    assert with_partition.partition == 4
 
 
 # -- PlayerLog composition --------------------------------------------------------
@@ -142,3 +155,20 @@ def test_cohort_bundles_criteria_and_members() -> None:
     )
     assert cohort.cohort_id == criteria.cohort_id()
     assert len(cohort.members) == 1
+
+
+# -- SpellProfile / CohortProfile --------------------------------------------------
+
+
+def test_cohort_profile_holds_spell_profiles_by_id() -> None:
+    spell = SpellProfile(
+        spell_id=104316, presence=1.0, ref_times=(10.0, 130.0, 250.0), n_usages_median=4.0
+    )
+    profile = CohortProfile(
+        cohort_id="abc123",
+        n_members=10,
+        built_at=datetime.now(UTC),
+        spells={104316: spell},
+    )
+    assert profile.spells[104316].presence == 1.0
+    assert profile.spells[104316].ref_times == (10.0, 130.0, 250.0)

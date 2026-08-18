@@ -212,3 +212,43 @@
   real da T1.5 (manifesto de execução, wiring do `cohort_id` no relatório) permanece intacto.
 - **Impacto:** nenhum na metodologia. `CohortCriteria` já testada nesta tarefa (determinismo do
   hash); os testes de wiring no relatório (critério de aceite específico da T1.5) ficam para lá.
+
+## D-12 — Quatro lacunas na especificação da T1.3 (Store)
+
+- **Tarefa:** T1.3
+
+**(a) `FightRef` não tem `partition`, mas o layout físico e a tabela `logs` da T1.3 exigem.**
+`docs/implementacao.md` mostra `raw/encounter_id=<E>/difficulty=<D>/partition=<P>/...` e a coluna
+`partition INTEGER` na tabela `logs`, mas `FightRef` (T1.2) não tem esse campo.
+**Ação:** adicionado `partition: int | None = None` a `FightRef` em `models.py` — nullable porque
+partition é metadado de zona/patch, não algo que vem direto do fight (resolvido separadamente na
+ingestão, T1.4/T1.7). Como `FightRef` foi criada nesta mesma sessão e nada mais depende do seu
+conjunto de campos ainda, estender é seguro.
+
+**(b) `CohortProfile` é usado na assinatura de `Store` (`read_profile`/`write_profile`) mas nunca
+definido** em nenhuma tarefa do documento (T1.2 não tem; T1.5 só define `CohortCriteria`).
+**Ação:** definidos `SpellProfile` e `CohortProfile` em `models.py`, formalizando a forma que
+`build_cd_reference_profile()` (Fase 0, `bot.py`) já produz ad-hoc como dict
+(`{spell_id: {"presence":, "ref_times":, "n_usages_median":}}`).
+
+**(c) A `PRIMARY KEY (report_code, fight_id, player_name)` da tabela `logs` contradiz o princípio
+"obrigatório" da própria T1.3**: "Dados brutos imutáveis. Um log escrito nunca é sobrescrito.
+Reingestão gera nova linha com `ingested_at` maior; a leitura pega a mais recente." Uma PRIMARY KEY
+rejeitaria a segunda inserção da mesma chave lógica — impossibilitando exatamente o comportamento
+que o princípio exige.
+**Ação:** a PK foi removida da criação da tabela; `(report_code, fight_id, player_name)` continua
+sendo a chave lógica para leitura (`read_log` faz `ORDER BY ingested_at DESC LIMIT 1`), mas não é
+uma constraint de unicidade do banco. O princípio de imutabilidade, explicitamente marcado como
+"obrigatório", prevalece sobre o SQL de exemplo.
+
+**(d) O template de caminho `raw/.../<report_code>_<fight_id>.parquet` colide entre jogadores**
+(um fight tem vários jogadores, cada um vira um `PlayerLog` separado) **e entre reingestões** (a
+mesma chave lógica sobrescreveria o mesmo arquivo físico, violando (c) na camada de arquivo).
+**Ação:** o nome do arquivo passa a incluir o jogador e um timestamp de ingestão:
+`<report_code>_<fight_id>_<player_name>_<ingested_at_epoch_ms>.parquet`, garantindo unicidade física
+por ingestão sem exigir deduplicação/limpeza de arquivos antigos (aceitável para o volume esperado
+de um projeto pessoal/comunidade pequena).
+
+- **Impacto:** nenhum na metodologia central (armazenamento imutável, coorte por hash). Muda
+  apenas os detalhes de schema/layout que o pseudocódigo do documento deixou subespecificados ou
+  contraditórios entre si.
