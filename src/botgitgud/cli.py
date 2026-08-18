@@ -1,0 +1,130 @@
+"""T1.6 — CLI entrypoint, replacing bot.py's Discord-only interface for
+batch/debug work (docs/implementacao.md §1.1/T1.6 step 4): lets the
+pipeline be exercised without Discord.
+
+`analyze` and `probe-schema` are fully implemented now. `build-cohort`
+(T1.7) and `backfill` (mentioned once in the spec with zero further
+detail anywhere in the document) are documented stubs — see
+docs/desvios.md D-13.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
+from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
+from botgitgud.config import Settings
+from botgitgud.domain.spells import SpellCatalog
+from botgitgud.errors import BotGitGudError
+from botgitgud.ingest.log_fetcher import LogFetcher
+from botgitgud.ingest.store import Store
+from botgitgud.logging_setup import configure_logging
+from botgitgud.report.text import render_report
+from botgitgud.wcl.client import WclClient, WclClientConfig
+
+EX_TEMPFAIL = 75  # BSD sysexits.h — T1.7's build-cohort uses this on budget exhaustion
+
+
+def _build_deps(settings: Settings) -> Deps:
+    client = WclClient(
+        WclClientConfig(
+            client_id=settings.wcl_client_id.get_secret_value(),
+            client_secret=settings.wcl_client_secret.get_secret_value(),
+            connect_timeout=settings.wcl_connect_timeout_s,
+            read_timeout=settings.wcl_read_timeout_s,
+            pool_timeout=settings.wcl_pool_timeout_s,
+            max_attempts=settings.wcl_max_attempts,
+            backoff_base=settings.wcl_backoff_base_s,
+            backoff_factor=settings.wcl_backoff_factor,
+            api_points_floor=settings.api_points_floor,
+            rate_limit_cache_ttl=settings.wcl_rate_limit_cache_ttl_s,
+        )
+    )
+    blizzard = BlizzardClient(
+        BlizzardClientConfig(
+            client_id=settings.blizzard_client_id.get_secret_value(),
+            client_secret=settings.blizzard_client_secret.get_secret_value(),
+            connect_timeout=settings.blizzard_connect_timeout_s,
+            read_timeout=settings.blizzard_read_timeout_s,
+            max_attempts=settings.blizzard_max_attempts,
+            backoff_base=settings.blizzard_backoff_base_s,
+            backoff_factor=settings.blizzard_backoff_factor,
+        )
+    )
+    catalog = SpellCatalog(Path("spells.json"), blizzard=blizzard)
+    store = Store(settings.data_dir)
+    fetcher = LogFetcher(client, store, catalog)
+    return Deps(client=client, fetcher=fetcher, store=store, catalog=catalog, settings=settings)
+
+
+def _cmd_analyze(args: argparse.Namespace) -> int:
+    settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
+    deps = _build_deps(settings)
+    req = AnalysisRequest(report_code=args.report, fight_id=args.fight, character_name=args.char)
+    try:
+        result = run_analysis(req, deps)
+    except BotGitGudError as e:
+        sys.stderr.write(f"erro: {e}\n")
+        return 1
+    finally:
+        deps.store.close()
+        deps.client.close()
+
+    sys.stdout.write(render_report(result.header, result.comparisons) + "\n")
+    return 0
+
+
+def _cmd_probe_schema(_args: argparse.Namespace) -> int:
+    from botgitgud.wcl.schema_probe import main as probe_main
+
+    return probe_main()
+
+
+def _cmd_build_cohort(_args: argparse.Namespace) -> int:
+    sys.stderr.write("build-cohort ainda não implementado — ver docs/implementacao.md T1.7.\n")
+    return 1
+
+
+def _cmd_backfill(_args: argparse.Namespace) -> int:
+    sys.stderr.write(
+        "backfill ainda não implementado — sem especificação (docs/desvios.md D-13).\n"
+    )
+    return 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="botgitgud")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_analyze = sub.add_parser("analyze", help="Analisa um jogador em um fight de um report WCL.")
+    p_analyze.add_argument("--report", required=True, help="Código do report WCL (16 caracteres).")
+    p_analyze.add_argument("--fight", required=True, type=int, help="ID do fight dentro do report.")
+    p_analyze.add_argument("--char", required=True, help="Nome do personagem.")
+    p_analyze.set_defaults(func=_cmd_analyze)
+
+    p_build_cohort = sub.add_parser(
+        "build-cohort", help="(T1.7) Constrói/persiste um CohortProfile."
+    )
+    p_build_cohort.set_defaults(func=_cmd_build_cohort)
+
+    p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
+    p_probe.set_defaults(func=_cmd_probe_schema)
+
+    p_backfill = sub.add_parser("backfill", help="Placeholder sem especificação (D-13).")
+    p_backfill.set_defaults(func=_cmd_backfill)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    configure_logging()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

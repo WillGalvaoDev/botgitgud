@@ -11,13 +11,14 @@ produces an all-MISSED alignment for them.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
 from botgitgud.analysis.alignment import Alignment, align
 from botgitgud.analysis.cadence import SpellCadence, classify_cd_type, compute_cadence
-from botgitgud.domain.spells import SpellInfo
+from botgitgud.domain.models import PlayerLog, SpellProfile
+from botgitgud.domain.spells import SpellCatalog, SpellInfo
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,3 +55,33 @@ def compare_spell_usage(
         alignment=alignment,
         reference_n=reference_n,
     )
+
+
+def compare_all_spells(
+    player_log: PlayerLog,
+    profile: Mapping[int, SpellProfile],
+    eligible_spell_ids: Sequence[int],
+    *,
+    catalog: SpellCatalog,
+    reference_n: int,
+) -> list[SpellComparison]:
+    """T1.6: replaces bot.py's compare_all_spells — one SpellComparison per
+    eligible spell, in the given order (discover_eligible_spell_ids' own
+    descending-presence order). Zero-usage abilities are never skipped
+    (see this module's docstring).
+    """
+    comparisons: list[SpellComparison] = []
+    for spell_id in eligible_spell_ids:
+        sp = profile[spell_id]
+        user_times = sorted(player_log.cast_timeline.get(spell_id, ()))
+        comparisons.append(
+            compare_spell_usage(
+                spell=catalog.get(spell_id),
+                presence=sp.presence,
+                user_times=user_times,
+                ref_times=sp.ref_times,
+                n_usages_median=sp.n_usages_median,
+                reference_n=reference_n,
+            )
+        )
+    return comparisons

@@ -90,11 +90,18 @@ def test_positional_band_is_narrower_than_sanity_band() -> None:
 
 def test_no_lexical_metric_branching_in_wired_files() -> None:
     """`grep -n '"hps"\\|healing' src/botgitgud/ingest/rankings.py` no
-    documento aponta para um arquivo que só existe na Fase 1 (D-9). O
-    critério real é verificado contra os arquivos que de fato existem.
+    documento originalmente apontava para um arquivo que só passou a
+    existir na T1.6 (D-9); agora que ele existe, o critério é verificado
+    contra `ingest/rankings.py` diretamente, mais os outros arquivos que
+    a T1.6 (D-9's "Impacto") também identificou como devendo herdar essa
+    lógica (`analysis/cohort.py`, `analysis/pipeline.py`).
     """
     repo_root = Path(__file__).resolve().parents[2]
-    targets = [repo_root / "src" / "botgitgud" / "analysis" / "cohort.py", repo_root / "bot.py"]
+    targets = [
+        repo_root / "src" / "botgitgud" / "analysis" / "cohort.py",
+        repo_root / "src" / "botgitgud" / "ingest" / "rankings.py",
+        repo_root / "src" / "botgitgud" / "analysis" / "pipeline.py",
+    ]
     offenders = []
     for path in targets:
         text = path.read_text(encoding="utf-8").lower()

@@ -252,3 +252,64 @@ de um projeto pessoal/comunidade pequena).
 - **Impacto:** nenhum na metodologia central (armazenamento imutável, coorte por hash). Muda
   apenas os detalhes de schema/layout que o pseudocódigo do documento deixou subespecificados ou
   contraditórios entre si.
+
+## D-13 — T1.6 pede 4 subcomandos de CLI, mas `build-cohort` e `backfill` não têm especificação própria
+
+- **Tarefa:** T1.6
+- **Documento diz:** "Criar `cli.py` com subcomandos: `analyze`, `build-cohort`, `probe-schema`,
+  `backfill`."
+- **Realidade:** `analyze` (roda `run_analysis`) e `probe-schema` (chama `wcl/schema_probe.py`,
+  T0.1) já têm lógica completa para se conectar. `build-cohort` é explicitamente descrito como
+  entregável da **T1.7** ("Job batch de construção de coortes"), tarefa seguinte, ainda não
+  implementada. `backfill` não é mencionado em nenhum outro lugar do documento — nenhuma
+  especificação de comportamento, argumentos ou objetivo.
+- **Ação tomada:** os 4 subcomandos existem em `cli.py` (a estrutura do argparse), mas
+  `build-cohort` e `backfill` são stubs documentados: imprimem uma mensagem clara em stderr
+  explicando por que ainda não fazem nada (apontando para T1.7 e para esta entrada,
+  respectivamente) e retornam código de saída 1. Nenhuma lógica foi inventada para `backfill`.
+- **Impacto:** nenhum na metodologia. `build-cohort` ganha implementação real na T1.7; `backfill`
+  fica pendente até o usuário/documento especificar o que deve fazer.
+
+## D-14 — Robustez do lote de logs de referência: `playerDetails` como lista e falhas parciais
+
+- **Tarefa:** T1.6
+- **Realidade:** ao religar `ingest/rankings.py`/`LogFetcher.fetch_many` no pipeline real pela
+  primeira vez (T1.4 só havia sido testada com respostas sintéticas, nunca contra a API ao vivo em
+  lote — ver módulo `test_log_fetcher.py`), a gravação das fixtures da T1.6 contra a API real
+  encontrou dois problemas que nenhuma tarefa anterior tinha exercitado em escala:
+  **(a)** um log de referência real teve `table(dataType: Summary).data.playerDetails` retornado
+  como lista vazia `[]` em vez do objeto `{dps, healers, tanks}` esperado, quebrando
+  `find_player_in_details` com `AttributeError: 'list' object has no attribute 'get'` e abortando
+  o lote inteiro; **(b)** esse mesmo cenário expôs que `LogFetcher.fetch_many` (T1.4) não tolerava
+  a falha de uma única referência — uma exceção de qualquer membro do lote (mesmo
+  `PlayerNotFound`/`FightNotFound`, que o código já tentava capturar antes de `AttributeError`
+  aparecer) propagava e derrubava a coleta de todo o resto do lote.
+- **Ação tomada:** `find_player_in_details` (`ingest/wcl_parsing.py`) agora valida com `isinstance`
+  em cada nível (`player_details`, cada grupo de papel, cada entrada) e trata qualquer formato
+  inesperado como "jogador não encontrado" em vez de estourar. `LogFetcher.fetch_many` passou a
+  capturar `PlayerNotFound`/`FightNotFound`/`ApiError` por referência individual, registrar um
+  aviso e pular essa referência — o lote inteiro só falha se **nenhuma** referência sobreviver. A
+  gravação ao vivo confirmou o comportamento (`failures=1` em um lote de 99, sem abortar).
+- **Impacto:** nenhum na metodologia — torna o comportamento já pretendido (coorte tolerante a
+  logs individualmente malformados/indisponíveis, espelhando o `except Exception` best-effort do
+  `bot.py` original, porém com exceções específicas em vez de um catch-all genérico) real em vez
+  de acidental.
+
+## D-15 — Pool ao vivo de `characterRankings` cresceu muito além do que a T0.1 mediu
+
+- **Tarefa:** T1.6
+- **Realidade:** `docs/schema_confirmado.md` §8 registrou ~26 entradas no pool de rankings do
+  encontro/spec de fixture quando a T0.1 sondou a API. Ao regravar as fixtures da T1.6 meses depois,
+  o mesmo pool já tinha ~99 candidatos dentro da banda de sanidade (±35%, T0.8) — o pool de
+  `characterRankings` é um leaderboard vivo que só cresce. Gravar o log completo de referência de
+  cada um deles (cada cassete de `events` é o log de casts **de todo o raid**, sem filtro de
+  `sourceID`, ~1MB+ por página) geraria centenas de MB de fixtures.
+- **Ação tomada:** `tests/fixtures/record.py`'s `_fetch_and_truncate_rankings` faz a chamada real de
+  `characterRankings` (necessária para não quebrar a cadeia de cassetes) e então **sobrescreve**
+  esse mesmo cassete (mesma chave, `method+url+payload`) com uma versão truncada a
+  `N_RECORDING_REFS = 10` candidatos e `hasMorePages: False`. Dez foi escolhido por ser o menor
+  valor prático acima do piso `COHORT_MIN_HARD` (8, T0.8) com margem para uma falha pontual (D-14).
+- **Impacto:** nenhum na metodologia real (o piso de 8 continua sendo a regra de produção,
+  inalterada; só a *fixture de teste* está limitada). O golden test da T1.6 (`test_new_pipeline_
+  output.py`) passa a rodar contra 10 referências em vez de ~99 — suficiente para exercitar toda a
+  lógica de perfil/elegibilidade/alinhamento sem inflar o repositório.

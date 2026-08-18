@@ -1,0 +1,101 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "473",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "六道无鱼",
+      "serverRegion": "CN",
+      "serverSlug": "熊猫酒仙"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 83.25067026707714,
+            "bestAmount": 187143.30658254,
+            "difficulty": 5,
+            "fastestKill": 303929,
+            "medianPerformance": 83.25067026707714,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 187143.30658254,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 346781,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 99.80420139643667,
+                "historicalTotalParses": 11064,
+                "lockedIn": true,
+                "rankPercent": 99.80420139643667,
+                "rankTotalParses": 11064,
+                "report": {
+                  "code": "46t9mTdyh3bQYVjW",
+                  "fightID": 30,
+                  "startTime": 1785981774328
+                },
+                "spec": "Demonology",
+                "startTime": 1786023029353,
+                "todayPercent": 99.80594231316407,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 128623.77726377,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 303929,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 66.69713913771761,
+                "historicalTotalParses": 7940,
+                "lockedIn": true,
+                "rankPercent": 66.69713913771761,
+                "rankTotalParses": 7940,
+                "report": {
+                  "code": "hH1mw64JpbCzqTD7",
+                  "fightID": 12,
+                  "startTime": 1783255006884
+                },
+                "spec": "Demonology",
+                "startTime": 1783258290744,
+                "todayPercent": 59.76834514740041,
+                "todayTotalParses": 11175
+              }
+            ],
+            "totalKills": 2,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

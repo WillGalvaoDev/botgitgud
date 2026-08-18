@@ -12,6 +12,7 @@ BotGitGudError
 │   ├── FightNotFound
 │   └── InsufficientCohort
 └── AnalysisError
+    └── ScopeRejected
 """
 
 from __future__ import annotations
@@ -75,3 +76,10 @@ class InsufficientCohort(DataError):
 
 class AnalysisError(BotGitGudError):
     """Failure in the analysis pipeline itself (alignment, profiling, ...)."""
+
+
+class ScopeRejected(AnalysisError):
+    """T1.6: raised by analysis/pipeline.py's scope gate (T0.9, §1.4) for a
+    tank/healer/Augmentation/unrecognized spec — str(e) is already the
+    user-facing message from domain.specs.rejection_message().
+    """

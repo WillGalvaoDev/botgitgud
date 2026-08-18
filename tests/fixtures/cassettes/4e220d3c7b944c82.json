@@ -1,0 +1,344 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "464",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Aleff",
+      "serverRegion": "EU",
+      "serverSlug": "tarrenmill"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 93.57058130105233,
+            "bestAmount": 182369.45074153,
+            "difficulty": 5,
+            "fastestKill": 221971,
+            "medianPerformance": 98.64457771124418,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 182369.45074153,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 225413,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 99.83011314828904,
+                "historicalTotalParses": 9822,
+                "lockedIn": true,
+                "rankPercent": 99.83011314828904,
+                "rankTotalParses": 9822,
+                "report": {
+                  "code": "CDnMdAwmJ4VpHXYB",
+                  "fightID": 10,
+                  "startTime": 1784413633224
+                },
+                "spec": "Demonology",
+                "startTime": 1784414485367,
+                "todayPercent": 99.7372037130336,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 166335.56665768,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 241195,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 98.64457771124418,
+                "historicalTotalParses": 10209,
+                "lockedIn": true,
+                "rankPercent": 98.64457771124418,
+                "rankTotalParses": 10209,
+                "report": {
+                  "code": "4GdmRkn8JPVc9hWL",
+                  "fightID": 14,
+                  "startTime": 1784726100436
+                },
+                "spec": "Demonology",
+                "startTime": 1784728487967,
+                "todayPercent": 97.85306851946237,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 160105.62958064,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 275207,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 99.83732688935545,
+                "historicalTotalParses": 21102,
+                "lockedIn": true,
+                "rankPercent": 99.83732688935545,
+                "rankTotalParses": 21102,
+                "report": {
+                  "code": "pCqyhVvP2c46BFWN",
+                  "fightID": 27,
+                  "startTime": 1779369742077
+                },
+                "spec": "Demonology",
+                "startTime": 1779380004307,
+                "todayPercent": 99.76881917446609,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 152429.77954823,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 261327,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 99.46592595147277,
+                "historicalTotalParses": 25378,
+                "lockedIn": true,
+                "rankPercent": 99.46592595147277,
+                "rankTotalParses": 25378,
+                "report": {
+                  "code": "pjWAtqGPXkV1L2DT",
+                  "fightID": 12,
+                  "startTime": 1780510796271
+                },
+                "spec": "Demonology",
+                "startTime": 1780513421227,
+                "todayPercent": 99.13424741987959,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 147950.13126275,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 270069,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 98.33455429305229,
+                "historicalTotalParses": 27189,
+                "lockedIn": true,
+                "rankPercent": 98.33455429305229,
+                "rankTotalParses": 27189,
+                "report": {
+                  "code": "4Yh2VtZL83rAcaRm",
+                  "fightID": 1,
+                  "startTime": 1781097565424
+                },
+                "spec": "Demonology",
+                "startTime": 1781097740086,
+                "todayPercent": 98.02732951474765,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 147949.58344133,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 270070,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 98.33440162507783,
+                "historicalTotalParses": 27189,
+                "lockedIn": true,
+                "rankPercent": 98.33440162507783,
+                "rankTotalParses": 27189,
+                "report": {
+                  "code": "txKDNzfZVY1jWAMr",
+                  "fightID": 35,
+                  "startTime": 1781086158536
+                },
+                "spec": "Demonology",
+                "startTime": 1781099540860,
+                "todayPercent": 98.02717975568918,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 146566.73169018,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 221971,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 90.68268136336472,
+                "historicalTotalParses": 8795,
+                "lockedIn": true,
+                "rankPercent": 90.68268136336472,
+                "rankTotalParses": 8795,
+                "report": {
+                  "code": "RBkGhg8HWLn9C7VX",
+                  "fightID": 26,
+                  "startTime": 1783687259780
+                },
+                "spec": "Demonology",
+                "startTime": 1783712258438,
+                "todayPercent": 85.73065019784877,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 145817.80199609,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 260409,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 98.86745821890733,
+                "historicalTotalParses": 23170,
+                "lockedIn": true,
+                "rankPercent": 98.86745821890733,
+                "rankTotalParses": 23170,
+                "report": {
+                  "code": "d8V1pG6HQy2tBnqZ",
+                  "fightID": 15,
+                  "startTime": 1779887763715
+                },
+                "spec": "Demonology",
+                "startTime": 1779890858378,
+                "todayPercent": 97.44441031575178,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 141888.39756741,
+                "bestSpec": "Demonology",
+                "bracketData": 286,
+                "class": 10,
+                "duration": 272960,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 99.12316881899709,
+                "historicalTotalParses": 18004,
+                "lockedIn": true,
+                "rankPercent": 99.12316881899709,
+                "rankTotalParses": 18004,
+                "report": {
+                  "code": "y1TYatjMD486gVdL",
+                  "fightID": 194,
+                  "startTime": 1778837472276
+                },
+                "spec": "Demonology",
+                "startTime": 1778883429244,
+                "todayPercent": 95.76583657756068,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 131612.80198806,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 234198,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 75.73921106851168,
+                "historicalTotalParses": 2990,
+                "lockedIn": true,
+                "rankPercent": 75.73921106851168,
+                "rankTotalParses": 2990,
+                "report": {
+                  "code": "FBXa7ThYNzZmVynt",
+                  "fightID": 28,
+                  "startTime": 1782111903171
+                },
+                "spec": "Demonology",
+                "startTime": 1782125339479,
+                "todayPercent": 65.07204296580848,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 108920.86435976,
+                "bestSpec": "Destruction",
+                "bracketData": 281,
+                "class": 10,
+                "duration": 301356,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 729461,
+                  "name": "G A M B I T"
+                },
+                "historicalPercent": 70.41697522330314,
+                "historicalTotalParses": 2776,
+                "lockedIn": true,
+                "rankPercent": 70.41697522330314,
+                "rankTotalParses": 2776,
+                "report": {
+                  "code": "1YqAKXbdNcyg824a",
+                  "fightID": 3,
+                  "startTime": 1777828139833
+                },
+                "spec": "Destruction",
+                "startTime": 1777831349766,
+                "todayPercent": 38.850651154721376,
+                "todayTotalParses": 6038
+              }
+            ],
+            "totalKills": 11,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import pytest
+
+from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
+from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
+from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, SpellProfile
+
+
+def _log(duration_s: float, cast_timeline: dict[int, tuple[float, ...]]) -> PlayerLog:
+    fight = FightRef(
+        report_code="ABCDEFGHIJKLMNOP",
+        fight_id=1,
+        encounter_id=3179,
+        boss_name="Fallen-King Salhadaar",
+        difficulty=5,
+        duration_s=duration_s,
+        kill=True,
+    )
+    build = PlayerBuild(
+        character_name="Ref",
+        server="Azralon",
+        class_name="Warlock",
+        spec_name="Demonology",
+        role="dps",
+        item_level=283.0,
+        talent_hash=None,
+        tier_pieces=None,
+    )
+    return PlayerLog(
+        fight=fight, build=build, dps=100000.0, percentile=50.0, cast_timeline=cast_timeline
+    )
+
+
+def test_empty_reference_logs_returns_empty_profile() -> None:
+    profile, n_positional = build_cd_reference_profile([], target_duration_s=300.0)
+    assert profile == {}
+    assert n_positional == 0
+
+
+def test_presence_counts_across_the_whole_sanity_band_pool() -> None:
+    logs = [
+        _log(300.0, {1: (10.0,)}),
+        _log(300.0, {1: (10.0,)}),
+        _log(300.0, {}),
+        _log(300.0, {}),
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].presence == 0.5
+
+
+def test_n_usages_median_at_matching_duration_equals_raw_count_median() -> None:
+    """When every positional log's duration equals target_duration_s, the
+    rate/minute normalization is a no-op — this is the easiest case to
+    hand-verify: median(2, 4) usages -> 3.0.
+    """
+    logs = [_log(300.0, {1: (10.0, 40.0)}), _log(300.0, {1: (10.0, 40.0, 70.0, 100.0)})]
+    profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert n_positional == 2
+    assert profile[1].n_usages_median == pytest.approx(3.0)
+
+
+def test_n_usages_median_pads_zero_for_positional_logs_that_never_cast_it() -> None:
+    """A positional log that never cast the spell still contributes an
+    explicit rate of 0.0 to the median — omitting it would silently bias
+    the median upward.
+    """
+    logs = [
+        _log(300.0, {1: (10.0, 40.0)}),  # 2 casts
+        _log(300.0, {1: (10.0, 40.0, 70.0, 100.0)}),  # 4 casts
+        _log(300.0, {}),  # 0 casts of spell 1
+    ]
+    profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert n_positional == 3
+    assert profile[1].n_usages_median == pytest.approx(2.0)  # median(0, 2, 4) == 2
+
+
+def test_ref_times_are_per_slot_medians_from_positional_band_only() -> None:
+    logs = [
+        _log(300.0, {1: (10.0, 40.0)}),
+        _log(300.0, {1: (12.0, 44.0)}),
+        _log(600.0, {1: (500.0, 550.0)}),  # far outside ±12% positional band — excluded
+    ]
+    profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert n_positional == 2
+    assert profile[1].ref_times == (11.0, 42.0)
+
+
+def test_out_of_positional_band_logs_still_count_toward_presence() -> None:
+    logs = [_log(300.0, {1: (10.0,)}), _log(600.0, {1: (500.0,)})]
+    profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].presence == 1.0  # both logs counted for presence
+    assert n_positional == 1  # only the near-duration one counts for timing/count
+
+
+def test_zero_positional_logs_yields_zero_n_usages_median() -> None:
+    logs = [_log(600.0, {1: (10.0,)})]  # outside the positional band of target
+    profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert n_positional == 0
+    assert profile[1].n_usages_median == 0.0
+    assert profile[1].ref_times == ()
+
+
+# -- discover_eligible_spell_ids ------------------------------------------------
+
+
+def test_low_presence_spell_is_excluded() -> None:
+    profile = {
+        1: SpellProfile(spell_id=1, presence=0.5, ref_times=(10.0, 200.0), n_usages_median=2.0)
+    }
+    assert discover_eligible_spell_ids(profile) == []
+
+
+def test_blacklisted_spell_is_excluded_even_with_high_presence() -> None:
+    blacklisted_id = next(iter(MAJOR_CD_BLACKLIST))
+    profile = {
+        blacklisted_id: SpellProfile(
+            spell_id=blacklisted_id, presence=1.0, ref_times=(10.0, 200.0), n_usages_median=2.0
+        )
+    }
+    assert discover_eligible_spell_ids(profile) == []
+
+
+def test_eligible_spells_ordered_by_descending_presence() -> None:
+    profile = {
+        1: SpellProfile(spell_id=1, presence=0.8, ref_times=(10.0, 200.0), n_usages_median=2.0),
+        2: SpellProfile(spell_id=2, presence=1.0, ref_times=(10.0, 200.0), n_usages_median=2.0),
+        3: SpellProfile(spell_id=3, presence=0.9, ref_times=(10.0, 200.0), n_usages_median=2.0),
+    }
+    assert discover_eligible_spell_ids(profile) == [2, 3, 1]
+
+
+def test_ties_broken_by_ascending_spell_id_deterministically() -> None:
+    profile = {
+        20: SpellProfile(spell_id=20, presence=1.0, ref_times=(10.0, 200.0), n_usages_median=2.0),
+        10: SpellProfile(spell_id=10, presence=1.0, ref_times=(10.0, 200.0), n_usages_median=2.0),
+    }
+    assert discover_eligible_spell_ids(profile) == [10, 20]

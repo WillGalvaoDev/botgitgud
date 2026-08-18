@@ -1,0 +1,74 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "470",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "暗影箭",
+      "serverRegion": "CN",
+      "serverSlug": "死亡之翼"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 99.7871172595829,
+            "bestAmount": 174452.93804093,
+            "difficulty": 5,
+            "fastestKill": 285156,
+            "medianPerformance": 99.7871172595829,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 174452.93804093,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 285156,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 99.7871172595829,
+                "historicalTotalParses": 7578,
+                "lockedIn": true,
+                "rankPercent": 99.7871172595829,
+                "rankTotalParses": 7578,
+                "report": {
+                  "code": "D9Tm3zF8CyVLQwKB",
+                  "fightID": 4,
+                  "startTime": 1783144095948
+                },
+                "spec": "Demonology",
+                "startTime": 1783150630509,
+                "todayPercent": 99.31239300843174,
+                "todayTotalParses": 11175
+              }
+            ],
+            "totalKills": 1,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

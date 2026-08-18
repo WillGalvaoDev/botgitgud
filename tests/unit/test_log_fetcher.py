@@ -330,6 +330,32 @@ def test_fetch_many_reports_cache_hits_and_misses(tmp_path: Path) -> None:
     assert results[1].build.character_name == "Other"
 
 
+def test_fetch_many_tolerates_one_failed_ref_without_aborting_batch(tmp_path: Path) -> None:
+    """T1.6: a reference-cohort fetch expects some fraction of ranked logs
+    to 404 — one failing ref must not lose the rest of the batch.
+    """
+    responses = {
+        "meta": [
+            _meta_response(no_player=True),
+            _meta_response(player_name="Other", player_id=7),
+        ],
+        "events": [_events_response([])],
+        "percentile": [_percentile_response(None, "ABCDEFGHIJKLMNOP", 1)],
+    }
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    refs = [
+        LogRequest("ABCDEFGHIJKLMNOP", 1, "Nobody"),
+        LogRequest("ABCDEFGHIJKLMNOP", 1, "Other"),
+    ]
+    # max_workers=1 makes the two submissions run strictly in order, so the
+    # first "meta" response deterministically answers the first ref.
+    results = fetcher.fetch_many(refs, max_workers=1)
+
+    assert len(results) == 1
+    assert results[0].build.character_name == "Other"
+
+
 def test_fetch_many_all_cache_hits_makes_zero_new_requests(tmp_path: Path) -> None:
     fetcher, transport, _store = _make_fetcher(tmp_path, _default_responses())
     fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
