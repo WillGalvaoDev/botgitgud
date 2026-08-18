@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import io
 import re
 
 import discord
@@ -34,7 +35,8 @@ from botgitgud.errors import (
     PlayerNotFound,
     ScopeRejected,
 )
-from botgitgud.report.text import chunk_report_for_discord, render_report
+from botgitgud.report.html_report import render_html_report
+from botgitgud.report.text import chunk_report_for_discord, render_header_and_top3
 
 log = structlog.get_logger(__name__)
 
@@ -187,18 +189,23 @@ def build_bot(deps: Deps) -> commands.Bot:
             await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
             return
 
-        report_text = render_report(
+        # T3.4: "Discord passa a enviar: cabeçalho + Top 3 em texto, e o
+        # HTML como anexo" — the full text report is no longer posted
+        # inline (it stopped fitting in Discord's own message limits once
+        # every T3.1-T3.3 section was added).
+        summary_text = render_header_and_top3(result.header, result.top_actions)
+        html_report = render_html_report(
             result.header,
             result.comparisons,
-            result.manifest,
-            result.build_divergence,
-            result.performance,
-            result.dps_gap,
-            result.top_actions,
+            manifest=result.manifest,
+            build_divergence=result.build_divergence,
+            performance=result.performance,
+            dps_gap=result.dps_gap,
+            top_actions=result.top_actions,
+            duration_s=result.header.duration_max_s,
         )
-        chunk_max = deps.settings.discord_chunk_max_len
-        for chunk in chunk_report_for_discord(report_text, max_len=chunk_max):
-            await ctx.send(f"```markdown\n{chunk}\n```")
+        html_file = discord.File(io.BytesIO(html_report.encode("utf-8")), filename="relatorio.html")
+        await ctx.send(f"```markdown\n{summary_text}\n```", file=html_file)
 
     @bot.command(name="status")
     async def cmd_status(ctx: commands.Context) -> None:

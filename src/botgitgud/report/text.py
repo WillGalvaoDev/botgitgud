@@ -207,6 +207,17 @@ def render_report(
     return "\n".join(lines)
 
 
+def render_header_and_top3(header: ReportHeader, top_actions: Sequence[Finding]) -> str:
+    """T3.4: "Discord passa a enviar: cabeçalho + Top 3 em texto, e o HTML
+    como anexo" — the short text message that accompanies the HTML
+    attachment (report/html_report.py), instead of the full report.
+    """
+    lines = list(_render_header(header))
+    lines.extend(render_top_actions_section(top_actions))
+    lines.append(_SEPARATOR)
+    return "\n".join(lines)
+
+
 def chunk_report_for_discord(text: str, max_len: int = 1900) -> list[str]:
     """Break `text` on line boundaries into chunks of at most `max_len`
     characters, never mid-line (achado 4.8 — legacy's blind 1900-char slice
