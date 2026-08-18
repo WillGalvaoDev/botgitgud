@@ -178,3 +178,22 @@
   src/botgitgud/analysis/cohort.py bot.py` — vazio, checado por teste dedicado.
 - **Impacto:** nenhum na metodologia. Quando a T1.3/T1.4 criar `ingest/rankings.py`, a lógica de
   `cohort.py` deve ser movida/reaproveitada para lá; nenhuma reescrita de lógica, só de localização.
+
+## D-10 — Pseudocódigo de `Settings` na T1.1 tem valores de coorte desatualizados
+
+- **Tarefa:** T1.1
+- **Documento diz:** o snippet de `Settings` na T1.1 lista `cohort_min_hard: int = 10`,
+  `cohort_min_warn: int = 30`, `duration_tolerance_pct: float = 0.07`,
+  `duration_tolerance_floor_s: float = 15.0`.
+- **Realidade:** esses são os valores do **rascunho original** da T0.8, antes da correção baseada
+  em medição real contra a API (`docs/schema_confirmado.md` §8). A própria seção T0.8 — mais
+  adiante no mesmo documento — substitui esses valores explicitamente por
+  `SANITY_BAND_PCT=0.35`, `POSITIONAL_BAND_PCT=0.12`, `COHORT_MIN_HARD=8`, `COHORT_MIN_WARN=20`,
+  já implementados e testados em `src/botgitgud/analysis/cohort.py`. O snippet da T1.1 não foi
+  atualizado para refletir essa revisão.
+- **Ação tomada:** aplicado o alternativo óbvio — `Settings` usa os valores corretos (os da T0.8,
+  já em produção), não os do rascunho da T1.1. Reverter para os valores antigos quebraria a
+  regressão medida da T0.8 (o log de fixture do projeto só tem coorte suficiente com a banda de
+  ±35%, não ±7%).
+- **Impacto:** nenhum no comportamento já validado. `Settings` documenta a origem correta no
+  próprio docstring do módulo.

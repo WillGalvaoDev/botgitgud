@@ -13,6 +13,7 @@ posteriores). A saída mecânica deste script vai para docs/schema_probe_output.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -278,6 +279,7 @@ def main() -> int:
     out_path.write_text(md, encoding="utf-8")
 
     n_missing = sum(1 for r in results if r.verdict == "missing")
+    lines: list[str] = []
     for r in results:
         mark = {
             "ok": "OK",
@@ -285,12 +287,17 @@ def main() -> int:
             "renamed": "RENAMED",
             "json_scalar_live_verified": "LIVE",
         }[r.verdict]
-        print(f"[{mark:8s}] {r.check.path}")
+        lines.append(f"[{mark:8s}] {r.check.path}")
         if r.verdict == "missing":
-            print(f"           -> {r.detail}")
+            lines.append(f"           -> {r.detail}")
 
-    print(f"\n{len(results)} campos verificados, {n_missing} ausentes.")
-    print(f"Relatório escrito em {out_path}")
+    lines.append(f"\n{len(results)} campos verificados, {n_missing} ausentes.")
+    lines.append(f"Relatório escrito em {out_path}")
+    # T1.1 (achado 4.9): nenhuma chamada de impressão bruta em src/ — esta é
+    # a saída deliberada de um utilitário de CLI (não logging de pipeline),
+    # então escreve direto em stdout em vez de rotear por structlog (que
+    # produziria linhas estruturadas menos legíveis para este propósito).
+    sys.stdout.write("\n".join(lines) + "\n")
     return 1 if n_missing else 0
 
 

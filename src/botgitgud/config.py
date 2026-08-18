@@ -1,0 +1,81 @@
+"""T1.1 — typed configuration, the single source of truth for every
+constant introduced across Fases 0-3.
+
+See docs/desvios.md D-10: the T1.1 pseudocode in docs/implementacao.md
+lists stale cohort defaults (cohort_min_hard=10, cohort_min_warn=30,
+duration_tolerance_pct=0.07) that predate the T0.8 correction — T0.8's own
+section explicitly revises these after measuring the real API
+(docs/schema_confirmado.md §8) and is chronologically later in the same
+document. The values below match what T0.6/T0.8 actually implemented and
+tested, not the earlier draft.
+
+Existing Fase 0 modules (analysis/*, wcl/client.py, blizzard/client.py)
+keep their own local constants for now — rewiring every call site to read
+from Settings is part of T1.6's restructuring, not this task. This class
+exists so that migration has one place to land.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # -- credentials (SecretStr: str(settings.x) never leaks the value) ---
+    discord_token: SecretStr
+    wcl_client_id: SecretStr
+    wcl_client_secret: SecretStr
+    blizzard_client_id: SecretStr
+    blizzard_client_secret: SecretStr
+
+    # -- general ------------------------------------------------------------
+    data_dir: Path = Path("data")
+    log_level: str = "INFO"
+    log_json: bool = False
+    max_workers: int = 4
+
+    # -- T0.3: WclClient ------------------------------------------------------
+    wcl_connect_timeout_s: float = 5.0
+    wcl_read_timeout_s: float = 30.0
+    wcl_pool_timeout_s: float = 60.0
+    wcl_max_attempts: int = 4
+    wcl_backoff_base_s: float = 1.0
+    wcl_backoff_factor: float = 2.0
+    wcl_rate_limit_cache_ttl_s: float = 60.0
+    api_points_floor: float = 1000.0
+
+    # -- T0.4: BlizzardClient -------------------------------------------------
+    blizzard_connect_timeout_s: float = 5.0
+    blizzard_read_timeout_s: float = 10.0
+    blizzard_max_attempts: int = 3
+    blizzard_backoff_base_s: float = 1.0
+    blizzard_backoff_factor: float = 2.0
+
+    # -- T0.5: alignment ------------------------------------------------------
+    gap_penalty_s: float = 25.0
+
+    # -- T0.6: cadence classification ------------------------------------------
+    major_threshold_s: float = 90.0
+    min_eligible_interval_s: float = 15.0
+    min_eligible_presence: float = 0.70
+    single_use_n_threshold: float = 1.5
+
+    # -- T0.7: report rendering (pre-T2.3 absolute delta thresholds) ----------
+    green_threshold_s: float = 10.0
+    yellow_threshold_s: float = 25.0
+    discord_chunk_max_len: int = 1900
+
+    # -- T0.8: cohort duration bands and size thresholds -----------------------
+    # Values as measured/revised against the live API (see module docstring).
+    sanity_band_pct: float = 0.35
+    positional_band_pct: float = 0.12
+    positional_min_n: int = 8
+    cohort_min_hard: int = 8
+    cohort_min_warn: int = 20
+    cohort_max: int = 100
+    max_ranking_pages: int = 10
