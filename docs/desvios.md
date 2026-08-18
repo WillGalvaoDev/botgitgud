@@ -197,3 +197,18 @@
   ±35%, não ±7%).
 - **Impacto:** nenhum no comportamento já validado. `Settings` documenta a origem correta no
   próprio docstring do módulo.
+
+## D-11 — `Cohort.criteria: CohortCriteria` precisa de um tipo que só é especificado na T1.5
+
+- **Tarefa:** T1.2
+- **Documento diz:** `Cohort` (T1.2) tem um campo `criteria: CohortCriteria`, mas `CohortCriteria`
+  só é definida no pseudocódigo da T1.5 — que depende da T1.3, posterior à T1.2 na ordem de tarefas.
+- **Realidade:** com `from __future__ import annotations`, o Python não reclamaria em tempo de
+  execução (anotações viram strings, resolvidas preguiçosamente), mas `pyright` — cujo critério de
+  aceite da T1.2 é literalmente "sem erros" — não resolveria a referência a um nome inexistente.
+- **Ação tomada:** aplicado o mesmo padrão dos gaps anteriores (D-8, D-9) — `CohortCriteria`
+  (incluindo `cohort_id()`) é definida agora em `src/botgitgud/domain/models.py`, junto com `Cohort`,
+  que dela depende estruturalmente. A T1.5 reaproveita esta classe em vez de redefini-la; o trabalho
+  real da T1.5 (manifesto de execução, wiring do `cohort_id` no relatório) permanece intacto.
+- **Impacto:** nenhum na metodologia. `CohortCriteria` já testada nesta tarefa (determinismo do
+  hash); os testes de wiring no relatório (critério de aceite específico da T1.5) ficam para lá.
