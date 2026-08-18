@@ -11,7 +11,176 @@
 | T0.6 | ✅ FEITA | 9d26891 | `src/botgitgud/analysis/cadence.py` (`SpellCadence`, `compute_cadence`, `classify_cd_type`, `is_eligible`) + `src/botgitgud/domain/blacklist.py` (blacklist estática por ID, só `22812` Barkskin migrado). Nenhum ID real de poção/pedra apareceu nas fixtures gravadas (esses são contadores separados `potionUse`/`healthstoneUse`, não spell IDs rastreáveis) — achado documentado no próprio módulo. Prova empírica do bug do filtro léxico encontrada no `spells.json` real do projeto: "Festering Scythe" (458128) e "Festering Strike" (85948) conteriam "ring" (fes** TERING**) e seriam falsamente bloqueadas pelo filtro antigo. 17 testes cobrindo os 5 critérios do documento + branches de classificação/elegibilidade. Corrigido um bug meu (`zip(seq, seq[1:], strict=True)` sempre falha por construção) antes do primeiro commit. 57/57 testes do projeto verdes. Ainda não conectado ao pipeline (T0.7). |
 | T0.7 | ✅ FEITA | 0e3c254 | `src/botgitgud/analysis/comparison.py` (`SpellComparison`, `compare_spell_usage`) + `src/botgitgud/report/text.py` (`render_report`, `chunk_report_for_discord`). `bot.py` (raiz) totalmente religado: `build_cd_reference_profile` simplificado (só dados brutos), `discover_eligible_spell_ids`/`compare_all_spells` substituem `discover_clean_major_cds`/`compare_major_cds_clean`, `LOCAL_SPELL_DB`/`get_spell_data` substituídos por `SpellCatalog`+`BlizzardClient`. Novo: DPS+percentil do jogador (achado 3.11, extraído do mesmo `table(Summary)` sem query extra + nova query `characterData.character.encounterRankings`), seção "⛔ USOS PERDIDOS" no topo, habilidades com 0 usos do jogador aparecem no relatório, "Uso extra" sem `delta=0.0` mascarado, "Parse méd" removido (era sempre 99 fabricado) substituído por DPS mediano real da coorte, chunking por linha. Validado ponta a ponta contra a API real (relatório real com USOS PERDIDOS, DPS 108.297/percentil 57, DPS mediano 76.853). 2 golden tests novos (`test_new_pipeline_output.py`) com cassetes httpx dedicados (`httpx_cassette_transport.py`, já que WclClient/BlizzardClient usam httpx, não requests) provam que o novo snapshot difere do legado e contém USOS PERDIDOS. 3 bugs reais encontrados e corrigidos durante a integração: (1) `httpx.Timeout` do `BlizzardClient` faltava write/pool — nenhum teste tocava o construtor real antes; (2) meu teste manual E2E rodou fora de isolamento e contaminou o `spells.json` rastreado (restaurado via git, causa raiz documentada); (3) ordem do relatório não-determinística por depender da ordem de conclusão de threads — corrigido com `sorted(profile.items())`, verificado estável em 8 execuções consecutivas. 83/83 testes verdes. |
 | T0.8 | ✅ FEITA | 7193358 | `src/botgitgud/analysis/cohort.py` (bandas de sanidade ±35%/posicional ±12%, limiares `COHORT_MIN_HARD=8`/`COHORT_MIN_WARN=20`, normalização por taxa/minuto). `bot.py`: filtro de duração absoluto (±30s) trocado pela banda de sanidade relativa; `InsufficientCohort` levantado e tratado com mensagem específica no Discord; `build_cd_reference_profile` agora recebe `target_duration_sec` e separa presença (pool ±35%) de timing/contagem de usos (subconjunto posicional ±12%, com contagens normalizadas por taxa); banners de aviso no relatório (amostra pequena / baixa confiança posicional). Verificado contra a distribuição real de durações do encontro 3179 (26 rankings): ±35% dá n=10 (não gera InsufficientCohort, critério de regressão da tarefa), ±12% dá n=3 (banner de baixa confiança). D-9 documentado (o grep do critério de aceite aponta para `src/botgitgud/ingest/rankings.py`, que só existe na Fase 1 — verificado contra os arquivos reais). Cassetes e snapshots golden regravados para refletir a coorte maior (10 refs em vez de 2); estabilidade confirmada em 5 execuções consecutivas. 93/93 testes verdes. |
-| T0.9 | ✅ FEITA | (pendente) | `src/botgitgud/domain/specs.py` (`SpecId`, `SpecSupport`, `classify_spec`, `rejection_message`). Allowlist de 25 specs DPS + listas de tanks/healers/Augmentation derivadas do roster real de specs de cada classe (39 specs no total = 25+6+7+1, contagem batida). Convenção de nomenclatura sem espaço (`DemonHunter`, `BeastMastery`) confirmada ao vivo contra a API real (rankings E `playerDetails[].type` de um relatório real de Demon Hunter) — registrado como verificação em `docs/schema_confirmado.md` seria o próximo passo, mas os testes já fixam o comportamento. `bot.py`: `process_analysis` extraído para `run_analysis()` (função de módulo, testável sem `ctx` de Discord — necessário para o teste de custo); portão de escopo roda logo após identificar a spec, antes de qualquer query de ranking. 9 testes em `test_specs.py` (todos os critérios do documento) + 4 testes de custo em `test_bot_scope_gate.py` com transporte que falha o teste em qualquer requisição real, confirmando que tank/healer/Augmentation/spec-desconhecida nunca disparam uma chamada de API. 106/106 testes do projeto verdes. **Fase 0 completa.** |
+| T0.9 | ✅ FEITA | 0e39d3d | `src/botgitgud/domain/specs.py` (`SpecId`, `SpecSupport`, `classify_spec`, `rejection_message`). Allowlist de 25 specs DPS + listas de tanks/healers/Augmentation derivadas do roster real de specs de cada classe (39 specs no total = 25+6+7+1, contagem batida). Convenção de nomenclatura sem espaço (`DemonHunter`, `BeastMastery`) confirmada ao vivo contra a API real (rankings E `playerDetails[].type` de um relatório real de Demon Hunter) — registrado como verificação em `docs/schema_confirmado.md` seria o próximo passo, mas os testes já fixam o comportamento. `bot.py`: `process_analysis` extraído para `run_analysis()` (função de módulo, testável sem `ctx` de Discord — necessário para o teste de custo); portão de escopo roda logo após identificar a spec, antes de qualquer query de ranking. 9 testes em `test_specs.py` (todos os critérios do documento) + 4 testes de custo em `test_bot_scope_gate.py` com transporte que falha o teste em qualquer requisição real, confirmando que tank/healer/Augmentation/spec-desconhecida nunca disparam uma chamada de API. 106/106 testes do projeto verdes. **Fase 0 completa.** |
+
+## Portão de saída da Fase 0
+
+Verificado em 2026-08-17, após a T0.9:
+
+- [x] Todas as tarefas T0.0–T0.9 com status ✅ (ver tabela acima).
+- [x] `pytest --cov=src -q` — cobertura em `src/botgitgud/analysis/`: `alignment.py` 100%, `cadence.py` 100%, `comparison.py` 100%, `cohort.py` 90%. Total do projeto: 90% (797 statements, 80 missed). Muito acima do mínimo de 70%.
+- [x] Execução real de `!analisar` (via `run_analysis()`, chamado a partir de um runner isolado — `tests/fixtures/new_bot_runner.py`) contra o log de fixture (`PtfBbQKRY9d6zAMC` fight 1, Zarad). Relatório completo abaixo — desta vez a coorte cresceu para n=26 (22 na banda posicional), grande o suficiente para não disparar nenhum banner de amostra pequena:
+
+```markdown
+==========================================
+GITGUD MAJOR CD ANALYSIS
+==========================================
+**Player:** Zarad
+**Boss:** Fallen-King Salhadaar
+**Spec:** Demonology Warlock
+**DPS:** 108,297 (percentil: 57)
+**Referência:** 22 logs | DPS mediano: 166,534 | Duração: 3m44s - 6m24s
+==========================================
+
+⛔ **USOS PERDIDOS**
+------------------------------------------
+**Call Dreadstalkers**: 1 uso(s) perdido(s) — esperado(s) aos 351.6s
+**Implosion**: 5 uso(s) perdido(s) — esperado(s) aos 62.2s, 280.1s, 313.1s, 330.1s, 348.3s
+**Spell #434506**: 2 uso(s) perdido(s) — esperado(s) aos 247.0s, 337.5s
+**Spell #434635**: 3 uso(s) perdido(s) — esperado(s) aos 185.8s, 294.3s, 353.0s
+**Dark Pact**: 4 uso(s) perdido(s) — esperado(s) aos 163.2s, 247.9s, 274.9s, 295.8s
+**Grimoire: Imp Lord**: 1 uso(s) perdido(s) — esperado(s) aos 2.4s
+**Burning Rush**: 5 uso(s) perdido(s) — esperado(s) aos 226.3s, 245.7s, 246.4s, 247.4s, 339.1s
+
+🔥 **OFFENSIVE MAJOR CDS**
+------------------------------------------
+
+**Spell #1236616** (Tipo: MAJOR | Pres: 90%)
+Usos: 2 (coorte: 1.9)
+------------------------------
+Uso #1 | Player: 4.7s | Ideal: 3.4s | Delta: +1.3s 🟢
+Uso #2 | Player: 319.9s | Ideal: 308.9s | Delta: +11.0s 🟡
+
+**Grimoire: Imp Lord** (Tipo: MAJOR | Pres: 85%)
+Usos: 2 (coorte: 3.0)
+------------------------------
+Uso #1 | Esperado ~2.4s | NÃO USADO ⛔
+Uso #2 | Player: 126.0s | Ideal: 124.3s | Delta: +1.7s 🟢
+Uso #3 | Player: 249.3s | Ideal: 247.6s | Delta: +1.7s 🟢
+
+**Spell #1250508** (Tipo: MAJOR | Pres: 83%)
+Usos: 3 (coorte: 2.9)
+------------------------------
+Uso #1 | Player: 4.7s | Ideal: 3.6s | Delta: +1.1s 🟢
+Uso #2 | Player: 131.3s | Ideal: 129.1s | Delta: +2.2s 🟢
+Uso #3 | Player: 256.2s | Ideal: 252.5s | Delta: +3.7s 🟢
+
+⚡ **MINOR CDS / BURST UTILITIES**
+------------------------------------------
+
+**Call Dreadstalkers** (Tipo: MINOR | Pres: 100%)
+Usos: 17 (coorte: 16.9)
+------------------------------
+Uso #1 | Player: 1.3s | Ideal: 0.8s | Delta: +0.5s 🟢
+Uso #2 | Player: 22.2s | Ideal: 21.4s | Delta: +0.8s 🟢
+Uso #3 | Player: 43.1s | Ideal: 42.7s | Delta: +0.4s 🟢
+Uso #4 | Player: 63.2s | Ideal: 63.0s | Delta: +0.2s 🟢
+Uso #5 | Player: 83.7s | Ideal: 84.0s | Delta: -0.2s 🟢
+Uso #6 | Player: 105.1s | Ideal: 105.0s | Delta: +0.1s 🟢
+Uso #7 | Player: 128.6s | Ideal: 126.1s | Delta: +2.5s 🟢
+Uso #8 | Player: 149.7s | Ideal: 146.8s | Delta: +2.9s 🟢
+Uso #9 | Player: 170.0s | Ideal: 167.3s | Delta: +2.7s 🟢
+Uso #10 | Player: 190.8s | Ideal: 188.5s | Delta: +2.3s 🟢
+Uso #11 | Player: 212.1s | Ideal: 209.2s | Delta: +2.9s 🟢
+Uso #12 | Player: 233.3s | Ideal: 230.2s | Delta: +3.1s 🟢
+Uso #13 | Player: 253.4s | Ideal: 251.3s | Delta: +2.1s 🟢
+Uso #14 | Player: 274.3s | Ideal: 272.1s | Delta: +2.2s 🟢
+Uso #15 | Player: 294.4s | Ideal: 292.3s | Delta: +2.1s 🟢
+Uso #16 | Player: 314.5s | Ideal: 313.2s | Delta: +1.3s 🟢
+Uso #17 | Player: 335.0s | Ideal: 334.2s | Delta: +0.8s 🟢
+Uso #18 | Esperado ~351.6s | NÃO USADO ⛔
+
+**Implosion** (Tipo: MINOR | Pres: 100%)
+Usos: 17 (coorte: 17.9)
+------------------------------
+Uso #1 | Player: 10.1s | Ideal: 7.5s | Delta: +2.6s 🟢
+Uso #2 | Player: 27.6s | Ideal: 23.0s | Delta: +4.6s 🟢
+Uso #3 | Player: 44.5s | Ideal: 40.9s | Delta: +3.6s 🟢
+Uso #4 | Esperado ~62.2s | NÃO USADO ⛔
+Uso #5 | Player: 78.0s | Ideal: 79.1s | Delta: -1.1s 🟢
+Uso #6 | Player: 94.3s | Ideal: 99.3s | Delta: -5.0s 🟢
+Uso #7 | Player: 121.9s | Ideal: 115.8s | Delta: +6.1s 🟢
+Uso #8 | Player: 138.0s | Ideal: 139.4s | Delta: -1.4s 🟢
+Uso #9 | Player: 153.6s | Ideal: 155.6s | Delta: -2.0s 🟢
+Uso #10 | Player: 176.4s | Ideal: 180.2s | Delta: -3.8s 🟢
+Uso #11 | Player: 200.7s | Ideal: 197.5s | Delta: +3.2s 🟢
+Uso #12 | Player: 216.1s | Ideal: 215.3s | Delta: +0.8s 🟢
+Uso #13 | Player: 234.6s | Ideal: 236.6s | Delta: -2.0s 🟢
+Uso #14 | Player: 260.7s | Ideal: 262.4s | Delta: -1.7s 🟢
+Uso #15 | Esperado ~280.1s | NÃO USADO ⛔
+Uso #16 | Player: 280.8s | Ideal: 280.6s | Delta: +0.2s 🟢
+Uso #17 | Player: 305.0s | Ideal: 298.4s | Delta: +6.6s 🟢
+Uso #18 | Esperado ~313.1s | NÃO USADO ⛔
+Uso #19 | Player: 323.4s | Ideal: 320.3s | Delta: +3.1s 🟢
+Uso #20 | Esperado ~330.1s | NÃO USADO ⛔
+Uso #21 | Player: 342.9s | Ideal: 339.3s | Delta: +3.6s 🟢
+Uso #22 | Esperado ~348.3s | NÃO USADO ⛔
+
+**Summon Demonic Tyrant** (Tipo: MINOR | Pres: 100%)
+Usos: 6 (coorte: 6.0)
+------------------------------
+Uso #1 | Player: 3.6s | Ideal: 3.7s | Delta: -0.1s 🟢
+Uso #2 | Player: 65.9s | Ideal: 65.6s | Delta: +0.3s 🟢
+Uso #3 | Player: 131.3s | Ideal: 128.8s | Delta: +2.6s 🟢
+Uso #4 | Player: 193.4s | Ideal: 191.1s | Delta: +2.3s 🟢
+Uso #5 | Player: 256.1s | Ideal: 253.2s | Delta: +2.9s 🟢
+Uso #6 | Player: 318.4s | Ideal: 314.4s | Delta: +4.0s 🟢
+
+**Spell #434506** (Tipo: MINOR | Pres: 100%)
+Usos: 8 (coorte: 9.1)
+------------------------------
+Uso #1 | Player: 26.2s | Ideal: 23.5s | Delta: +2.7s 🟢
+Uso #2 | Player: 74.1s | Ideal: 61.2s | Delta: +12.8s 🟡
+Uso #3 | Player: 115.8s | Ideal: 96.0s | Delta: +19.8s 🟡
+Uso #4 | Player: 140.2s | Ideal: 137.6s | Delta: +2.6s 🟢
+Uso #5 | Player: 190.4s | Ideal: 171.9s | Delta: +18.5s 🟡
+Uso #6 | Player: 226.7s | Ideal: 209.5s | Delta: +17.2s 🟡
+Uso #7 | Esperado ~247.0s | NÃO USADO ⛔
+Uso #8 | Player: 267.5s | Ideal: 282.1s | Delta: -14.6s 🟡
+Uso #9 | Player: 299.7s | Ideal: 319.5s | Delta: -19.8s 🟡
+Uso #10 | Esperado ~337.5s | NÃO USADO ⛔
+
+**Spell #434635** (Tipo: MINOR | Pres: 100%)
+Usos: 7 (coorte: 8.9)
+------------------------------
+Uso #1 | Player: 36.4s | Ideal: 32.8s | Delta: +3.6s 🟢
+Uso #2 | Player: 76.8s | Ideal: 72.8s | Delta: +4.0s 🟢
+Uso #3 | Player: 117.1s | Ideal: 110.7s | Delta: +6.4s 🟢
+Uso #4 | Player: 152.1s | Ideal: 144.5s | Delta: +7.6s 🟢
+Uso #5 | Esperado ~185.8s | NÃO USADO ⛔
+Uso #6 | Player: 241.2s | Ideal: 218.4s | Delta: +22.8s 🟡
+Uso #7 | Player: 274.3s | Ideal: 261.6s | Delta: +12.7s 🟡
+Uso #8 | Esperado ~294.3s | NÃO USADO ⛔
+Uso #9 | Player: 312.9s | Ideal: 329.4s | Delta: -16.5s 🟡
+Uso #10 | Esperado ~353.0s | NÃO USADO ⛔
+
+**Dark Pact** (Tipo: MINOR | Pres: 87%)
+Usos: 2 (coorte: 2.0)
+------------------------------
+Uso #1 | Player: 31.3s | Uso extra
+Uso #2 | Player: 99.5s | Ideal: 81.6s | Delta: +17.9s 🟡
+Uso #3 | Esperado ~163.2s | NÃO USADO ⛔
+Uso #4 | Esperado ~247.9s | NÃO USADO ⛔
+Uso #5 | Esperado ~274.9s | NÃO USADO ⛔
+Uso #6 | Esperado ~295.8s | NÃO USADO ⛔
+
+**Burning Rush** (Tipo: MINOR | Pres: 81%)
+Usos: 2 (coorte: 2.1)
+------------------------------
+Uso #1 | Player: 30.8s | Uso extra
+Uso #2 | Player: 101.8s | Ideal: 106.2s | Delta: -4.4s 🟢
+Uso #3 | Esperado ~226.3s | NÃO USADO ⛔
+Uso #4 | Esperado ~245.7s | NÃO USADO ⛔
+Uso #5 | Esperado ~246.4s | NÃO USADO ⛔
+Uso #6 | Esperado ~247.4s | NÃO USADO ⛔
+Uso #7 | Esperado ~339.1s | NÃO USADO ⛔
+
+==========================================
+```
+
+- [x] `docs/desvios.md` revisado — 9 desvios (D-1 a D-9), todos resolvidos ou informativos, **nenhum em estado `BLOQUEADO`**.
+
+**Fase 0 concluída.** 106/106 testes verdes, cobertura 90%, pipeline validado ponta a ponta contra a API real três vezes ao longo da fase (T0.3, T0.7, T0.9).
 
 ## Ações pendentes do usuário
 
