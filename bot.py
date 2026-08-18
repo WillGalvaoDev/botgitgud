@@ -25,6 +25,7 @@ from botgitgud.analysis.cohort import (
 from botgitgud.analysis.comparison import compare_spell_usage
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
+from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, InsufficientCohort
 from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
@@ -571,6 +572,89 @@ async def on_ready():
     print(f"🤖 Bot conectado no Discord como {bot.user}")
 
 
+def run_analysis(code, fight_id, char_name):
+    """T0.9: extraído de dentro de cmd_analisar para ser testável de forma
+    isolada — o critério de aceite da T0.9 exige verificar que uma spec
+    fora de escopo não dispara nenhuma query de ranking, o que exige poder
+    chamar esta lógica diretamente (sem um `ctx` de Discord) e injetar/
+    inspecionar as dependências (_wcl_client etc.).
+    """
+    user_data = fetch_player_timeline_data(code, fight_id, char_name)
+    if not user_data:
+        return {"user_data": None}
+
+    # T0.9: o portão de escopo roda IMEDIATAMENTE após identificar a spec,
+    # ANTES de qualquer query de ranking — nenhum ponto de API é gasto com
+    # entrada fora de escopo (achado de design do §1.4).
+    spec_id = SpecId(class_name=user_data["build"]["class"], spec_name=user_data["build"]["spec"])
+    support = classify_spec(spec_id)
+    if support != SpecSupport.SUPPORTED:
+        return {
+            "user_data": user_data,
+            "matched": 0,
+            "scope_rejection": rejection_message(support, spec_id),
+        }
+
+    try:
+        references, matched, min_d, max_d, cohort_median_dps = fetch_top_logs_for_cds(
+            user_data["fight"]["encounter_id"],
+            user_data["build"]["class"],
+            user_data["build"]["spec"],
+            user_data["fight"]["duration_sec"],
+        )
+    except InsufficientCohort as e:
+        return {"user_data": user_data, "matched": 0, "insufficient_cohort": e}
+
+    if not references:
+        return {"user_data": user_data, "matched": 0}
+
+    profile, num_positional = build_cd_reference_profile(
+        references, user_data["fight"]["duration_sec"]
+    )
+    eligible_ids = discover_eligible_spell_ids(profile)
+    comparisons = compare_all_spells(user_data, profile, eligible_ids, reference_n=num_positional)
+
+    percentile = fetch_player_percentile(
+        code,
+        fight_id,
+        char_name,
+        user_data["build"].get("server"),
+        user_data["build"].get("region"),
+        user_data["fight"]["encounter_id"],
+        user_data["fight"].get("difficulty"),
+    )
+
+    # T0.8: avisos honestos sobre o tamanho da amostra, em vez de
+    # apresentar poucos logs como se fossem uma coorte robusta.
+    warnings = []
+    if classify_cohort_size(matched) == "warn":
+        warnings.append(
+            f"Amostra pequena ({matched} logs). Trate os desvios como indicativos, não conclusivos."
+        )
+    if 0 < num_positional < POSITIONAL_MIN_N:
+        warnings.append(
+            f"Apenas {num_positional} logs com duração próxima à sua (±12%) para "
+            "comparar o timing dos cooldowns — os valores 'Ideal' têm confiança baixa."
+        )
+
+    # T0.4/T0.7: persiste o catálogo de spells uma única vez, ao fim da
+    # análise, na thread principal — nunca durante a coleta concorrente
+    # (achado 4.1).
+    _spell_catalog.flush()
+
+    return {
+        "user_data": user_data,
+        "matched": matched,
+        "min_d": min_d,
+        "max_d": max_d,
+        "cohort_median_dps": cohort_median_dps,
+        "comparisons": comparisons,
+        "percentile": percentile,
+        "reference_n": num_positional,
+        "warnings": warnings,
+    }
+
+
 @bot.command(name="analisar")
 async def cmd_analisar(ctx, char_name: str, report_link: str):
     """Uso: !analisar NomeDoPlayer LinkDoWCL"""
@@ -592,79 +676,17 @@ async def cmd_analisar(ctx, char_name: str, report_link: str):
     )
 
     loop = asyncio.get_running_loop()
-
-    def process_analysis():
-        user_data = fetch_player_timeline_data(code, fight_id, char_name)
-        if not user_data:
-            return {"user_data": None}
-
-        try:
-            references, matched, min_d, max_d, cohort_median_dps = fetch_top_logs_for_cds(
-                user_data["fight"]["encounter_id"],
-                user_data["build"]["class"],
-                user_data["build"]["spec"],
-                user_data["fight"]["duration_sec"],
-            )
-        except InsufficientCohort as e:
-            return {"user_data": user_data, "matched": 0, "insufficient_cohort": e}
-
-        if not references:
-            return {"user_data": user_data, "matched": 0}
-
-        profile, num_positional = build_cd_reference_profile(
-            references, user_data["fight"]["duration_sec"]
-        )
-        eligible_ids = discover_eligible_spell_ids(profile)
-        comparisons = compare_all_spells(
-            user_data, profile, eligible_ids, reference_n=num_positional
-        )
-
-        percentile = fetch_player_percentile(
-            code,
-            fight_id,
-            char_name,
-            user_data["build"].get("server"),
-            user_data["build"].get("region"),
-            user_data["fight"]["encounter_id"],
-            user_data["fight"].get("difficulty"),
-        )
-
-        # T0.8: avisos honestos sobre o tamanho da amostra, em vez de
-        # apresentar poucos logs como se fossem uma coorte robusta.
-        warnings = []
-        if classify_cohort_size(matched) == "warn":
-            warnings.append(
-                f"Amostra pequena ({matched} logs). Trate os desvios como indicativos, não conclusivos."
-            )
-        if 0 < num_positional < POSITIONAL_MIN_N:
-            warnings.append(
-                f"Apenas {num_positional} logs com duração próxima à sua (±12%) para "
-                "comparar o timing dos cooldowns — os valores 'Ideal' têm confiança baixa."
-            )
-
-        # T0.4/T0.7: persiste o catálogo de spells uma única vez, ao fim da
-        # análise, na thread principal — nunca durante a coleta concorrente
-        # (achado 4.1).
-        _spell_catalog.flush()
-
-        return {
-            "user_data": user_data,
-            "matched": matched,
-            "min_d": min_d,
-            "max_d": max_d,
-            "cohort_median_dps": cohort_median_dps,
-            "comparisons": comparisons,
-            "percentile": percentile,
-            "reference_n": num_positional,
-            "warnings": warnings,
-        }
-
-    result = await loop.run_in_executor(None, process_analysis)
+    result = await loop.run_in_executor(None, run_analysis, code, fight_id, char_name)
 
     if not result.get("user_data"):
         await ctx.send(
             f"❌ Jogador `{char_name}` não foi encontrado neste fight ou ocorreu um erro na busca."
         )
+        return
+
+    scope_rejection = result.get("scope_rejection")
+    if scope_rejection is not None:
+        await ctx.send(f"❌ {scope_rejection}")
         return
 
     insufficient = result.get("insufficient_cohort")
