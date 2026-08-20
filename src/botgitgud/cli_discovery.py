@@ -14,6 +14,14 @@ import functools
 import sys
 from collections.abc import Callable
 
+from botgitgud.analysis.dataset_status import (
+    GATE_TARGET,
+    TEMPORAL_MIN_PER_SIDE,
+    CandidateGroup,
+    TargetStatus,
+    target_status,
+    top_candidate_groups,
+)
 from botgitgud.analysis.pipeline import Deps
 from botgitgud.config import Settings
 from botgitgud.errors import BotGitGudError
@@ -141,3 +149,102 @@ def cmd_triage(args: argparse.Namespace, *, build_deps: BuildDeps) -> int:
         f"motivo de parada: {summary.stopped_reason}\n"
     )
     return EX_TEMPFAIL if summary.stopped_reason == "budget_exceeded" else 0
+
+
+def add_dataset_status_parser(
+    sub: argparse._SubParsersAction,  # type: ignore[type-arg]
+    *,
+    build_deps: BuildDeps,
+) -> None:
+    p = sub.add_parser(
+        "dataset-status",
+        help="T-DG.5: inspeciona objetivamente o progresso do Data Acquisition Gate. "
+        "Sem --class/--spec/etc.: visão geral dos melhores candidatos. Com todos: "
+        "avaliação completa de um alvo, incluindo o veredito FASE 4 DATA GATE. "
+        "Nunca chama a API da WCL.",
+    )
+    p.add_argument("--class", dest="klass", default=None, help="Nome da classe (ex.: DeathKnight).")
+    p.add_argument("--spec", default=None, help="Nome da spec (ex.: Unholy).")
+    p.add_argument("--encounter", type=int, default=None, help="encounterID da WCL.")
+    p.add_argument("--difficulty", type=int, default=None, help="3=Normal, 4=Heroic, 5=Mythic.")
+    p.add_argument("--partition", type=int, default=None, help="Partition alvo.")
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Nº de grupos candidatos mostrados na visão geral (default 20).",
+    )
+    p.set_defaults(func=functools.partial(cmd_dataset_status, build_deps=build_deps))
+
+
+def cmd_dataset_status(args: argparse.Namespace, *, build_deps: BuildDeps) -> int:
+    settings = Settings()  # type: ignore[call-arg]  # populada a partir do .env em runtime
+    deps = build_deps(settings)
+    discovery_store = DiscoveryStore(deps.store)
+    target_fields = (args.klass, args.spec, args.encounter, args.difficulty, args.partition)
+    try:
+        if all(f is not None for f in target_fields):
+            status = target_status(
+                deps.store,
+                discovery_store,
+                class_name=args.klass,
+                spec_name=args.spec,
+                encounter_id=args.encounter,
+                difficulty=args.difficulty,
+                partition=args.partition,
+            )
+            _print_target_status(status)
+        elif any(f is not None for f in target_fields):
+            sys.stderr.write(
+                "erro: --class/--spec/--encounter/--difficulty/--partition devem ser usados "
+                "juntos (ou nenhum, para a visão geral).\n"
+            )
+            return 1
+        else:
+            _print_candidate_groups(top_candidate_groups(deps.store, limit=args.limit))
+    finally:
+        deps.store.close()
+        deps.client.close()
+    return 0
+
+
+def _print_candidate_groups(groups: list[CandidateGroup]) -> None:
+    if not groups:
+        sys.stdout.write("nenhum candidato descoberto ainda — rode 'discover' e 'triage'.\n")
+        return
+    sys.stdout.write("melhores candidatos (class/spec @ encontro/dificuldade/partition):\n\n")
+    for g in groups:
+        sys.stdout.write(
+            f"  {g.class_name}/{g.spec_name}  encounter={g.encounter_id} "
+            f"difficulty={g.difficulty} partition={g.partition}: {g.n_candidates} candidatos\n"
+        )
+
+
+def _print_target_status(status: TargetStatus) -> None:
+    sys.stdout.write(
+        f"DATA ACQUISITION GATE — {status.class_name}/{status.spec_name} @ encounter "
+        f"{status.encounter_id}, difficulty {status.difficulty}, partition {status.partition}\n\n"
+        "  Descoberta\n"
+        f"    reports descobertos (global) ........ {status.reports_discovered}\n"
+        f"    fights triados (este alvo) .......... {status.fights_triaged}\n"
+        f"    candidatos (kills desta spec) ........ {status.candidates}\n\n"
+        "  Ingestão\n"
+        f"    observações ingeridas ............... {status.ingested}\n"
+        f"    duplicatas (ignoradas na contagem) .. {status.duplicates}\n"
+        f"    rejeitadas ........................... {status.rejected}\n"
+    )
+    for reason, n in sorted(status.rejected_by_reason.items(), key=lambda kv: -kv[1]):
+        sys.stdout.write(f"      - {reason} .... {n}\n")
+    sys.stdout.write(
+        f"\n  Observações VÁLIDAS: {status.valid} / {GATE_TARGET}   "
+        f"({status.progress_pct:.1f}%)\n\n"
+        "  Dispersão temporal\n"
+        f"    mais antiga .......................... {status.earliest_valid_ingested_at}\n"
+        f"    mais recente ......................... {status.latest_valid_ingested_at}\n"
+        f"    corte com >= {TEMPORAL_MIN_PER_SIDE} de cada lado ......... "
+        f"{'sim' if status.temporal_split_ok else 'não'}\n\n"
+        "  Restante\n"
+        f"    observações faltantes ............... {status.observations_remaining}\n\n"
+    )
+    verdict = "PASS" if status.gate_pass else "BLOCKED"
+    sys.stdout.write(f"FASE 4 DATA GATE: {verdict}\n")

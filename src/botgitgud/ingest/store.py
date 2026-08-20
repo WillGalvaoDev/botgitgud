@@ -67,10 +67,15 @@ CREATE TABLE IF NOT EXISTS logs (
     class_name    VARCHAR, spec_name VARCHAR, role VARCHAR,
     duration_s    DOUBLE,  dps DOUBLE, percentile DOUBLE,
     item_level    DOUBLE,  talent_hash VARCHAR, tier_pieces INTEGER,
-    active_time_pct DOUBLE, deaths INTEGER, downtime_s DOUBLE,
+    active_time_pct DOUBLE, deaths INTEGER, downtime_s DOUBLE, kill BOOLEAN,
     parquet_path  VARCHAR, ingested_at TIMESTAMP
 )
 """
+# T-DG.5: `kill` was already on FightRef/Parquet (T1.2) but never promoted
+# to this flat, indexable table — the Data Acquisition Gate's validity
+# contract (docs/fase4-data-acquisition-plan.md §10.2) needs to filter on
+# it at SQL level without opening every log's Parquet file (same reasoning
+# T-DG.0 used for `partition`).
 # docs/desvios.md D-12(c): deliberately no PRIMARY KEY — a second insert for
 # the same (report_code, fight_id, player_name) must SUCCEED (immutability:
 # re-ingestion adds a row with a later ingested_at; reads take the latest).
@@ -185,8 +190,8 @@ class Store:
                     report_code, fight_id, player_name, server, encounter_id, difficulty,
                     partition, class_name, spec_name, role, duration_s, dps, percentile,
                     item_level, talent_hash, tier_pieces, active_time_pct, deaths, downtime_s,
-                    parquet_path, ingested_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    kill, parquet_path, ingested_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     fight.report_code,
@@ -208,6 +213,7 @@ class Store:
                     log.active_time_pct,
                     log.deaths,
                     log.downtime_s,
+                    fight.kill,
                     str(parquet_path),
                     datetime.fromtimestamp(ingested_at_ms / 1000.0, tz=UTC),
                 ],

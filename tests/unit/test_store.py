@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import threading
 import time
 from datetime import UTC, datetime
@@ -115,6 +116,17 @@ def test_rewriting_same_log_does_not_erase_previous_read_returns_latest(tmp_path
 
 
 # -- additional coverage --------------------------------------------------------
+
+
+def test_write_log_persists_kill_flag(tmp_path: Path) -> None:
+    """T-DG.5: `kill` was already on FightRef/Parquet but not the `logs`
+    table — the Data Acquisition Gate's validity contract needs it at SQL
+    level.
+    """
+    with Store(tmp_path) as store:
+        store.write_log(_log(fight=dataclasses.replace(_fight(), kill=False)))
+        rows = store.query("SELECT kill FROM logs")
+    assert rows["kill"][0] is False
 
 
 def test_has_log_false_before_write_true_after(tmp_path: Path) -> None:
