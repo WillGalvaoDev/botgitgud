@@ -274,7 +274,7 @@ Todos os itens abaixo foram fechados durante a execução formal da T0.1
 | ✅ `guid` de Ebon Might / Prescience | **`395152`** (Ebon Might) e **`410089`** (Prescience), confirmados via `gameData.ability(id)`. Buff auxiliar relacionado: **`413984`** (Shifting Sands). Use estes 3 IDs para detectar `has_augmentation` na T2.1. |
 | ✅ `table(dataType: Debuffs)` tem o mesmo formato de `Buffs`? | **Sim, idêntico.** Mesma estrutura `data.auras[]` com `{guid, name, type, abilityIcon, totalUptime, totalUses, bands}`. |
 | ⚠️ Existe `filterExpression` que evite paginar eventos de dano? | O argumento **existe** em `events(...)` (confirmado por introspecção), mas a sintaxe testada (`"source.id in (6, 16, 20, ...)"`) retornou 0 eventos sem erro — a sintaxe exata não foi determinada. **Não use `filterExpression` para a agregação de pet da T3.1** até a sintaxe ser confirmada num experimento dedicado; use o filtro client-side por `sourceID` já validado em §5, que tem exatidão comprovada (erro 0,00%). |
-| ✅ Custo em **pontos** por tipo de query | **~2,0 pontos por requisição**, uniforme entre tipos (1 página de `events(Casts, limit:5000)`, 1 página de `events(DamageDone, limit:10000)`, 1 `table(Summary)` e 1 página de `characterRankings` custaram exatamente 2,00–2,01 pontos cada, medido via `rateLimitData.pointsSpentThisHour` antes/depois). Isso é **bem mais barato** do que o pior caso assumido na T1.8 (que estimava "centenas de requisições podem esgotar a cota rapidamente") — com `limitPerHour=3600`, o orçamento real é ~1800 requisições/hora. **Não relaxe os mecanismos de fila/orçamento da T1.8 por causa disso**: eles continuam sendo boa prática para justiça entre usuários e para not martelar a API à toa, mas a urgência é menor do que o documento original presumia. |
+| ⚠️ Custo em **pontos** por tipo de query — **CORRIGIDO na §13.1** (o valor abaixo está errado: uma query simples custa **1,0**, não 2,0, e o custo **não é uniforme** — escala com a complexidade) | **~2,0 pontos por requisição**, uniforme entre tipos (1 página de `events(Casts, limit:5000)`, 1 página de `events(DamageDone, limit:10000)`, 1 `table(Summary)` e 1 página de `characterRankings` custaram exatamente 2,00–2,01 pontos cada, medido via `rateLimitData.pointsSpentThisHour` antes/depois). Isso é **bem mais barato** do que o pior caso assumido na T1.8 (que estimava "centenas de requisições podem esgotar a cota rapidamente") — com `limitPerHour=3600`, o orçamento real é ~1800 requisições/hora. **Não relaxe os mecanismos de fila/orçamento da T1.8 por causa disso**: eles continuam sendo boa prática para justiça entre usuários e para not martelar a API à toa, mas a urgência é menor do que o documento original presumia. |
 | ❌ Cooldown base na API da **WCL** | **Não existe.** `GameData.ability(id)` (tipo `GameAbility`) só tem `{id, icon, name}` — sem cooldown. Confirma que a T2.5 depende mesmo da API da Blizzard (fonte 1) ou de tabela manual curada (fonte 2), como já previsto no documento; não há atalho pela própria WCL. |
 | ⬜ Valores literais de `class`/`spec` para as 25 specs | **Ainda não verificado** — nenhum log de fixture cobre as 25 specs. Warlock/Demonology confirmado (`type: "Warlock"`, `specs: ["Demonology"]`, `specIDs: [266]` em `combatantInfo`). A T0.9 deve confirmar as demais 24 ao encontrar logs reais, ou aceitar o risco e normalizar por `_normalize()` como já previsto. |
 | ✅ Como obter `partition` atual programaticamente | `worldData.zones { id name partitions { id name compactName default } }` — o campo booleano **`default`** marca a partition vigente. Confirmado para a zone 46 (VS/DR/MQD): partition `4` ("12.1") é `default: true` entre as 4 partitions listadas. Use esta query na T1.7 em vez de hardcode. |
@@ -291,6 +291,107 @@ Todos os itens abaixo foram fechados durante a execução formal da T0.1
 | `masterData.actors[].petOwner` | Confirmado como o mapeamento pet → dono (já citado em §3) — usado para filtrar `events(dataType: DamageDone)` por `sourceID ∈ {player_id} ∪ {pet_ids}`. |
 | `events(dataType: Resources)`'s `resourceChangeType` | Seguem o `Enum.PowerType` padrão da Blizzard (constante pública, estável entre expansões — não é o mesmo tipo de dado instável que os cooldowns de D-28). Verificado ao vivo: os eventos de Zarad (Warlock/Demonology) usam `resourceChangeType: 7`, e `maxResourceAmount: 50` bate com 5 Fragmentos de Alma × 10 (WCL reporta fragmentos fracionados ×10) — confirma `7 = SoulShards`. |
 | `events(...)`'s argumento `sourceID` | Aceito (confirmado por introspecção de `Report.events`), mas não usado para os eventos de dano (múltiplas fontes — jogador + pets — não cabem num único `sourceID`); usado nos eventos de recurso (uma fonte só, o próprio jogador) só como filtro client-side, igual ao padrão já usado para `Casts`. |
+
+---
+
+## 13. Fatos verificados na sondagem do portão de dados da Fase 4 (2026-08-20)
+
+> Sondagens ao vivo feitas para `docs/fase4-data-acquisition-plan.md`. Custo total: 530 pontos.
+> Os números completos e o raciocínio de custo estão naquele documento; aqui ficam só os fatos de
+> schema/API, que são o escopo deste arquivo.
+
+### 13.1 ⚠️ CORREÇÃO à §11 — o custo por query **não** é uniforme nem 2,0
+
+A §11 afirma "~2,0 pontos por requisição, uniforme entre tipos". Ambas as partes estão erradas:
+
+1. **Uma query simples custa 1,0 ponto, não 2,0.** A medição original somou o custo da própria
+   query `rateLimitData` de aferição (que também custa 1,0). Medindo com o `rateLimitData`
+   descontado, `events(Casts)`, `events(Resources)`, `table(Buffs)`, `table(Debuffs)`,
+   `characterData…encounterRankings`, `fightRankings` e `reports` (só códigos) custam **1,0** cada.
+2. **O custo escala com a complexidade da query.** Valores líquidos medidos:
+
+| Query | Pontos (líquidos) |
+|---|---|
+| Query simples (lista acima) | 1,0 |
+| `report.rankings(fightIDs:[N])` | 2,0 |
+| `events(DamageDone)` 1 página (10.005 eventos) | 2,65 |
+| `QUERY_PLAYER_META` (Summary+Casts+DamageDone+masterData numa query) | 5,0 |
+| `reports(limit:N){ fights{…} }` | **~1,04 × N** (26,0 pts para N=25) |
+| `LogFetcher.fetch()` ponta a ponta, 1 jogador | **17,0** |
+
+⚠️ Filtrar `fights` no servidor (`encounterID`, `difficulty`, `killType`) **não reduz o custo**:
+26,0 pts nos dois casos, devolvendo 267 fights vs. 1 fight. O custo acompanha o número de
+*reports* atravessados, não o volume retornado.
+
+### 13.2 ✅ `reportData.reports` — descoberta de reports em escala
+
+Argumentos (introspecção): `zoneID, gameZoneID, startTime, endTime, guildID, guildName,
+guildServerSlug, guildServerRegion, guildTagID, userID, limit, page`. Funciona **só com `zoneID`**.
+
+| Fato | Valor |
+|---|---|
+| `total` / `last_page` | **`-1`** — a API não computa o total |
+| **Página máxima** | **25** (erro explícito: *"The maximum allowed page is 25 until the performance of paginated queries can be improved."*) → teto de 2.500 reports por combinação de filtros |
+| `startTime`/`endTime` | ✅ respeitados |
+| Ordenação | **estável** entre chamadas idênticas, mas **não** por `startTime` |
+| Densidade zona 46, janela de 1 dia | **1.988 reports únicos** (esgotados em 20 páginas) |
+| Densidade zona 46, janela de 7 dias | bate no teto de 2.500 |
+
+**Consequência normativa:** qualquer varredura em escala exige **janelamento temporal**; janelas
+de 12 h cabem sob o teto com folga.
+
+### 13.3 ✅ `reportData.report.rankings` — percentil em lote (campo nunca sondado antes)
+
+```graphql
+reportData { report(code: "...") { rankings(fightIDs: [21]) } }
+```
+Argumentos: `compare, difficulty, encounterID, fightIDs, playerMetric, timeframe`. Custo **2,0**.
+
+- Nível do fight: `fightID, partition, encounter{id,name}, difficulty, size, kill, duration,
+  bracketData, bracket, deaths, guild, speed, execution`.
+- `roles.{tanks,healers,dps}.characters[]`, por jogador: `id, name, server{name,region}, class,
+  spec, amount, bracketData, bracket, rank, best, totalParses, bracketPercent, **rankPercent**`.
+
+| Fato | Valor |
+|---|---|
+| Cobertura de `rankPercent` | **169/169 = 100%** em 10 kills míticos amostrados |
+| Mesma medida via `characterData…encounterRankings` (fonte usada hoje) | **2/5** num fight, e custa 1 pt **por jogador** |
+| `partition` por fight | ✅ disponível — é a fonte que falta para popular `FightRef.partition` |
+| Dispersão de `rankPercent` num único fight | 18 a 94 |
+
+⚠️ `rankPercent` aqui é **inteiro** (48, 88, 94); `characterData` devolve **float** (93,71).
+
+**Consequência:** esta é a fonte forte do percentil e da partition. §9 continua correta ao dizer
+que o parse vem de `characterData`, mas `report.rankings` é estritamente melhor (mais barata, em
+lote, cobertura maior) quando se quer o fight inteiro.
+
+### 13.4 ✅ `worldData.encounter.fightRankings` — leaderboard de kills, com teto
+
+50 kills/página; campos: `report{code,fightID}, duration, startTime, guild, server, bracketData,
+damageTaken, deaths, tanks, healers, melee, ranged`. Custo 1,0/página.
+
+**Teto medido:** última página não vazia ≈ **20–23** para as dificuldades 3, 4 e 5 →
+**~1.000–1.150 kills** por `(encounter, difficulty, partition)`. É leaderboard, como
+`characterRankings` (§8) — mesma armadilha de viés de sobrevivência (achado 3.5).
+
+### 13.5 ✅ Oferta real de kills por report (zona 46)
+
+Varredura de 100 reports, encontro 3179: **0,160 kills/report** no total — 0,050 (Normal),
+0,060 (Heroic), 0,050 (Mythic). Encontros mais densos na mesma zona (50 reports):
+`enc=3183 diff=0` → 0,36/report; `enc=3182 diff=5` → 0,26; `enc=3183 diff=5` → 0,20.
+
+Composição típica: **16,9 DPS por kill mítico**. Frequência das specs mais comuns (169 slots):
+Augmentation 2,40/kill, Unholy DK 1,40, Devourer DH 1,30, Shadow 1,20, Ret/Elemental/Frost 1,00,
+**Demonology 0,70**.
+
+### 13.6 ⬜ Argumentos que existem mas não foram utilizáveis
+
+- `characterRankings(leaderboard: LeaderboardRank)` — o argumento existe na introspecção, mas
+  introspecção do **tipo** `LeaderboardRank` devolve `"Internal server error"` e passar o argumento
+  causou **HTTP 400** nas três formas testadas (`null`, `Any`, `LogsOnly`). Não depender dele.
+- `characterRankings(includeCombatantInfo:, includeOtherPlayers:, filter:, serverRegion:,
+  serverSlug:, size:, hardModeLevel:, externalBuffs:, covenantID:, soulbindID:)` — existem no
+  schema e **não** constavam da lista de 7 argumentos registrada na §8; não foram exercitados.
 
 ---
 
