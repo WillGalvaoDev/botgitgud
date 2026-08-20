@@ -16,6 +16,9 @@ class CampaignStatus:
     completed: int
     failed: int
     rejected: int
+    retryable_rejections: int
+    reopened_observations: int
+    historical_attempt_points: float
     consumed_api_points: float
     authorized_api_ceiling: float
     remaining_authorized_points: float
@@ -59,6 +62,12 @@ def campaign_status(campaign: StoredCampaign) -> CampaignStatus:
         completed=len(completed),
         failed=counts[CollectionStatus.FAILED],
         rejected=counts[CollectionStatus.REJECTED],
+        retryable_rejections=sum(
+            item.status is CollectionStatus.REJECTED and item.reason == "percentile_missing"
+            for item in campaign.observations
+        ),
+        reopened_observations=sum(item.reopened_count > 0 for item in campaign.observations),
+        historical_attempt_points=points,
         consumed_api_points=points,
         authorized_api_ceiling=campaign.max_api_points,
         remaining_authorized_points=campaign.remaining_authorized_points,

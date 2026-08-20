@@ -295,6 +295,62 @@ def test_fetch_twice_hits_api_only_once(tmp_path: Path) -> None:
     assert first == second
 
 
+def test_experimental_fetch_shares_only_fight_wide_http_requests(tmp_path: Path) -> None:
+    meta = _meta_response()
+    report = meta["data"]["reportData"]["report"]
+    second = {
+        "id": 7,
+        "name": "Another",
+        "type": "Warlock",
+        "server": "Azralon",
+        "region": "US",
+        "specs": ["Demonology"],
+        "maxItemLevel": 282.0,
+    }
+    report["table"]["data"]["playerDetails"]["dps"].append(second)
+    report["table"]["data"]["damageDone"].append({"id": 7, "total": 900_000.0})
+    report["castsTable"]["data"]["entries"].append({"id": 7, "abilities": []})
+    report["damageTable"]["data"]["entries"].append({"id": 7, "activeTime": 100000})
+    responses = {
+        "meta": meta,
+        "events": _events_response(
+            [
+                {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300},
+                {"sourceID": 7, "type": "cast", "abilityGameID": 686, "timestamp": 1400},
+            ]
+        ),
+        "report_rankings": _report_rankings_response(partition=4),
+    }
+    fetcher, transport, store = _make_fetcher(tmp_path, responses)
+    fight_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    first = fetcher.fetch(
+        "ABCDEFGHIJKLMNOP",
+        1,
+        "Zarad",
+        experimental_label=6.0,
+        fight_query_cache=fight_cache,
+    )
+    calls_after_first = list(transport.calls)
+    additional = fetcher.fetch(
+        "ABCDEFGHIJKLMNOP",
+        1,
+        "Another",
+        experimental_label=100.0,
+        fight_query_cache=fight_cache,
+    )
+    store.close()
+
+    assert first.percentile == 6.0
+    assert additional.percentile == 100.0
+    assert "percentile" not in transport.calls
+    for operation in ("meta", "events", "damage_events", "resource_events", "report_rankings"):
+        assert transport.calls.count(operation) == 1
+    assert transport.calls.count("buffs") == 2
+    assert transport.calls.count("debuffs") == 2
+    assert len(calls_after_first) == 7
+    assert len(transport.calls) == 9
+
+
 def test_force_bypasses_cache(tmp_path: Path) -> None:
     responses = {
         "meta": [_meta_response(), _meta_response(damage_total=2_000_000.0)],

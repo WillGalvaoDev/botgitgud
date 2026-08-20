@@ -152,8 +152,11 @@ class ExperimentalDatasetBuilder:
         partition: int | None = None,
         difficulties: frozenset[int] | None = None,
         observation_keys: frozenset[tuple[str, int, str]] | None = None,
+        campaign_id: str | None = None,
     ) -> ExperimentalFeatureDataset:
-        rows = self._latest_logs(partition=partition, difficulties=difficulties)
+        rows = self._latest_logs(
+            partition=partition, difficulties=difficulties, campaign_id=campaign_id
+        )
         if observation_keys is not None:
             rows = [
                 row
@@ -174,7 +177,11 @@ class ExperimentalDatasetBuilder:
         )
 
     def _latest_logs(
-        self, *, partition: int | None, difficulties: frozenset[int] | None
+        self,
+        *,
+        partition: int | None,
+        difficulties: frozenset[int] | None,
+        campaign_id: str | None,
     ) -> list[dict[str, object]]:
         """Dedup by the natural key, most recent ingestion wins (§9.1).
 
@@ -182,8 +189,21 @@ class ExperimentalDatasetBuilder:
         time; both are LEFT JOINed because a log may exist without its
         discovery row (e.g. ingested through the interactive path).
         """
-        clauses = ["l.percentile IS NOT NULL", "l.kill = true", "l.partition IS NOT NULL"]
+        label_expr = "l.percentile"
+        campaign_join = ""
+        clauses = ["l.kill = true", "l.partition IS NOT NULL"]
         params: dict[str, object] = {}
+        if campaign_id is None:
+            clauses.append("l.percentile IS NOT NULL")
+        else:
+            campaign_join = """
+            JOIN experiment_campaign_observations eco
+              ON eco.report_code=l.report_code AND eco.fight_id=l.fight_id
+             AND eco.player_name=l.player_name AND eco.campaign_id=$campaign_id
+             AND eco.status='completed'
+            """
+            label_expr = "eco.rank_percent"
+            params["campaign_id"] = campaign_id
         if partition is not None:
             clauses.append("l.partition = $p")
             params["p"] = partition
@@ -191,7 +211,7 @@ class ExperimentalDatasetBuilder:
         frame = self._store.query(
             f"""
             SELECT l.report_code, l.fight_id, l.player_name, l.class_name, l.spec_name,
-                   l.encounter_id, l.difficulty, l.partition, l.percentile,
+                   l.encounter_id, l.difficulty, l.partition, {label_expr} AS percentile,
                    l.parquet_path, l.ingested_at,
                    df.size AS raid_size, dr.start_time_ms
             FROM (
@@ -200,6 +220,7 @@ class ExperimentalDatasetBuilder:
                 ) AS rn
                 FROM logs
             ) l
+            {campaign_join}
             LEFT JOIN discovery_fights df
               ON df.report_code = l.report_code AND df.fight_id = l.fight_id
             LEFT JOIN discovery_reports dr ON dr.report_code = l.report_code

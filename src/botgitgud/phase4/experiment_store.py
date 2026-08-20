@@ -60,6 +60,20 @@ class StoredObservation:
     event_cache_hit: bool
     pages_reused: int
     first_player_in_fight: bool
+    reopened_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ObservationAttempt:
+    campaign_id: str
+    ordinal: int
+    attempt_no: int
+    status: CollectionStatus
+    api_points: float
+    started_at: datetime | None
+    completed_at: datetime | None
+    reason: str | None
+    output_reference: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +110,12 @@ CREATE TABLE IF NOT EXISTS experiment_campaign_observations (
  pages_reused INTEGER,
  first_player_in_fight BOOLEAN, PRIMARY KEY (campaign_id, ordinal)
 )"""
+_ATTEMPTS = """
+CREATE TABLE IF NOT EXISTS experiment_observation_attempts (
+ campaign_id VARCHAR, ordinal INTEGER, attempt_no INTEGER, status VARCHAR,
+ api_points DOUBLE, started_at TIMESTAMP, completed_at TIMESTAMP, reason VARCHAR,
+ output_reference VARCHAR, PRIMARY KEY (campaign_id, ordinal, attempt_no)
+)"""
 
 
 def _now() -> datetime:
@@ -107,6 +127,12 @@ class ExperimentCampaignStore:
         self._store = store
         store.execute(_CAMPAIGNS)
         store.execute(_OBSERVATIONS)
+        store.execute(
+            "ALTER TABLE experiment_campaign_observations ADD COLUMN IF NOT EXISTS "
+            "reopened_count INTEGER DEFAULT 0"
+        )
+        store.execute(_ATTEMPTS)
+        self._backfill_attempt_history()
 
     def freeze(self, campaign: ExperimentCampaign) -> StoredCampaign:
         campaign_id = CampaignId.from_campaign(campaign).value
@@ -134,7 +160,7 @@ class ExperimentCampaignStore:
             self._store.execute(
                 "INSERT INTO experiment_campaign_observations VALUES "
                 "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, NULL, NULL, NULL, "
-                "true, false, 0, false)",
+                "true, false, 0, false, 0)",
                 [
                     campaign_id,
                     ordinal,
@@ -169,6 +195,7 @@ class ExperimentCampaignStore:
             "encounter_id, difficulty, partition, rank_percent, bucket, start_time_ms, status, "
             "attempts, api_points, started_at, completed_at, reason, output_reference, "
             "api_points_estimated, event_cache_hit, pages_reused, first_player_in_fight "
+            ", reopened_count "
             "FROM experiment_campaign_observations WHERE campaign_id=? ORDER BY ordinal",
             [campaign_id],
         )
@@ -214,6 +241,86 @@ class ExperimentCampaignStore:
                 campaign_id,
                 ordinal,
             ],
+        )
+        current = self.get(campaign_id)
+        assert current is not None
+        item = current.observations[ordinal]
+        self._store.execute(
+            "INSERT INTO experiment_observation_attempts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                campaign_id,
+                ordinal,
+                item.attempts,
+                status.value,
+                points,
+                item.started_at,
+                item.completed_at,
+                reason,
+                output,
+            ],
+        )
+
+    def attempts(self, campaign_id: str, ordinal: int) -> tuple[ObservationAttempt, ...]:
+        rows = self._store.execute_returning(
+            "SELECT attempt_no, status, api_points, started_at, completed_at, reason, "
+            "output_reference FROM experiment_observation_attempts "
+            "WHERE campaign_id=? AND ordinal=? ORDER BY attempt_no",
+            [campaign_id, ordinal],
+        )
+        return tuple(
+            ObservationAttempt(
+                campaign_id,
+                ordinal,
+                int(row[0]),
+                CollectionStatus(str(row[1])),
+                float(row[2]),
+                row[3] if isinstance(row[3], datetime) else None,
+                row[4] if isinstance(row[4], datetime) else None,
+                row[5] if isinstance(row[5], str) else None,
+                row[6] if isinstance(row[6], str) else None,
+            )
+            for row in rows
+        )
+
+    def reopen_percentile_integration_rejections(self, campaign_id: str) -> int:
+        """Reopen only the known incident-001 rejection; never performs I/O."""
+        campaign = self.get(campaign_id)
+        if campaign is None:
+            raise ValueError(f"unknown campaign: {campaign_id}")
+        eligible = [
+            item
+            for item in campaign.observations
+            if item.status is CollectionStatus.REJECTED
+            and item.reason == "percentile_missing"
+            and 0.0 <= item.planned.rank_percent <= 100.0
+        ]
+        for item in eligible:
+            self._store.execute(
+                "UPDATE experiment_campaign_observations SET status=?, reason=NULL, "
+                "completed_at=NULL, output_reference=NULL, reopened_count=reopened_count+1 "
+                "WHERE campaign_id=? AND ordinal=? AND status=? AND reason=?",
+                [
+                    CollectionStatus.PENDING.value,
+                    campaign_id,
+                    item.ordinal,
+                    CollectionStatus.REJECTED.value,
+                    "percentile_missing",
+                ],
+            )
+        return len(eligible)
+
+    def _backfill_attempt_history(self) -> None:
+        self._store.execute(
+            """
+            INSERT INTO experiment_observation_attempts
+            SELECT o.campaign_id, o.ordinal, o.attempts, o.status, o.api_points,
+                   o.started_at, o.completed_at, o.reason, o.output_reference
+            FROM experiment_campaign_observations o
+            LEFT JOIN experiment_observation_attempts a
+              ON a.campaign_id=o.campaign_id AND a.ordinal=o.ordinal AND a.attempt_no=o.attempts
+            WHERE o.status IN ('completed','failed','rejected') AND o.attempts > 0
+              AND a.campaign_id IS NULL
+            """
         )
 
     def reset_collecting(self, campaign_id: str) -> None:
@@ -273,4 +380,5 @@ def _stored_observation(campaign_id: str, row: tuple[object, ...]) -> StoredObse
         event_cache_hit=bool(row[20]),
         pages_reused=int(str(row[21])),
         first_player_in_fight=bool(row[22]),
+        reopened_count=int(str(row[23] or 0)),
     )

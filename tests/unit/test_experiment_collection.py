@@ -16,6 +16,8 @@ from botgitgud.phase4.experiment_collector import (
     CollectionResult,
     ExperimentCollector,
     FightSession,
+    LogFetcherBackend,
+    _validate,
 )
 from botgitgud.phase4.experiment_status import campaign_status
 from botgitgud.phase4.experiment_store import (
@@ -290,4 +292,76 @@ def test_larger_authorization_preserves_failed_and_rejected(tmp_path: Path) -> N
     assert [item.status for item in current.observations] == [  # type: ignore[union-attr]
         CollectionStatus.FAILED,
         CollectionStatus.REJECTED,
+    ]
+
+
+def test_frozen_label_is_authoritative_and_extremes_are_preserved() -> None:
+    class CapturingFetcher:
+        query_count = 0
+
+        def fetch(self, report: str, fight: int, player: str, **kwargs: object) -> PlayerLog:
+            label = kwargs["experimental_label"]
+            assert isinstance(label, float) and label in {6.0, 100.0}
+            observation = _observation(0)
+            return _log(observation, percentile=label)
+
+    backend = LogFetcherBackend(CapturingFetcher())  # type: ignore[arg-type]
+    for label in (6.0, 100.0):
+        observation = replace(_observation(0), rank_percent=label)
+        result = backend.collect(observation, FightSession(observation.fight_key))
+        assert result.player_log.percentile == label
+
+
+def test_complete_identity_is_validated_before_frozen_label_is_accepted() -> None:
+    planned = _observation(0)
+    assert _validate(planned, _log(planned)) is None
+    cases = [
+        (replace(planned, report_code="OTHER"), "report_mismatch"),
+        (replace(planned, fight_id=2), "fight_mismatch"),
+        (replace(planned, player_name="Other"), "player_mismatch"),
+        (replace(planned, spec_name="Frost"), "spec_mismatch"),
+        (replace(planned, encounter_id=999), "encounter_mismatch"),
+        (replace(planned, difficulty=4), "difficulty_mismatch"),
+        (replace(planned, partition=3), "partition_mismatch"),
+    ]
+    for payload_identity, reason in cases:
+        assert _validate(planned, _log(payload_identity)) == reason
+    assert _validate(replace(planned, rank_percent=float("nan")), _log(planned)) == (
+        "percentile_missing"
+    )
+
+
+def test_reopen_known_incident_preserves_plan_attempt_and_accounting(tmp_path: Path) -> None:
+    first, second, third = _observation(0), _observation(1), _observation(2)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(first, second, third))
+        original_keys = tuple(item.planned.observation_key for item in frozen.observations)
+        for ordinal, reason in [(0, "percentile_missing"), (1, "partition_mismatch")]:
+            campaigns.mark_collecting(frozen.campaign_id, ordinal, first=ordinal == 0)
+            campaigns.finish(
+                frozen.campaign_id,
+                ordinal,
+                status=CollectionStatus.REJECTED,
+                points=28,
+                reason=reason,
+            )
+        campaigns.mark_collecting(frozen.campaign_id, 2, first=False)
+        campaigns.finish(frozen.campaign_id, 2, status=CollectionStatus.COMPLETED, points=2)
+        reopened = campaigns.reopen_percentile_integration_rejections(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        history = campaigns.attempts(frozen.campaign_id, 0)
+    assert reopened == 1
+    assert current is not None and current.campaign_id == frozen.campaign_id
+    assert tuple(item.planned.observation_key for item in current.observations) == original_keys
+    assert [item.status for item in current.observations] == [
+        CollectionStatus.PENDING,
+        CollectionStatus.REJECTED,
+        CollectionStatus.COMPLETED,
+    ]
+    assert current.consumed_api_points == 58
+    assert current.observations[0].attempts == 1
+    assert current.observations[0].reopened_count == 1
+    assert [(item.status, item.reason, item.api_points) for item in history] == [
+        (CollectionStatus.REJECTED, "percentile_missing", 28)
     ]

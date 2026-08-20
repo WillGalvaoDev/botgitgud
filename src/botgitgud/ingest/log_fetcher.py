@@ -11,7 +11,8 @@ import threading
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Any
 
 import structlog
 
@@ -74,14 +75,31 @@ class LogFetcher:
             return self._query_count
 
     def fetch(
-        self, report_code: str, fight_id: int, player: str, *, force: bool = False
+        self,
+        report_code: str,
+        fight_id: int,
+        player: str,
+        *,
+        force: bool = False,
+        experimental_label: float | None = None,
+        fight_query_cache: dict[tuple[str, str], dict[str, Any]] | None = None,
     ) -> PlayerLog:
         if not force:
             cached = self._store.read_log(report_code, fight_id, player)
             if cached is not None:
-                return cached
+                if experimental_label is None or cached.percentile == experimental_label:
+                    return cached
+                labelled = replace(cached, percentile=experimental_label)
+                self._store.write_log(labelled)
+                return labelled
 
-        player_log = self._fetch_from_api(report_code, fight_id, player)
+        player_log = self._fetch_from_api(
+            report_code,
+            fight_id,
+            player,
+            experimental_label=experimental_label,
+            fight_query_cache=fight_query_cache,
+        )
         self._store.write_log(player_log)
         return player_log
 
@@ -167,8 +185,34 @@ class LogFetcher:
             self._query_count += 1
         return self._client.query(query, variables, op_name=op_name)
 
-    def _fetch_from_api(self, report_code: str, fight_id: int, player: str) -> PlayerLog:
-        res_json = self._query(
+    def _fetch_from_api(
+        self,
+        report_code: str,
+        fight_id: int,
+        player: str,
+        *,
+        experimental_label: float | None = None,
+        fight_query_cache: dict[tuple[str, str], dict[str, Any]] | None = None,
+    ) -> PlayerLog:
+        def query_fn(query: str, variables: dict[str, object], *, op_name: str) -> dict:
+            fight_wide = {
+                "fetch_player_meta",
+                "fetch_player_events",
+                "fetch_player_damage_events",
+                "fetch_player_resource_events",
+                "fetch_report_rankings",
+            }
+            cache_key = (query, repr(sorted(variables.items())))
+            if fight_query_cache is not None and op_name in fight_wide:
+                cached_response = fight_query_cache.get(cache_key)
+                if cached_response is not None:
+                    return cached_response
+            response = self._query(query, variables, op_name=op_name)
+            if fight_query_cache is not None and op_name in fight_wide:
+                fight_query_cache[cache_key] = response
+            return response
+
+        res_json = query_fn(
             QUERY_PLAYER_META,
             {"code": report_code, "fightIDs": [fight_id]},
             op_name="fetch_player_meta",
@@ -202,7 +246,7 @@ class LogFetcher:
             fight_end_ms=end_time_ms,
         )
         cast_timeline, phase_cast_timeline = fetch_cast_timelines(
-            self._query,
+            query_fn,
             report_code=report_code,
             fight_id=fight_id,
             player_id=match.player_id,
@@ -212,18 +256,20 @@ class LogFetcher:
         )
         dps = (damage_total / duration_s) if (damage_total and duration_s > 0) else None
 
-        percentile = fetch_percentile(
-            self._query,
-            report_code=report_code,
-            fight_id=fight_id,
-            player=player,
-            server=match.server,
-            region=match.region,
-            encounter_id=raw_fight["encounterID"],
-            difficulty=raw_fight.get("difficulty"),
-        )
+        percentile = experimental_label
+        if percentile is None:
+            percentile = fetch_percentile(
+                query_fn,
+                report_code=report_code,
+                fight_id=fight_id,
+                player=player,
+                server=match.server,
+                region=match.region,
+                encounter_id=raw_fight["encounterID"],
+                difficulty=raw_fight.get("difficulty"),
+            )
         has_augmentation, external_buffs, uptimes = fetch_buffs_and_debuffs(
-            self._query,
+            query_fn,
             report_code=report_code,
             fight_id=fight_id,
             player_id=match.player_id,
@@ -232,7 +278,7 @@ class LogFetcher:
 
         # T-DG.0: report.rankings is the strong partition source — never
         # fabricated when unavailable, stays None as before (D-12(a)).
-        partition = fetch_partition(self._query, report_code=report_code, fight_id=fight_id)
+        partition = fetch_partition(query_fn, report_code=report_code, fight_id=fight_id)
 
         # T3.1 — features beyond casts.
         damage_entry = find_damage_table_entry(
@@ -244,7 +290,7 @@ class LogFetcher:
         pet_ids = pet_ids_for_owner(pet_owner_map, match.player_id)
         cast_counts = {spell_id: len(times) for spell_id, times in cast_timeline.items()}
         damage_by_ability, avg_targets_per_cast = fetch_damage_and_targets(
-            self._query,
+            query_fn,
             report_code=report_code,
             fight_id=fight_id,
             start_time_ms=start_time_ms,
@@ -253,7 +299,7 @@ class LogFetcher:
             cast_counts=cast_counts,
         )
         resource_waste = fetch_resource_waste(
-            self._query,
+            query_fn,
             report_code=report_code,
             fight_id=fight_id,
             player_id=match.player_id,

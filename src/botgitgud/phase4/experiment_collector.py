@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from botgitgud.domain.models import PlayerLog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
@@ -22,6 +22,7 @@ class FightSession:
     fight_key: tuple[str, int]
     payload_loaded: bool = False
     pages_loaded: int = 0
+    query_cache: dict[tuple[str, str], dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,13 +53,21 @@ class LogFetcherBackend:
         self, observation: PlannedExperimentObservation, session: FightSession
     ) -> CollectionResult:
         before = self._fetcher.query_count
+        if session.query_cache is None:
+            session.query_cache = {}
+        cache_entries_before = len(session.query_cache) if session.payload_loaded else 0
         player_log = self._fetcher.fetch(
-            observation.report_code, observation.fight_id, observation.player_name
+            observation.report_code,
+            observation.fight_id,
+            observation.player_name,
+            experimental_label=observation.rank_percent,
+            fight_query_cache=session.query_cache,
         )
         queries = self._fetcher.query_count - before
-        cache_hit = queries == 0
+        reused = cache_entries_before
+        cache_hit = queries == 0 or reused > 0
         session.payload_loaded = True
-        return CollectionResult(player_log, queries * 2.0, True, cache_hit, 0)
+        return CollectionResult(player_log, queries * 2.0, True, cache_hit, reused)
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +184,12 @@ def _execution_order(observations: tuple[StoredObservation, ...]) -> list[Stored
 
 def _validate(planned: PlannedExperimentObservation, player_log: PlayerLog) -> str | None:
     fight, build = player_log.fight, player_log.build
+    if fight.report_code != planned.report_code:
+        return "report_mismatch"
+    if fight.fight_id != planned.fight_id:
+        return "fight_mismatch"
+    if build.character_name != planned.player_name:
+        return "player_mismatch"
     if fight.partition != planned.partition:
         return "partition_mismatch"
     if fight.difficulty != planned.difficulty:
@@ -183,7 +198,7 @@ def _validate(planned: PlannedExperimentObservation, player_log: PlayerLog) -> s
         return "encounter_mismatch"
     if (build.class_name, build.spec_name) != (planned.class_name, planned.spec_name):
         return "spec_mismatch"
-    if player_log.percentile is None:
+    if not 0.0 <= planned.rank_percent <= 100.0:
         return "percentile_missing"
     return None
 
