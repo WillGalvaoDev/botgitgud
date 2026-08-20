@@ -19,6 +19,7 @@ from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
+from botgitgud.ingest.fight_rankings import fetch_partition
 from botgitgud.ingest.log_fetcher_aux import (
     fetch_buffs_and_debuffs,
     fetch_cast_timelines,
@@ -223,6 +224,10 @@ class LogFetcher:
             catalog=self._catalog,
         )
 
+        # T-DG.0: report.rankings is the strong partition source — never
+        # fabricated when unavailable, stays None as before (D-12(a)).
+        partition = fetch_partition(self._query, report_code=report_code, fight_id=fight_id)
+
         # T3.1 — features beyond casts.
         damage_entry = find_damage_table_entry(
             report.get("damageTable", {}).get("data", {}).get("entries", []), match.player_id
@@ -262,6 +267,7 @@ class LogFetcher:
             difficulty=raw_fight.get("difficulty") or 0,
             duration_s=duration_s,
             kill=bool(raw_fight.get("kill")),
+            partition=partition,
             phase_intervals=phase_intervals,
         )
         build = PlayerBuild(

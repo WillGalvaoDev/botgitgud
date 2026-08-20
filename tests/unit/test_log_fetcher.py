@@ -143,6 +143,41 @@ def _events_response(
     }
 
 
+def _report_rankings_response(
+    *,
+    partition: int | None = None,
+    dps_characters: list[dict[str, Any]] | None = None,
+    no_data: bool = False,
+) -> dict[str, Any]:
+    """T-DG.0/T-DG.1: shape of reportData.report.rankings — see
+    ingest/fight_rankings.py's module docstring for field provenance.
+    """
+    if no_data:
+        return {"data": {"reportData": {"report": {"rankings": {"data": []}}}}}
+    return {
+        "data": {
+            "reportData": {
+                "report": {
+                    "rankings": {
+                        "data": [
+                            {
+                                "fightID": 1,
+                                "partition": partition,
+                                "encounter": {"id": 3179, "name": "Fallen-King Salhadaar"},
+                                "difficulty": 5,
+                                "size": 20,
+                                "kill": 1,
+                                "duration": 100000,
+                                "roles": {"dps": {"characters": dps_characters or []}},
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+
 def _percentile_response(
     rank_percent: float | None, report_code: str, fight_id: int
 ) -> dict[str, Any]:
@@ -194,6 +229,8 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "events"
         elif "GetPercentile" in query:
             op = "percentile"
+        elif "GetReportRankings" in query:
+            op = "report_rankings"
         elif "GetPlayerDebuffs" in query:
             op = "debuffs"
         elif "GetPlayerBuffs" in query:
@@ -209,6 +246,7 @@ class _DispatchTransport(httpx.BaseTransport):
             "debuffs": lambda: _buffs_response(),
             "damage_events": lambda: _events_response([]),
             "resource_events": lambda: _events_response([]),
+            "report_rankings": lambda: _report_rankings_response(no_data=True),
         }
         if op in _EMPTY_DEFAULTS and op not in self._responses:
             return httpx.Response(200, json=_EMPTY_DEFAULTS[op]())
@@ -435,6 +473,53 @@ def test_fetch_populates_resource_waste_for_the_player_only(tmp_path: Path) -> N
     result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
 
     assert result.resource_waste == {"Fragmentos de Alma": 5.0}
+
+
+# -- T-DG.0: partition populated from report.rankings --------------------------
+
+
+def test_fetch_populates_partition_from_report_rankings(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["report_rankings"] = [_report_rankings_response(partition=3)]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.fight.partition == 3
+
+
+def test_fetch_partition_is_none_when_report_rankings_unavailable(tmp_path: Path) -> None:
+    """Never fabricated: no ranking data for this fight -> partition stays
+    None, exactly as it did before T-DG.0 — it never becomes a guessed or
+    default value.
+    """
+    fetcher, _transport, _store = _make_fetcher(tmp_path, _default_responses())
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.fight.partition is None
+
+
+def test_fetch_persists_partition_to_store_and_parquet_path(tmp_path: Path) -> None:
+    """docs/fase4-data-acquisition-plan.md T-DG.0 acceptance criterion: a
+    new ingestion no longer writes logs.partition = NULL nor a
+    partition=unknown parquet path when the API provides a real partition.
+    """
+    responses = _default_responses()
+    responses["report_rankings"] = [_report_rankings_response(partition=3)]
+    fetcher, _transport, store = _make_fetcher(tmp_path, responses)
+
+    fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    df = store.query(
+        "SELECT partition, parquet_path FROM logs WHERE report_code = $code",
+        code="ABCDEFGHIJKLMNOP",
+    )
+    assert len(df) == 1
+    partition, parquet_path = df["partition"][0], df["parquet_path"][0]
+    assert partition == 3
+    assert "partition=3" in parquet_path.replace("\\", "/")
+    assert "partition=unknown" not in parquet_path
 
 
 # -- T2.4: phase-aware fetching --------------------------------------------------

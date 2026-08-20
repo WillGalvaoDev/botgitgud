@@ -1,0 +1,445 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "227",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "bxN2ym6nwY1h8Xkc",
+      "fightIDs": [
+        51
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "rankings": {
+            "data": [
+              {
+                "bracket": 17,
+                "bracketData": 282,
+                "damageTakenExcludingTanks": 132044584,
+                "deaths": 3,
+                "difficulty": 5,
+                "duration": 268554,
+                "encounter": {
+                  "id": 3179,
+                  "name": "Fallen-King Salhadaar"
+                },
+                "execution": {
+                  "best": 1499,
+                  "rank": 1599,
+                  "rankPercent": 43,
+                  "totalParses": 2808
+                },
+                "fightID": 51,
+                "kill": 1,
+                "partition": 3,
+                "reportsBlacklistForCharacters": [],
+                "roles": {
+                  "dps": {
+                    "characters": [
+                      {
+                        "amount": 148592.39854927,
+                        "best": "~2464",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 79,
+                        "class": "DeathKnight",
+                        "id": 72294947,
+                        "name": "Dkóp",
+                        "rank": "~2464",
+                        "rankPercent": 84,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 15405
+                      },
+                      {
+                        "amount": 139637.19028575,
+                        "best": "~1410",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 72,
+                        "class": "Druid",
+                        "id": 109197321,
+                        "name": "Fletchicat",
+                        "rank": "~1602",
+                        "rankPercent": 75,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Balance",
+                        "totalParses": 6410
+                      },
+                      {
+                        "amount": 155387.89591665,
+                        "best": 41,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 91,
+                        "class": "Hunter",
+                        "id": 105476963,
+                        "name": "Mortiremix",
+                        "rank": 191,
+                        "rankPercent": 92,
+                        "server": {
+                          "id": 320,
+                          "name": "Ragnaros",
+                          "region": "EU"
+                        },
+                        "spec": "Marksmanship",
+                        "totalParses": 2552
+                      },
+                      {
+                        "amount": 130458.31378419,
+                        "best": 50,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 68,
+                        "class": "Mage",
+                        "id": 98385483,
+                        "name": "Tkpmagethree",
+                        "rank": 196,
+                        "rankPercent": 78,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Arcane",
+                        "totalParses": 911
+                      },
+                      {
+                        "amount": 9255.6990400441,
+                        "best": "~710",
+                        "bracket": 1,
+                        "bracketData": 184,
+                        "bracketPercent": 90,
+                        "class": "Mage",
+                        "id": 110949972,
+                        "name": "Babetaki",
+                        "rank": "~801",
+                        "rankPercent": 12,
+                        "server": {
+                          "id": 295,
+                          "name": "Genjuros",
+                          "region": "EU"
+                        },
+                        "spec": "Arcane",
+                        "totalParses": 911
+                      },
+                      {
+                        "amount": 151899.38708789,
+                        "best": 477,
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 97,
+                        "class": "Paladin",
+                        "id": 101676509,
+                        "name": "Lattepal",
+                        "rank": 477,
+                        "rankPercent": 95,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Retribution",
+                        "totalParses": 11650
+                      },
+                      {
+                        "amount": 140291.79978701,
+                        "best": 25,
+                        "bracket": 19,
+                        "bracketData": 289,
+                        "bracketPercent": 92,
+                        "class": "Rogue",
+                        "id": 54238618,
+                        "name": "Neelyn",
+                        "rank": 150,
+                        "rankPercent": 78,
+                        "server": {
+                          "id": 286,
+                          "name": "Drak'thul",
+                          "region": "EU"
+                        },
+                        "spec": "Assassination",
+                        "totalParses": 689
+                      },
+                      {
+                        "amount": 82423.937085279,
+                        "best": "~6176",
+                        "bracket": 19,
+                        "bracketData": 289,
+                        "bracketPercent": 10,
+                        "class": "Shaman",
+                        "id": 105472143,
+                        "name": "Shermanq",
+                        "rank": "~6176",
+                        "rankPercent": 11,
+                        "server": {
+                          "id": 283,
+                          "name": "Draenor",
+                          "region": "EU"
+                        },
+                        "spec": "Elemental",
+                        "totalParses": 6940
+                      },
+                      {
+                        "amount": 170527.80446391,
+                        "best": 125,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 98,
+                        "class": "Warlock",
+                        "id": 104242012,
+                        "name": "Voldemort",
+                        "rank": 125,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 351,
+                          "name": "Vashj",
+                          "region": "EU"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 11175
+                      },
+                      {
+                        "amount": 149278.30157063,
+                        "best": 254,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 81,
+                        "class": "Warrior",
+                        "id": 86568260,
+                        "name": "Jareziaah",
+                        "rank": 491,
+                        "rankPercent": 87,
+                        "server": {
+                          "id": 270,
+                          "name": "Burning Legion",
+                          "region": "EU"
+                        },
+                        "spec": "Arms",
+                        "totalParses": 4064
+                      },
+                      {
+                        "amount": 11781.377302144,
+                        "best": "~6092",
+                        "bracket": 3,
+                        "bracketData": 239,
+                        "bracketPercent": 100,
+                        "class": "Warrior",
+                        "id": 110951345,
+                        "name": "Boxzz",
+                        "rank": "~6092",
+                        "rankPercent": 3,
+                        "server": {
+                          "id": 340,
+                          "name": "Tarren Mill",
+                          "region": "EU"
+                        },
+                        "spec": "Fury",
+                        "totalParses": 6281
+                      },
+                      {
+                        "amount": 142071.35994995,
+                        "best": "~950",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 76,
+                        "class": "DemonHunter",
+                        "id": 106181910,
+                        "name": "Tmzebum",
+                        "rank": "~2376",
+                        "rankPercent": 80,
+                        "server": {
+                          "id": 283,
+                          "name": "Draenor",
+                          "region": "EU"
+                        },
+                        "spec": "Devourer",
+                        "totalParses": 11881
+                      },
+                      {
+                        "amount": 149146.2648108,
+                        "best": 13,
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 86,
+                        "class": "Evoker",
+                        "id": 105426974,
+                        "name": "Tahridragon",
+                        "rank": 139,
+                        "rankPercent": 88,
+                        "server": {
+                          "id": 304,
+                          "name": "Kazzak",
+                          "region": "EU"
+                        },
+                        "spec": "Devastation",
+                        "totalParses": 1160
+                      }
+                    ],
+                    "name": "Damage Dealers"
+                  },
+                  "healers": {
+                    "characters": [
+                      {
+                        "amount": 18462.435860199,
+                        "best": "~1669",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 75,
+                        "class": "Monk",
+                        "id": 93512153,
+                        "name": "Homieside",
+                        "rank": "~1669",
+                        "rankPercent": 80,
+                        "server": {
+                          "id": 329,
+                          "name": "Silvermoon",
+                          "region": "EU"
+                        },
+                        "spec": "Mistweaver",
+                        "totalParses": 8347
+                      },
+                      {
+                        "amount": 27248.501232527,
+                        "best": "~2111",
+                        "bracket": 19,
+                        "bracketData": 288,
+                        "bracketPercent": 42,
+                        "class": "Priest",
+                        "id": 99265378,
+                        "name": "Healla",
+                        "rank": "~3801",
+                        "rankPercent": 37,
+                        "server": {
+                          "id": 304,
+                          "name": "Kazzak",
+                          "region": "EU"
+                        },
+                        "spec": "Discipline",
+                        "totalParses": 6034
+                      },
+                      {
+                        "amount": 2609.3820982,
+                        "best": "~5644",
+                        "bracket": 19,
+                        "bracketData": 288,
+                        "bracketPercent": 36,
+                        "class": "Shaman",
+                        "id": 109872632,
+                        "name": "Navidsham",
+                        "rank": "~5644",
+                        "rankPercent": 33,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 8424
+                      }
+                    ],
+                    "name": "Healers"
+                  },
+                  "tanks": {
+                    "characters": [
+                      {
+                        "amount": 65685.575340527,
+                        "best": "~1460",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 66,
+                        "class": "DeathKnight",
+                        "id": 107071582,
+                        "name": "Dentolicious",
+                        "rank": "~1460",
+                        "rankPercent": 72,
+                        "server": {
+                          "id": 350,
+                          "name": "Twisting Nether",
+                          "region": "EU"
+                        },
+                        "spec": "Blood",
+                        "totalParses": 5217
+                      },
+                      {
+                        "amount": 21278.405832719,
+                        "best": "~3656",
+                        "bracket": 19,
+                        "bracketData": 289,
+                        "bracketPercent": 1,
+                        "class": "Druid",
+                        "id": 110493905,
+                        "name": "Zaabo",
+                        "rank": "~3656",
+                        "rankPercent": 3,
+                        "server": {
+                          "id": 408,
+                          "name": "Blackrock",
+                          "region": "EU"
+                        },
+                        "spec": "Guardian",
+                        "totalParses": 3770
+                      },
+                      {
+                        "amount": 89167.11722782,
+                        "best": 7,
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 98,
+                        "class": "DemonHunter",
+                        "id": 34540181,
+                        "name": "Flaydh",
+                        "rank": 20,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 283,
+                          "name": "Draenor",
+                          "region": "EU"
+                        },
+                        "spec": "Vengeance",
+                        "totalParses": 1396
+                      }
+                    ],
+                    "name": "Tanks"
+                  }
+                },
+                "size": 20,
+                "speed": {
+                  "best": 2451,
+                  "rank": 1610,
+                  "rankPercent": 42,
+                  "totalParses": 2808
+                },
+                "zone": 46
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

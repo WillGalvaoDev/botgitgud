@@ -1,0 +1,474 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "227",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "jC7x2P4DYJq1KMNW",
+      "fightIDs": [
+        22
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "rankings": {
+            "data": [
+              {
+                "bracket": 10,
+                "bracketData": 261.1,
+                "damageTakenExcludingTanks": 157812138,
+                "deaths": 5,
+                "difficulty": 5,
+                "duration": 325202,
+                "encounter": {
+                  "id": 3179,
+                  "name": "Fallen-King Salhadaar"
+                },
+                "execution": {
+                  "best": 403,
+                  "rank": 2324,
+                  "rankPercent": 17,
+                  "totalParses": 2808
+                },
+                "fightID": 22,
+                "guild": {
+                  "faction": 1,
+                  "id": 758788,
+                  "name": "一代天骄",
+                  "server": {
+                    "id": 655,
+                    "name": "安苏",
+                    "region": "CN"
+                  }
+                },
+                "kill": 1,
+                "partition": 3,
+                "reportsBlacklistForCharacters": [],
+                "roles": {
+                  "dps": {
+                    "characters": [
+                      {
+                        "amount": 122043.6620931,
+                        "best": "~1865",
+                        "bracket": 18,
+                        "bracketData": 284,
+                        "bracketPercent": 64,
+                        "class": "DeathKnight",
+                        "id": 46862505,
+                        "name": "涅槃丶尤文",
+                        "rank": "~1865",
+                        "rankPercent": 42,
+                        "server": {
+                          "id": 872,
+                          "name": "阿迦玛甘",
+                          "region": "CN"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 3216
+                      },
+                      {
+                        "amount": 155850.05012269,
+                        "best": 367,
+                        "bracket": 19,
+                        "bracketData": 288,
+                        "bracketPercent": 96,
+                        "class": "DeathKnight",
+                        "id": 99879378,
+                        "name": "Vence",
+                        "rank": 367,
+                        "rankPercent": 88,
+                        "server": {
+                          "id": 790,
+                          "name": "罗宁",
+                          "region": "CN"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 3216
+                      },
+                      {
+                        "amount": 119110.29452463,
+                        "best": "~4863",
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 56,
+                        "class": "Hunter",
+                        "id": 30975939,
+                        "name": "胖熊爹",
+                        "rank": "~4863",
+                        "rankPercent": 59,
+                        "server": {
+                          "id": 723,
+                          "name": "永夜港",
+                          "region": "CN"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 11861
+                      },
+                      {
+                        "amount": 157919.54846526,
+                        "best": 124,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 96,
+                        "class": "Hunter",
+                        "id": 65390741,
+                        "name": "拉姆赞小卡",
+                        "rank": 124,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 611,
+                          "name": "国王之谷",
+                          "region": "CN"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 11861
+                      },
+                      {
+                        "amount": 126059.02792726,
+                        "best": "~3321",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 70,
+                        "class": "Hunter",
+                        "id": 107763547,
+                        "name": "奥丽薇丶",
+                        "rank": "~3321",
+                        "rankPercent": 72,
+                        "server": {
+                          "id": 672,
+                          "name": "幽暗沼泽",
+                          "region": "CN"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 11861
+                      },
+                      {
+                        "amount": 151741.81278098,
+                        "best": "~2094",
+                        "bracket": 19,
+                        "bracketData": 288,
+                        "bracketPercent": 95,
+                        "class": "Mage",
+                        "id": 101105918,
+                        "name": "大红手李太白",
+                        "rank": "~2094",
+                        "rankPercent": 86,
+                        "server": {
+                          "id": 697,
+                          "name": "无尽之海",
+                          "region": "CN"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 14962
+                      },
+                      {
+                        "amount": 0,
+                        "best": "~14962",
+                        "bracket": 1,
+                        "bracketData": 0,
+                        "bracketPercent": 25,
+                        "class": "Mage",
+                        "id": 101137125,
+                        "name": "无常君王卡尔",
+                        "rank": "~14962",
+                        "rankPercent": 0,
+                        "server": {
+                          "id": 610,
+                          "name": "回音山",
+                          "region": "CN"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 14962
+                      },
+                      {
+                        "amount": 0,
+                        "best": "~3866",
+                        "bracket": 12,
+                        "bracketData": 268,
+                        "bracketPercent": 20,
+                        "class": "Monk",
+                        "id": 111125069,
+                        "name": "轩辕财神",
+                        "rank": "~3866",
+                        "rankPercent": 1,
+                        "server": {
+                          "id": 908,
+                          "name": "瓦拉纳",
+                          "region": "CN"
+                        },
+                        "spec": "Windwalker",
+                        "totalParses": 3906
+                      },
+                      {
+                        "amount": 0,
+                        "best": "~11533",
+                        "bracket": 7,
+                        "bracketData": 252,
+                        "bracketPercent": 10,
+                        "class": "Paladin",
+                        "id": 99982157,
+                        "name": "潞丨职",
+                        "rank": "~11533",
+                        "rankPercent": 1,
+                        "server": {
+                          "id": 655,
+                          "name": "安苏",
+                          "region": "CN"
+                        },
+                        "spec": "Retribution",
+                        "totalParses": 11650
+                      },
+                      {
+                        "amount": 141095.20236653,
+                        "best": "~2346",
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 64,
+                        "class": "Warlock",
+                        "id": 58695110,
+                        "name": "小水球",
+                        "rank": "~2346",
+                        "rankPercent": 79,
+                        "server": {
+                          "id": 697,
+                          "name": "无尽之海",
+                          "region": "CN"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 11175
+                      },
+                      {
+                        "amount": 167679.54071623,
+                        "best": 180,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 98,
+                        "class": "Warlock",
+                        "id": 100119602,
+                        "name": "Galthran",
+                        "rank": 180,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 750,
+                          "name": "燃烧之刃",
+                          "region": "CN"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 11175
+                      },
+                      {
+                        "amount": 135178.00628532,
+                        "best": "~3445",
+                        "bracket": 19,
+                        "bracketData": 287,
+                        "bracketPercent": 86,
+                        "class": "DemonHunter",
+                        "id": 108442000,
+                        "name": "我曾直视圣光",
+                        "rank": "~3445",
+                        "rankPercent": 71,
+                        "server": {
+                          "id": 621,
+                          "name": "基尔加丹",
+                          "region": "CN"
+                        },
+                        "spec": "Devourer",
+                        "totalParses": 11881
+                      },
+                      {
+                        "amount": 118660.12816649,
+                        "best": "~3814",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 40,
+                        "class": "Evoker",
+                        "id": 109822317,
+                        "name": "布施戈门",
+                        "rank": "~3814",
+                        "rankPercent": 50,
+                        "server": {
+                          "id": 817,
+                          "name": "萨格拉斯",
+                          "region": "CN"
+                        },
+                        "spec": "Augmentation",
+                        "totalParses": 7628
+                      }
+                    ],
+                    "name": "Damage Dealers"
+                  },
+                  "healers": {
+                    "characters": [
+                      {
+                        "amount": 12502.844385951,
+                        "best": 27,
+                        "bracket": 17,
+                        "bracketData": 281,
+                        "bracketPercent": 54,
+                        "class": "Monk",
+                        "id": 110968291,
+                        "name": "绫濑桃",
+                        "rank": "~6009",
+                        "rankPercent": 28,
+                        "server": {
+                          "id": 870,
+                          "name": "阿比迪斯",
+                          "region": "CN"
+                        },
+                        "spec": "Mistweaver",
+                        "totalParses": 8347
+                      },
+                      {
+                        "amount": 21934.975799657,
+                        "best": 81,
+                        "bracket": 18,
+                        "bracketData": 286,
+                        "bracketPercent": 99,
+                        "class": "Paladin",
+                        "id": 62592342,
+                        "name": "禁书",
+                        "rank": 81,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 615,
+                          "name": "地狱咆哮",
+                          "region": "CN"
+                        },
+                        "spec": "Holy",
+                        "totalParses": 4640
+                      },
+                      {
+                        "amount": 31385.200583022,
+                        "best": "~2232",
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 59,
+                        "class": "Priest",
+                        "id": 107710259,
+                        "name": "Ttpriesteigh",
+                        "rank": "~2232",
+                        "rankPercent": 63,
+                        "server": {
+                          "id": 713,
+                          "name": "格瑞姆巴托",
+                          "region": "CN"
+                        },
+                        "spec": "Discipline",
+                        "totalParses": 6034
+                      },
+                      {
+                        "amount": 8241.2562038364,
+                        "best": "~2190",
+                        "bracket": 19,
+                        "bracketData": 289,
+                        "bracketPercent": 77,
+                        "class": "Shaman",
+                        "id": 58515641,
+                        "name": "生有丶何欢",
+                        "rank": "~2190",
+                        "rankPercent": 74,
+                        "server": {
+                          "id": 720,
+                          "name": "死亡之翼",
+                          "region": "CN"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 8424
+                      },
+                      {
+                        "amount": 360.21918684387,
+                        "best": "~7413",
+                        "bracket": 1,
+                        "bracketData": 78,
+                        "bracketPercent": 55,
+                        "class": "Shaman",
+                        "id": 93315782,
+                        "name": "Layria",
+                        "rank": "~7413",
+                        "rankPercent": 12,
+                        "server": {
+                          "id": 611,
+                          "name": "国王之谷",
+                          "region": "CN"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 8424
+                      }
+                    ],
+                    "name": "Healers"
+                  },
+                  "tanks": {
+                    "characters": [
+                      {
+                        "amount": 63273.294752185,
+                        "best": "~1825",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 59,
+                        "class": "DeathKnight",
+                        "id": 87969607,
+                        "name": "赤色制裁",
+                        "rank": "~1825",
+                        "rankPercent": 65,
+                        "server": {
+                          "id": 770,
+                          "name": "白银之手",
+                          "region": "CN"
+                        },
+                        "spec": "Blood",
+                        "totalParses": 5217
+                      },
+                      {
+                        "amount": 82007.312378153,
+                        "best": "~603",
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 83,
+                        "class": "Druid",
+                        "id": 107490409,
+                        "name": "阿咸一禾",
+                        "rank": "~603",
+                        "rankPercent": 84,
+                        "server": {
+                          "id": 720,
+                          "name": "死亡之翼",
+                          "region": "CN"
+                        },
+                        "spec": "Guardian",
+                        "totalParses": 3770
+                      }
+                    ],
+                    "name": "Tanks"
+                  }
+                },
+                "size": 20,
+                "speed": {
+                  "best": 831,
+                  "rank": 2402,
+                  "rankPercent": 14,
+                  "totalParses": 2808
+                },
+                "zone": 46
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

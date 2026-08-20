@@ -1,0 +1,474 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "226",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "PtfBbQKRY9d6zAMC",
+      "fightIDs": [
+        1
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "rankings": {
+            "data": [
+              {
+                "bracket": 17,
+                "bracketData": 281.4,
+                "damageTakenExcludingTanks": 226530704,
+                "deaths": 7,
+                "difficulty": 5,
+                "duration": 345146,
+                "encounter": {
+                  "id": 3179,
+                  "name": "Fallen-King Salhadaar"
+                },
+                "execution": {
+                  "best": "~4004",
+                  "rank": "~5148",
+                  "rankPercent": 10,
+                  "totalParses": 5720
+                },
+                "fightID": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc",
+                  "server": {
+                    "id": 25,
+                    "name": "Azralon",
+                    "region": "US"
+                  }
+                },
+                "kill": 1,
+                "partition": 2,
+                "reportsBlacklistForCharacters": [],
+                "roles": {
+                  "dps": {
+                    "characters": [
+                      {
+                        "amount": 98129.382927804,
+                        "best": "~29001",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 20,
+                        "class": "DeathKnight",
+                        "id": 86105886,
+                        "name": "Zilbag",
+                        "rank": "~29001",
+                        "rankPercent": 19,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 35804
+                      },
+                      {
+                        "amount": 120382.37731279,
+                        "best": "~13247",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 80,
+                        "class": "DeathKnight",
+                        "id": 100346749,
+                        "name": "Ifan",
+                        "rank": "~13247",
+                        "rankPercent": 63,
+                        "server": {
+                          "id": 182,
+                          "name": "Sargeras",
+                          "region": "US"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 35804
+                      },
+                      {
+                        "amount": 108277.69407729,
+                        "best": "~8234",
+                        "bracket": 17,
+                        "bracketData": 283,
+                        "bracketPercent": 46,
+                        "class": "DeathKnight",
+                        "id": 106476466,
+                        "name": "Warflavor",
+                        "rank": "~22556",
+                        "rankPercent": 37,
+                        "server": {
+                          "id": 18,
+                          "name": "Area 52",
+                          "region": "US"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 35804
+                      },
+                      {
+                        "amount": 107647.51148789,
+                        "best": "~8178",
+                        "bracket": 17,
+                        "bracketData": 283,
+                        "bracketPercent": 77,
+                        "class": "Hunter",
+                        "id": 82434542,
+                        "name": "Predo",
+                        "rank": "~9995",
+                        "rankPercent": 56,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 22717
+                      },
+                      {
+                        "amount": 103709.36357368,
+                        "best": "~12267",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 66,
+                        "class": "Hunter",
+                        "id": 89055912,
+                        "name": "Veloso",
+                        "rank": "~12267",
+                        "rankPercent": 46,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 22717
+                      },
+                      {
+                        "amount": 115327.44983282,
+                        "best": "~3384",
+                        "bracket": 16,
+                        "bracketData": 279,
+                        "bracketPercent": 70,
+                        "class": "Hunter",
+                        "id": 109039602,
+                        "name": "Rhaelos",
+                        "rank": "~4436",
+                        "rankPercent": 41,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Survival",
+                        "totalParses": 7520
+                      },
+                      {
+                        "amount": 99611.390541974,
+                        "best": "~16076",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 22,
+                        "class": "Mage",
+                        "id": 97542605,
+                        "name": "Battoumage",
+                        "rank": "~25848",
+                        "rankPercent": 18,
+                        "server": {
+                          "id": 182,
+                          "name": "Sargeras",
+                          "region": "US"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 31523
+                      },
+                      {
+                        "amount": 96947.126723184,
+                        "best": "~6155",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 21,
+                        "class": "Priest",
+                        "id": 105339893,
+                        "name": "Luanreizinho",
+                        "rank": "~7523",
+                        "rankPercent": 23,
+                        "server": {
+                          "id": 123,
+                          "name": "Illidan",
+                          "region": "US"
+                        },
+                        "spec": "Shadow",
+                        "totalParses": 9771
+                      },
+                      {
+                        "amount": 92916.000764894,
+                        "best": "~1206",
+                        "bracket": 17,
+                        "bracketData": 281,
+                        "bracketPercent": 13,
+                        "class": "Rogue",
+                        "id": 7781379,
+                        "name": "Neroditty",
+                        "rank": "~1507",
+                        "rankPercent": 15,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Assassination",
+                        "totalParses": 1774
+                      },
+                      {
+                        "amount": 108296.5440712,
+                        "best": "~11316",
+                        "bracket": 17,
+                        "bracketData": 283,
+                        "bracketPercent": 51,
+                        "class": "Warlock",
+                        "id": 3811443,
+                        "name": "Zarad",
+                        "rank": "~16974",
+                        "rankPercent": 40,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 28290
+                      },
+                      {
+                        "amount": 109034.13917588,
+                        "best": "~11598",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 53,
+                        "class": "Warlock",
+                        "id": 106710020,
+                        "name": "Anakyn",
+                        "rank": "~16691",
+                        "rankPercent": 41,
+                        "server": {
+                          "id": 206,
+                          "name": "Stormrage",
+                          "region": "US"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 28290
+                      },
+                      {
+                        "amount": 92399.129643687,
+                        "best": "~8628",
+                        "bracket": 17,
+                        "bracketData": 281,
+                        "bracketPercent": 18,
+                        "class": "Warrior",
+                        "id": 70426523,
+                        "name": "Brunorotoro",
+                        "rank": "~10560",
+                        "rankPercent": 18,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Fury",
+                        "totalParses": 12879
+                      },
+                      {
+                        "amount": 58221.500466469,
+                        "best": "~6131",
+                        "bracket": 16,
+                        "bracketData": 280,
+                        "bracketPercent": 4,
+                        "class": "DemonHunter",
+                        "id": 21860342,
+                        "name": "Maeliel",
+                        "rank": "~6401",
+                        "rankPercent": 5,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Havoc",
+                        "totalParses": 6738
+                      },
+                      {
+                        "amount": 111984.73689395,
+                        "best": "~12119",
+                        "bracket": 16,
+                        "bracketData": 280,
+                        "bracketPercent": 71,
+                        "class": "DemonHunter",
+                        "id": 101717622,
+                        "name": "Decenty",
+                        "rank": "~12119",
+                        "rankPercent": 52,
+                        "server": {
+                          "id": 65,
+                          "name": "Demon Soul",
+                          "region": "US"
+                        },
+                        "spec": "Devourer",
+                        "totalParses": 25249
+                      }
+                    ],
+                    "name": "Damage Dealers"
+                  },
+                  "healers": {
+                    "characters": [
+                      {
+                        "amount": 2826.6125060119,
+                        "best": "~7549",
+                        "bracket": 17,
+                        "bracketData": 281,
+                        "bracketPercent": 54,
+                        "class": "Druid",
+                        "id": 97972705,
+                        "name": "Drickie",
+                        "rank": "~7549",
+                        "rankPercent": 49,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 14803
+                      },
+                      {
+                        "amount": 8228.0223441674,
+                        "best": "~11177",
+                        "bracket": 16,
+                        "bracketData": 280,
+                        "bracketPercent": 7,
+                        "class": "Monk",
+                        "id": 107986934,
+                        "name": "Sekungfu",
+                        "rank": "~14126",
+                        "rankPercent": 9,
+                        "server": {
+                          "id": 123,
+                          "name": "Illidan",
+                          "region": "US"
+                        },
+                        "spec": "Mistweaver",
+                        "totalParses": 15524
+                      },
+                      {
+                        "amount": 5064.9116605726,
+                        "best": "~2900",
+                        "bracket": 17,
+                        "bracketData": 281,
+                        "bracketPercent": 72,
+                        "class": "Paladin",
+                        "id": 106353619,
+                        "name": "Cebøla",
+                        "rank": "~4081",
+                        "rankPercent": 62,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Holy",
+                        "totalParses": 10742
+                      },
+                      {
+                        "amount": 4636.0989262515,
+                        "best": "~4559",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 56,
+                        "class": "Shaman",
+                        "id": 93629999,
+                        "name": "Kezzers",
+                        "rank": "~9293",
+                        "rankPercent": 47,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 17535
+                      }
+                    ],
+                    "name": "Healers"
+                  },
+                  "tanks": {
+                    "characters": [
+                      {
+                        "amount": 64622.336634352,
+                        "best": "~2678",
+                        "bracket": 17,
+                        "bracketData": 282,
+                        "bracketPercent": 87,
+                        "class": "Monk",
+                        "id": 75864770,
+                        "name": "Disghusting",
+                        "rank": "~2678",
+                        "rankPercent": 79,
+                        "server": {
+                          "id": 25,
+                          "name": "Azralon",
+                          "region": "US"
+                        },
+                        "spec": "Brewmaster",
+                        "totalParses": 12757
+                      },
+                      {
+                        "amount": 53351.115180243,
+                        "best": "~1151",
+                        "bracket": 16,
+                        "bracketData": 280,
+                        "bracketPercent": 73,
+                        "class": "Paladin",
+                        "id": 86178279,
+                        "name": "Jocí",
+                        "rank": "~1151",
+                        "rankPercent": 60,
+                        "server": {
+                          "id": 206,
+                          "name": "Stormrage",
+                          "region": "US"
+                        },
+                        "spec": "Protection",
+                        "totalParses": 2878
+                      }
+                    ],
+                    "name": "Tanks"
+                  }
+                },
+                "size": 20,
+                "speed": {
+                  "best": "~3317",
+                  "rank": "~4690",
+                  "rankPercent": 18,
+                  "totalParses": 5720
+                },
+                "zone": 46
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -18,7 +18,12 @@ from typing import Any
 
 import httpx
 import pytest
-from test_log_fetcher import _events_response, _meta_response, _percentile_response
+from test_log_fetcher import (
+    _events_response,
+    _meta_response,
+    _percentile_response,
+    _report_rankings_response,
+)
 
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.config import Settings
@@ -120,6 +125,8 @@ class _DispatchTransport(httpx.BaseTransport):
             op = "events"
         elif "GetPercentile" in query:
             op = "percentile"
+        elif "GetReportRankings" in query:
+            op = "report_rankings"
         elif "GetRankingsCDs" in query:
             op = "rankings"
         elif "GetZonePartitions" in query:
@@ -142,6 +149,7 @@ class _DispatchTransport(httpx.BaseTransport):
             "debuffs": _buffs_response(),
             "damage_events": _empty_events,
             "resource_events": _empty_events,
+            "report_rankings": _report_rankings_response(no_data=True),
         }
         if op in _empty_defaults and op not in self._responses:
             return httpx.Response(200, json=_empty_defaults[op])

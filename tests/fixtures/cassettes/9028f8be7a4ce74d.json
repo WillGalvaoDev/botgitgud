@@ -1,0 +1,464 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "227",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "QtYfBmyc8kMNaKxZ",
+      "fightIDs": [
+        33
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "rankings": {
+            "data": [
+              {
+                "bracket": 18,
+                "bracketData": 286.5,
+                "damageTakenExcludingTanks": 160325193,
+                "deaths": 2,
+                "difficulty": 5,
+                "duration": 238714,
+                "encounter": {
+                  "id": 3179,
+                  "name": "Fallen-King Salhadaar"
+                },
+                "execution": {
+                  "best": 1499,
+                  "rank": 1283,
+                  "rankPercent": 54,
+                  "totalParses": 2808
+                },
+                "fightID": 33,
+                "kill": 1,
+                "partition": 3,
+                "reportsBlacklistForCharacters": [],
+                "roles": {
+                  "dps": {
+                    "characters": [
+                      {
+                        "amount": 156172.14742328,
+                        "best": 299,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 84,
+                        "class": "DeathKnight",
+                        "id": 109714691,
+                        "name": "랑빈",
+                        "rank": 356,
+                        "rankPercent": 88,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 3216
+                      },
+                      {
+                        "amount": 129868.93102206,
+                        "best": 412,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 32,
+                        "class": "Druid",
+                        "id": 90749313,
+                        "name": "Exorde",
+                        "rank": "~2564",
+                        "rankPercent": 60,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Balance",
+                        "totalParses": 6410
+                      },
+                      {
+                        "amount": 64852.970500264,
+                        "best": "~5897",
+                        "bracket": 9,
+                        "bracketData": 259,
+                        "bracketPercent": 52,
+                        "class": "Druid",
+                        "id": 111634535,
+                        "name": "이나츄",
+                        "rank": "~5897",
+                        "rankPercent": 8,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Balance",
+                        "totalParses": 6410
+                      },
+                      {
+                        "amount": 148366.75687224,
+                        "best": 295,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 84,
+                        "class": "Hunter",
+                        "id": 96486406,
+                        "name": "무작위사냥",
+                        "rank": 332,
+                        "rankPercent": 86,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Marksmanship",
+                        "totalParses": 2552
+                      },
+                      {
+                        "amount": 164097.35918296,
+                        "best": 12,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 91,
+                        "class": "Mage",
+                        "id": 109849749,
+                        "name": "젠부키마가이이",
+                        "rank": 12,
+                        "rankPercent": 98,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Arcane",
+                        "totalParses": 911
+                      },
+                      {
+                        "amount": 162883.8694002,
+                        "best": "~748",
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 95,
+                        "class": "Mage",
+                        "id": 92701801,
+                        "name": "카뉴",
+                        "rank": "~748",
+                        "rankPercent": 95,
+                        "server": {
+                          "id": 524,
+                          "name": "세나리우스",
+                          "region": "KR"
+                        },
+                        "spec": "Frost",
+                        "totalParses": 14962
+                      },
+                      {
+                        "amount": 107706.76625585,
+                        "best": "~7456",
+                        "bracket": 18,
+                        "bracketData": 285,
+                        "bracketPercent": 54,
+                        "class": "Paladin",
+                        "id": 59048731,
+                        "name": "쐐기러",
+                        "rank": "~7456",
+                        "rankPercent": 36,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Retribution",
+                        "totalParses": 11650
+                      },
+                      {
+                        "amount": 140217.01282707,
+                        "best": "~1081",
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 51,
+                        "class": "Priest",
+                        "id": 107151429,
+                        "name": "몽실몽실김몽실",
+                        "rank": "~1459",
+                        "rankPercent": 73,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Shadow",
+                        "totalParses": 5407
+                      },
+                      {
+                        "amount": 57258.087083288,
+                        "best": "~6593",
+                        "bracket": 8,
+                        "bracketData": 254,
+                        "bracketPercent": 60,
+                        "class": "Shaman",
+                        "id": 108323330,
+                        "name": "택술이",
+                        "rank": "~6593",
+                        "rankPercent": 5,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Elemental",
+                        "totalParses": 6940
+                      },
+                      {
+                        "amount": 173189.94277671,
+                        "best": 89,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 97,
+                        "class": "Warlock",
+                        "id": 20659776,
+                        "name": "부꼬오옷",
+                        "rank": 89,
+                        "rankPercent": 99,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 11175
+                      },
+                      {
+                        "amount": 159068.51713766,
+                        "best": 211,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 92,
+                        "class": "Warrior",
+                        "id": 9810271,
+                        "name": "Dragonslayer",
+                        "rank": 211,
+                        "rankPercent": 96,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Fury",
+                        "totalParses": 6281
+                      },
+                      {
+                        "amount": 152164.46458943,
+                        "best": "~950",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 87,
+                        "class": "DemonHunter",
+                        "id": 17316311,
+                        "name": "Jova",
+                        "rank": "~1306",
+                        "rankPercent": 89,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Devourer",
+                        "totalParses": 11881
+                      },
+                      {
+                        "amount": 164134.40770127,
+                        "best": 419,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 90,
+                        "class": "DemonHunter",
+                        "id": 98691762,
+                        "name": "악초캉",
+                        "rank": 419,
+                        "rankPercent": 96,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Devourer",
+                        "totalParses": 11881
+                      }
+                    ],
+                    "name": "Damage Dealers"
+                  },
+                  "healers": {
+                    "characters": [
+                      {
+                        "amount": 2082.6721516124,
+                        "best": "~3115",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 31,
+                        "class": "Druid",
+                        "id": 86532914,
+                        "name": "포도는포도포도",
+                        "rank": "~3661",
+                        "rankPercent": 33,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 5465
+                      },
+                      {
+                        "amount": 13560.231071491,
+                        "best": "~5008",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 27,
+                        "class": "Monk",
+                        "id": 101755477,
+                        "name": "Unmuu",
+                        "rank": "~5258",
+                        "rankPercent": 37,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Mistweaver",
+                        "totalParses": 8347
+                      },
+                      {
+                        "amount": 15878.268555678,
+                        "best": "-",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 51,
+                        "class": "Monk",
+                        "id": 111271274,
+                        "name": "Hiyuki",
+                        "rank": "~3338",
+                        "rankPercent": 60,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Mistweaver",
+                        "totalParses": 8347
+                      },
+                      {
+                        "amount": 0,
+                        "best": "~4640",
+                        "bracket": 8,
+                        "bracketData": 254,
+                        "bracketPercent": 0,
+                        "class": "Paladin",
+                        "id": 111684409,
+                        "name": "돌아온드워프신녀",
+                        "rank": "~4640",
+                        "rankPercent": 0,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Holy",
+                        "totalParses": 4640
+                      },
+                      {
+                        "amount": 1905.8161649505,
+                        "best": "~6065",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 27,
+                        "class": "Shaman",
+                        "id": 11902049,
+                        "name": "나는야만장",
+                        "rank": "~6065",
+                        "rankPercent": 28,
+                        "server": {
+                          "id": 518,
+                          "name": "데스윙",
+                          "region": "KR"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 8424
+                      }
+                    ],
+                    "name": "Healers"
+                  },
+                  "tanks": {
+                    "characters": [
+                      {
+                        "amount": 61016.412946036,
+                        "best": "~1669",
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 53,
+                        "class": "DeathKnight",
+                        "id": 37591720,
+                        "name": "혈죽곤",
+                        "rank": "~2138",
+                        "rankPercent": 59,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Blood",
+                        "totalParses": 5217
+                      },
+                      {
+                        "amount": 71149.408916109,
+                        "best": "~608",
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 48,
+                        "class": "Warrior",
+                        "id": 69106792,
+                        "name": "전사반나",
+                        "rank": "~1331",
+                        "rankPercent": 65,
+                        "server": {
+                          "id": 526,
+                          "name": "아즈샤라",
+                          "region": "KR"
+                        },
+                        "spec": "Protection",
+                        "totalParses": 3804
+                      }
+                    ],
+                    "name": "Tanks"
+                  }
+                },
+                "size": 20,
+                "speed": {
+                  "best": 2451,
+                  "rank": 980,
+                  "rankPercent": 65,
+                  "totalParses": 2808
+                },
+                "zone": 46
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}
