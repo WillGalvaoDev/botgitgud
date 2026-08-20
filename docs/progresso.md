@@ -467,7 +467,7 @@ propriamente dita (T4.1-T4.4) continua bloqueada.**
 | MT.3/4 | ✅ FEITA | bd8ca97 | Boundary de capability; fallback Fases 0–3 normal. |
 | MT.5 | ✅ FEITA | 8629201 | Ranking global inclui progresso, gate e model status. |
 | MT.6 | ✅ FEITA | e665bcd | Planner local e genérico; nenhuma coleta ou rede. |
-| MT.7 | ✅ FEITA | (backfill) | Arquitetura documentada; 581 testes, ruff e pyright verdes. |
+| MT.7 | ✅ FEITA | 3e9f1c5 | Arquitetura documentada; 581 testes, ruff e pyright verdes. |
 
 ## Ambiente
 
