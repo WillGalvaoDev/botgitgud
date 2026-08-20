@@ -172,3 +172,24 @@ query GetReportRankings($code: String!, $fightIDs: [Int]!) {
   }
 }
 """
+
+# T-DG.3 (docs/fase4-data-acquisition-plan.md §4.1, docs/schema_confirmado.md
+# §13.2): Estágio A discovery — reportData.reports is the source that scales
+# (no characterRankings/fightRankings leaderboard-size ceiling), but the WCL
+# server itself rejects page > 25 ("The maximum allowed page is 25 until the
+# performance of paginated queries can be improved"), so callers MUST window
+# by startTime/endTime (ingest/discovery.py enforces this, never calls with
+# page > MAX_DISCOVERY_PAGE). `has_more_pages` is snake_case in the response
+# (verified live), unlike every other paginator in this file.
+QUERY_DISCOVER_REPORTS = """
+query DiscoverReports(
+  $zoneID: Int!, $limit: Int!, $page: Int!, $startTime: Float!, $endTime: Float!
+) {
+  reportData {
+    reports(zoneID: $zoneID, limit: $limit, page: $page, startTime: $startTime, endTime: $endTime) {
+      has_more_pages
+      data { code startTime endTime }
+    }
+  }
+}
+"""

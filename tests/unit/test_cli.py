@@ -93,3 +93,45 @@ def test_backfill_stub_returns_failure_and_explains_why(
     exit_code = _cmd_backfill(build_parser().parse_args(["backfill"]))
     assert exit_code == 1
     assert "D-13" in capsys.readouterr().err
+
+
+# -- T-DG.3: discover subcommand ----------------------------------------------
+
+
+def test_discover_subcommand_parses_required_flags() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["discover", "--zone", "46", "--start-ms", "1000", "--end-ms", "2000"])
+    assert args.command == "discover"
+    assert args.zone == 46
+    assert args.start_ms == 1000
+    assert args.end_ms == 2000
+    assert args.window_hours == 12.0  # default
+    assert args.max_points is None  # default
+    assert args.func is not None
+
+
+def test_discover_subcommand_accepts_optional_flags() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "discover",
+            "--zone",
+            "46",
+            "--start-ms",
+            "1000",
+            "--end-ms",
+            "2000",
+            "--window-hours",
+            "6",
+            "--max-points",
+            "900",
+        ]
+    )
+    assert args.window_hours == 6.0
+    assert args.max_points == 900.0
+
+
+def test_discover_missing_required_flag_exits_nonzero() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["discover", "--zone", "46"])
