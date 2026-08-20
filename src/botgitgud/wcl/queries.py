@@ -173,6 +173,22 @@ query GetReportRankings($code: String!, $fightIDs: [Int]!) {
 }
 """
 
+# T-DG.4 (docs/fase4-data-acquisition-plan.md §4.3, docs/schema_confirmado.md
+# §13.3 update): `fightIDs` omitted entirely — measured live to return EVERY
+# ranked fight of the report in one call (6/6 fights, same ~2.0 pts/fight as
+# the single-fight form above), letting Estágio B triage a report without
+# knowing any fight_id upfront and without filtering by spec/encounter —
+# the plan's own requirement ("não fixe ainda uma spec/encontro").
+QUERY_REPORT_RANKINGS_ALL_FIGHTS = """
+query GetReportRankingsAllFights($code: String!) {
+  reportData {
+    report(code: $code) {
+      rankings
+    }
+  }
+}
+"""
+
 # T-DG.3 (docs/fase4-data-acquisition-plan.md §4.1, docs/schema_confirmado.md
 # §13.2): Estágio A discovery — reportData.reports is the source that scales
 # (no characterRankings/fightRankings leaderboard-size ceiling), but the WCL

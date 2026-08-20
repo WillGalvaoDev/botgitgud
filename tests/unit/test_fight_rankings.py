@@ -5,7 +5,11 @@ from typing import Any
 import pytest
 
 from botgitgud.errors import TransientApiError
-from botgitgud.ingest.fight_rankings import fetch_fight_rankings, parse_report_rankings
+from botgitgud.ingest.fight_rankings import (
+    fetch_fight_rankings,
+    parse_report_rankings,
+    parse_report_rankings_all,
+)
 
 
 def _real_shaped_response() -> dict[str, Any]:
@@ -212,6 +216,66 @@ def test_duration_none_when_missing() -> None:
 def test_entry_not_a_dict_returns_none() -> None:
     payload = {"data": {"reportData": {"report": {"rankings": {"data": ["not_a_dict"]}}}}}
     assert parse_report_rankings(payload, fight_id=1) is None
+
+
+# -- parse_report_rankings_all: T-DG.4, multi-fight ---------------------------
+
+
+def _multi_fight_response() -> dict[str, Any]:
+    """Mirrors the live shape measured for docs/schema_confirmado.md §13.3's
+    T-DG.4 update: report.rankings with fightIDs omitted, 2 of the 6 fights
+    measured live for report 2CbQfkJ47Nxq6cDT.
+    """
+    entry_template = _real_shaped_response()["data"]["reportData"]["report"]["rankings"]["data"][0]
+    entry_2 = dict(entry_template)
+    entry_2["fightID"] = 3
+    entry_2["kill"] = 0
+    return {
+        "data": {
+            "reportData": {
+                "report": {"rankings": {"data": [entry_template, entry_2]}},
+            }
+        }
+    }
+
+
+def test_parse_report_rankings_all_returns_every_fight() -> None:
+    results = parse_report_rankings_all(_multi_fight_response())
+
+    assert len(results) == 2
+    assert {r.fight_id for r in results} == {21, 3}
+
+
+def test_parse_report_rankings_all_preserves_each_fights_own_fields() -> None:
+    results = {r.fight_id: r for r in parse_report_rankings_all(_multi_fight_response())}
+
+    assert results[21].kill is True
+    assert results[3].kill is False
+    assert len(results[21].dps) == 2
+    assert len(results[3].dps) == 2
+
+
+def test_parse_report_rankings_all_empty_when_no_data() -> None:
+    payload = {"data": {"reportData": {"report": {"rankings": {"data": []}}}}}
+    assert parse_report_rankings_all(payload) == ()
+
+
+def test_parse_report_rankings_all_none_rankings_returns_empty_tuple() -> None:
+    payload = {"data": {"reportData": {"report": {"rankings": None}}}}
+    assert parse_report_rankings_all(payload) == ()
+
+
+def test_parse_report_rankings_all_skips_entries_without_a_usable_fight_id() -> None:
+    payload = _multi_fight_response()
+    payload["data"]["reportData"]["report"]["rankings"]["data"].append({"fightID": None})
+    payload["data"]["reportData"]["report"]["rankings"]["data"].append("not_a_dict")
+    results = parse_report_rankings_all(payload)
+    assert len(results) == 2  # the 2 well-formed entries only
+
+
+def test_parse_report_rankings_all_missing_data_key_returns_empty_tuple() -> None:
+    payload = {"data": {"reportData": {"report": {"rankings": {}}}}}
+    assert parse_report_rankings_all(payload) == ()
 
 
 # -- fetch_fight_rankings: best-effort wrapper -------------------------------

@@ -12,6 +12,13 @@ and are never useful as training observations. `rankPercent` here is an
 integer (measured: 48, 88, 94, ...), coarser than the float
 `characterData...encounterRankings` already used elsewhere returns — a
 documented precision loss (docs/schema_confirmado.md §13.3), not a bug.
+
+T-DG.4 adds `parse_report_rankings_all`/`QUERY_REPORT_RANKINGS_ALL_FIGHTS`:
+report.rankings with `fightIDs` omitted returns every ranked fight of a
+report in one call, not just one — the fact that lets Estágio B triage a
+report without knowing any fight_id in advance, spec/encounter-agnostic by
+construction (the user-approved plan explicitly forbids fixing a target
+before the census).
 """
 
 from __future__ import annotations
@@ -55,22 +62,55 @@ class FightRankings:
     dps: tuple[DpsRanking, ...]
 
 
+def _rankings_data_list(res_json: dict[str, Any]) -> list[Any] | None:
+    rankings = res_json.get("data", {}).get("reportData", {}).get("report", {}).get("rankings")
+    if not isinstance(rankings, dict):
+        return None
+    data = rankings.get("data")
+    return data if isinstance(data, list) else None
+
+
 def parse_report_rankings(res_json: dict[str, Any], *, fight_id: int) -> FightRankings | None:
     """None whenever the fight has no rankings entry (private report, a
     wipe not counted, or WCL simply lacking ranking data for it) or the
     response is malformed in any way — never fabricated, mirroring every
     other best-effort parser in ingest/ (e.g. find_matching_rank_percent).
     """
-    rankings = res_json.get("data", {}).get("reportData", {}).get("report", {}).get("rankings")
-    if not isinstance(rankings, dict):
-        return None
-    data = rankings.get("data")
-    if not isinstance(data, list) or not data:
+    data = _rankings_data_list(res_json)
+    if not data:
         return None
     entry = data[0]
     if not isinstance(entry, dict):
         return None
+    return _parse_fight_entry(entry, fight_id=fight_id)
 
+
+def parse_report_rankings_all(res_json: dict[str, Any]) -> tuple[FightRankings, ...]:
+    """T-DG.4: unlike parse_report_rankings (one already-known fight_id),
+    parses EVERY fight entry the response contains — pairs with
+    QUERY_REPORT_RANKINGS_ALL_FIGHTS (report.rankings with no fightIDs
+    filter), which live-measurement showed returns every ranked fight of a
+    report in one call (docs/schema_confirmado.md §13.3 update: 6/6 fights,
+    same ~2.0 pts/fight as the single-fight form) — the fact that makes
+    Estágio B's triage spec/encounter-agnostic, never needing to know a
+    fight_id in advance. Entries missing a usable `fightID` are skipped,
+    never fabricated.
+    """
+    data = _rankings_data_list(res_json)
+    if not data:
+        return ()
+    results: list[FightRankings] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        fight_id = entry.get("fightID")
+        if not isinstance(fight_id, int):
+            continue
+        results.append(_parse_fight_entry(entry, fight_id=fight_id))
+    return tuple(results)
+
+
+def _parse_fight_entry(entry: dict[str, Any], *, fight_id: int) -> FightRankings:
     roles = entry.get("roles")
     dps_group = roles.get("dps") if isinstance(roles, dict) else None
     characters = dps_group.get("characters") if isinstance(dps_group, dict) else None

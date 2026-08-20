@@ -16,11 +16,10 @@ from pathlib import Path
 from botgitgud.analysis.cohort_builder import build_cohorts
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
+from botgitgud.cli_discovery import add_discover_parser, add_triage_parser
 from botgitgud.config import Settings
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
-from botgitgud.ingest.discovery import run_discovery
-from botgitgud.ingest.discovery_store import DiscoveryStore
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
 from botgitgud.logging_setup import configure_logging
@@ -125,44 +124,6 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_discover(args: argparse.Namespace) -> int:
-    """T-DG.3 — Estágio A do Data Acquisition Gate (docs/fase4-data-acquisition-plan.md):
-    descoberta janelada e resumível de reports via reportData.reports.
-    Nunca dispara sozinho — cada execução processa o que couber dentro de
-    --max-points (se dado) e do piso global de orçamento, depois para.
-    """
-    settings = Settings()  # type: ignore[call-arg]  # populada a partir do .env em runtime
-    deps = _build_deps(settings)
-    discovery_store = DiscoveryStore(deps.store)
-    window_span_ms = int(args.window_hours * 3600 * 1000)
-    try:
-        summary = run_discovery(
-            deps.client,
-            discovery_store,
-            zone_id=args.zone,
-            start_ms=args.start_ms,
-            end_ms=args.end_ms,
-            window_span_ms=window_span_ms,
-            max_points=args.max_points,
-        )
-    except BotGitGudError as e:
-        sys.stderr.write(f"erro: {e}\n")
-        return 1
-    finally:
-        deps.store.close()
-        deps.client.close()
-
-    sys.stdout.write(
-        f"job_key={summary.job_key}\n"
-        f"janelas: {summary.windows_done}/{summary.windows_total} concluídas "
-        f"({summary.windows_remaining} restantes)\n"
-        f"reports novos descobertos: {summary.reports_written}\n"
-        f"pontos de API gastos: {summary.points_spent:.2f}\n"
-        f"motivo de parada: {summary.stopped_reason}\n"
-    )
-    return EX_TEMPFAIL if summary.stopped_reason == "budget_exceeded" else 0
-
-
 def _cmd_backfill(_args: argparse.Namespace) -> int:
     sys.stderr.write(
         "backfill ainda não implementado — sem especificação (docs/desvios.md D-13).\n"
@@ -222,33 +183,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_build_cohort.set_defaults(func=_cmd_build_cohort)
 
-    p_discover = sub.add_parser(
-        "discover",
-        help="Estágio A do Data Acquisition Gate: descoberta janelada e resumível de "
-        "reports (docs/fase4-data-acquisition-plan.md).",
-    )
-    p_discover.add_argument("--zone", required=True, type=int, help="zoneID da WCL.")
-    p_discover.add_argument(
-        "--start-ms", required=True, type=int, help="Início da janela total (epoch ms)."
-    )
-    p_discover.add_argument(
-        "--end-ms", required=True, type=int, help="Fim da janela total (epoch ms)."
-    )
-    p_discover.add_argument(
-        "--window-hours",
-        type=float,
-        default=12.0,
-        help="Tamanho de cada janela interna, em horas (default 12h; subdividida "
-        "automaticamente ao esgotar a página 25 do servidor).",
-    )
-    p_discover.add_argument(
-        "--max-points",
-        type=float,
-        default=None,
-        help="Teto de pontos de API para esta execução. Omitido: sem teto explícito "
-        "(ainda respeita o piso global de orçamento).",
-    )
-    p_discover.set_defaults(func=_cmd_discover)
+    add_discover_parser(sub, build_deps=_build_deps)
+    add_triage_parser(sub, build_deps=_build_deps)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)

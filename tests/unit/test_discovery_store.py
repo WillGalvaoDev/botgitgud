@@ -80,6 +80,62 @@ def test_count_reports_filters_by_zone(tmp_path: Path) -> None:
         assert discovery.count_reports() == 3
 
 
+# -- Estágio B dedup unit: an entire report (T-DG.4) -------------------------
+
+
+def test_has_triaged_report_false_before_mark_true_after(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        discovery.write_report(report_code="A", zone_id=46, start_time_ms=0, end_time_ms=1)
+
+        assert discovery.has_triaged_report("A") is False
+        discovery.mark_report_triaged("A")
+        assert discovery.has_triaged_report("A") is True
+
+
+def test_marking_an_unknown_report_triaged_does_not_raise(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        discovery.mark_report_triaged("NEVERDISCOVERED0")  # must not raise
+        assert discovery.has_triaged_report("NEVERDISCOVERED0") is False
+
+
+def test_list_untriaged_reports_excludes_triaged(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        discovery.write_report(report_code="A", zone_id=46, start_time_ms=0, end_time_ms=1)
+        discovery.write_report(report_code="B", zone_id=46, start_time_ms=0, end_time_ms=1)
+        discovery.mark_report_triaged("A")
+
+        assert discovery.list_untriaged_reports() == ["B"]
+
+
+def test_list_untriaged_reports_filters_by_zone(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        discovery.write_report(report_code="A", zone_id=46, start_time_ms=0, end_time_ms=1)
+        discovery.write_report(report_code="B", zone_id=99, start_time_ms=0, end_time_ms=1)
+
+        assert discovery.list_untriaged_reports(zone_id=46) == ["A"]
+        assert discovery.list_untriaged_reports(zone_id=99) == ["B"]
+        assert sorted(discovery.list_untriaged_reports()) == ["A", "B"]
+
+
+def test_rewriting_a_triaged_report_preserves_the_triaged_marker(tmp_path: Path) -> None:
+    """T-DG.4: a later Estágio A pass re-discovering the same report (e.g.
+    on a wider re-scan) must not un-triage it — write_report never lists
+    triaged_at, so DuckDB's INSERT OR REPLACE leaves it untouched.
+    """
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        discovery.write_report(report_code="A", zone_id=46, start_time_ms=0, end_time_ms=1)
+        discovery.mark_report_triaged("A")
+
+        discovery.write_report(report_code="A", zone_id=46, start_time_ms=0, end_time_ms=1)
+
+        assert discovery.has_triaged_report("A") is True
+
+
 # -- discovery_fights + discovery_targets (Estágio B) ------------------------
 
 

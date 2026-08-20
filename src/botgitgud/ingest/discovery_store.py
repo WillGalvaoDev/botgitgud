@@ -36,9 +36,18 @@ _CREATE_DISCOVERY_REPORTS_TABLE = """
 CREATE TABLE IF NOT EXISTS discovery_reports (
     report_code VARCHAR PRIMARY KEY,
     zone_id INTEGER, start_time_ms BIGINT, end_time_ms BIGINT,
-    discovered_at TIMESTAMP
+    discovered_at TIMESTAMP,
+    triaged_at TIMESTAMP
 )
 """
+# T-DG.4: `triaged_at` (NULL = not yet triaged) tracks Estágio B's own
+# dedup unit — an entire report, not a page or a fight (report.rankings
+# with no fightIDs filter triages every ranked fight of a report in one
+# call, ingest/fight_rankings.py's parse_report_rankings_all). `write_report`
+# below never lists this column, so DuckDB's INSERT OR REPLACE leaves an
+# already-triaged report's triaged_at untouched on a re-discovery
+# (verified: DuckDB's INSERT OR REPLACE only overwrites listed columns,
+# unlike SQLite's delete+reinsert semantics).
 
 # Estágio B (docs/schema_confirmado.md §13.3): one row per triaged fight —
 # partition/kill/duration come from report.rankings, the strong source
@@ -126,6 +135,36 @@ class DiscoveryStore:
                 "SELECT count(*) FROM discovery_reports WHERE zone_id = ?", [zone_id]
             )
         return int(rows[0][0])
+
+    # -- Estágio B dedup unit: an entire report (T-DG.4) -------------------------
+
+    def has_triaged_report(self, report_code: str) -> bool:
+        rows = self._store.execute_returning(
+            "SELECT 1 FROM discovery_reports WHERE report_code = ? AND triaged_at IS NOT NULL "
+            "LIMIT 1",
+            [report_code],
+        )
+        return bool(rows)
+
+    def mark_report_triaged(self, report_code: str) -> None:
+        self._store.execute(
+            "UPDATE discovery_reports SET triaged_at = ? WHERE report_code = ?",
+            [_now(), report_code],
+        )
+
+    def list_untriaged_reports(self, *, zone_id: int | None = None) -> list[str]:
+        if zone_id is None:
+            rows = self._store.execute_returning(
+                "SELECT report_code FROM discovery_reports WHERE triaged_at IS NULL "
+                "ORDER BY report_code"
+            )
+        else:
+            rows = self._store.execute_returning(
+                "SELECT report_code FROM discovery_reports "
+                "WHERE triaged_at IS NULL AND zone_id = ? ORDER BY report_code",
+                [zone_id],
+            )
+        return [r[0] for r in rows]
 
     # -- Estágio B: discovery_fights + discovery_targets -------------------------
 
