@@ -433,7 +433,25 @@ revisitar a Fase 4 depois** — quando houver volume real de dados (ex.: o bot e
 acumulando logs organicamente com o tempo). Nenhum código da Fase 4 foi escrito. Fases 0-3
 permanecem o entregável completo desta rodada.
 
-## Ações pendentes do usuário
+## Data Acquisition Gate (entre a Fase 3 e a Fase 4)
+
+Investigação registrada em `docs/fase4-data-acquisition-plan.md` (530 pontos de API gastos em
+sondagens ao vivo) concluiu que chegar a ≥5.000 observações válidas é tecnicamente viável via
+`reportData.reports` (descoberta) + `reportData.report.rankings` (triagem barata, nunca sondada
+antes do projeto) + o `LogFetcher` já existente (extração) — `characterRankings` e
+`fightRankings` (ambos leaderboards com teto e viés de sobrevivência) não bastam. Aprovado pelo
+usuário em 2026-08-20 com decisões explícitas: não fixar spec/encontro alvo ainda (censo A+B
+decide), extrair só a spec alvo quando chegar ao Estágio C, ritmo lento (~900 pts/h) preservando
+prioridade absoluta do bot interativo, e sem reingestão de logs antigos nesta rodada. **A Fase 4
+propriamente dita (T4.1-T4.4) continua bloqueada.**
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| T-DG.1 | ✅ FEITA | a229c83 | `wcl/queries.py` ganha `QUERY_REPORT_RANKINGS`; `ingest/fight_rankings.py` (novo) parseia `reportData.report.rankings` — fonte forte de `partition`+`rankPercent` por fight descoberta na investigação (2,0 pts, 100% de cobertura medida contra ~40% e 1,0 pt/jogador da fonte antiga). Só o grupo `dps` é parseado (T0.9: único escopo da ferramenta). Degrada para `None` em qualquer formato inesperado ou falha de API — nunca fabrica. Ainda não ligado ao `LogFetcher`. 16 testes novos (`test_fight_rankings.py`) cobrindo o shape real medido e formatos degradados. |
+| T-DG.0 | ✅ FEITA | 79710fa | `LogFetcher._fetch_from_api` não passava `partition=` ao `FightRef` — `logs.partition` sempre `NULL`, caminho parquet sempre `partition=unknown` (bloqueante para um gate definido por `(spec, encounter, difficulty, partition)`). Agora usa `fight_rankings.fetch_partition` (T-DG.1). Testes confirmam: partition populada; permanece `None` quando indisponível (nunca inventada); persistida em `logs.partition` e no caminho parquet. Regravadas 59 cassetes reais (`fetch_report_rankings`, 2 pts cada = 118 pts) para cada par `(report_code, fight_id)` já presente nas fixtures de golden tests — nenhuma outra query foi re-gravada. 487/487 testes verdes. |
+| T-DG.2 | ✅ FEITA | (pendente) | `ingest/discovery_store.py` (novo) — `DiscoveryStore`, seguindo o mesmo padrão de `bot/jobs.py`'s `JobQueue` (dono da própria DDL, fala com o warehouse compartilhado só via `Store.execute`/`execute_returning`/`query`, nunca toca `Store._conn` diretamente — T1.8/D-19). Quatro tabelas novas: `discovery_reports` (Estágio A), `discovery_fights`+`discovery_targets` (Estágio B, escritas juntas a partir de um `FightRankings`), `backfill_checkpoints` (resumabilidade do Estágio A, §9.2 do plano). Todas com `INSERT OR REPLACE` por chave natural — upsert idempotente, diferente da imutabilidade insert-only de `logs`/`runs` (D-12c), que é preservada e testada como regressão explícita. 15 testes novos (`test_discovery_store.py`). 502/502 testes verdes. |
+
+
 
 - **Rotacionar as 5 credenciais expostas** (Discord, WCL client id/secret, Blizzard client id/secret) — o `.env` foi lido em texto claro durante a auditoria. Recomendado antes de qualquer push para remoto. Não bloqueia a implementação local.
 
