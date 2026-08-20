@@ -67,6 +67,12 @@ class LogFetcher:
         self._query_count_lock = threading.Lock()
         self._query_count = 0
 
+    @property
+    def query_count(self) -> int:
+        """Monotonic query count for single-threaded campaign accounting."""
+        with self._query_count_lock:
+            return self._query_count
+
     def fetch(
         self, report_code: str, fight_id: int, player: str, *, force: bool = False
     ) -> PlayerLog:
