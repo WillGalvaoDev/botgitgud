@@ -469,6 +469,14 @@ propriamente dita (T4.1-T4.4) continua bloqueada.**
 | MT.6 | ✅ FEITA | e665bcd | Planner local e genérico; nenhuma coleta ou rede. |
 | MT.7 | ✅ FEITA | 3e9f1c5 | Arquitetura documentada; 581 testes, ruff e pyright verdes. |
 
+## Censo real A+B — zona 46
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| CENSUS.BUG.1 | ✅ FEITA | d9f1747 | Campos numéricos `"-"` degradam para `None`; ver D-32. |
+| CENSUS.BUG.2 | ✅ FEITA | fcbff6f | Ranking global filtra specs fora do scope gate; ver D-33. |
+| CENSUS.AB | ✅ FEITA | 66180a6 | 801 reports, 1.963 fights, 24.723 DPS brutos; relatório quantitativo completo. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
