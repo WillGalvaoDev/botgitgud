@@ -28,6 +28,7 @@ from botgitgud.errors import BotGitGudError
 from botgitgud.ingest.discovery import run_discovery
 from botgitgud.ingest.discovery_store import DiscoveryStore
 from botgitgud.ingest.triage import triage_pending_reports
+from botgitgud.phase4.registry import Phase4ModelRegistry
 
 EX_TEMPFAIL = 75  # BSD sysexits.h — same contract as cli.py's build-cohort/discover/triage
 
@@ -201,7 +202,10 @@ def cmd_dataset_status(args: argparse.Namespace, *, build_deps: BuildDeps) -> in
             )
             return 1
         else:
-            _print_candidate_groups(top_candidate_groups(deps.store, limit=args.limit))
+            registry = Phase4ModelRegistry(deps.store)
+            _print_candidate_groups(
+                top_candidate_groups(deps.store, limit=args.limit, registry=registry)
+            )
     finally:
         deps.store.close()
         deps.client.close()
@@ -216,7 +220,9 @@ def _print_candidate_groups(groups: list[CandidateGroup]) -> None:
     for g in groups:
         sys.stdout.write(
             f"  {g.class_name}/{g.spec_name}  encounter={g.encounter_id} "
-            f"difficulty={g.difficulty} partition={g.partition}: {g.n_candidates} candidatos\n"
+            f"difficulty={g.difficulty} partition={g.partition}: {g.n_candidates} candidatos; "
+            f"ingeridos={g.ingested}; faltam={g.observations_remaining}; "
+            f"gate={'PASS' if g.gate_pass else 'BLOCKED'}; modelo={g.model_status.value}\n"
         )
 
 

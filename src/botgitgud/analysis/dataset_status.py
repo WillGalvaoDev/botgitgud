@@ -18,8 +18,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from botgitgud.analysis.cohort import SANITY_BAND_PCT
+from botgitgud.domain.specs import SpecId
 from botgitgud.ingest.discovery_store import DiscoveryStore
 from botgitgud.ingest.store import Store
+from botgitgud.phase4.registry import ModelStatus, Phase4ModelRegistry
+from botgitgud.phase4.target import Phase4Target
 
 GATE_TARGET = 5000
 TEMPORAL_MIN_PER_SIDE = 1000
@@ -47,6 +50,10 @@ class CandidateGroup:
     difficulty: int
     partition: int | None
     n_candidates: int
+    ingested: int = 0
+    observations_remaining: int = GATE_TARGET
+    gate_pass: bool = False
+    model_status: ModelStatus = ModelStatus.UNAVAILABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +91,9 @@ class TargetStatus:
         return self.valid >= GATE_TARGET and self.temporal_split_ok
 
 
-def top_candidate_groups(store: Store, *, limit: int = 20) -> list[CandidateGroup]:
+def top_candidate_groups(
+    store: Store, *, limit: int = 20, registry: Phase4ModelRegistry | None = None
+) -> list[CandidateGroup]:
     """The general `dataset-status` view — best candidates across every
     spec/encounter/difficulty/partition discovered so far, ranked by size.
     Only fights the triage stage confirmed as kills count (a wipe is never
@@ -104,7 +113,7 @@ def top_candidate_groups(store: Store, *, limit: int = 20) -> list[CandidateGrou
         """,
         limit=limit,
     )
-    return [
+    groups = [
         CandidateGroup(
             class_name=row["class_name"],
             spec_name=row["spec_name"],
@@ -115,6 +124,45 @@ def top_candidate_groups(store: Store, *, limit: int = 20) -> list[CandidateGrou
         )
         for row in df.iter_rows(named=True)
     ]
+    records = {record.target: record for record in registry.list_all()} if registry else {}
+    enriched: list[CandidateGroup] = []
+    for group in groups:
+        if group.partition is None:
+            enriched.append(group)
+            continue
+        target = Phase4Target(
+            SpecId(group.class_name, group.spec_name),
+            group.encounter_id,
+            group.difficulty,
+            group.partition,
+        )
+        ingested_df = store.query(
+            "SELECT count(DISTINCT (report_code, fight_id, player_name)) AS n FROM logs "
+            "WHERE class_name=$c AND spec_name=$s AND encounter_id=$e "
+            "AND difficulty=$d AND partition=$p",
+            c=group.class_name,
+            s=group.spec_name,
+            e=group.encounter_id,
+            d=group.difficulty,
+            p=group.partition,
+        )
+        ingested = int(ingested_df["n"][0])
+        record = records.get(target)
+        enriched.append(
+            CandidateGroup(
+                class_name=group.class_name,
+                spec_name=group.spec_name,
+                encounter_id=group.encounter_id,
+                difficulty=group.difficulty,
+                partition=group.partition,
+                n_candidates=group.n_candidates,
+                ingested=ingested,
+                observations_remaining=max(0, GATE_TARGET - ingested),
+                gate_pass=ingested >= GATE_TARGET,
+                model_status=record.status if record else ModelStatus.UNAVAILABLE,
+            )
+        )
+    return enriched
 
 
 def _classify_rejection(
