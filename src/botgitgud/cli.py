@@ -21,6 +21,10 @@ from botgitgud.cli_discovery import (
     add_discover_parser,
     add_triage_parser,
 )
+from botgitgud.cli_experiment import (
+    add_experiment_plan_parser,
+    add_experiment_status_parser,
+)
 from botgitgud.config import Settings
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
@@ -200,6 +204,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_discover_parser(sub, build_deps=_build_deps)
     add_triage_parser(sub, build_deps=_build_deps)
     add_dataset_status_parser(sub, build_deps=_build_deps)
+    add_experiment_plan_parser(sub, build_deps=_build_deps)
+    add_experiment_status_parser(sub, build_deps=_build_deps)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)
