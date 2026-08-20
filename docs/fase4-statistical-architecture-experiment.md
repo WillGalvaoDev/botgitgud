@@ -273,8 +273,22 @@ Estes limiares são **do experimento**, não do produto, e não substituem T4.2/
 | Teto de API para **todo** o Stage C experimental | **25.000 pontos** |
 | Custo estimado por observação (fight solo) | 17 pontos |
 | Custo por fight compartilhado | 15 + 2/jogador |
-| Observações máximas sob o teto | ~1.470 |
+| Observações máximas sob o teto, **pior caso** (1 fight por observação) | ~1.470 |
 | Faixa alvo | 500–1.500 |
+
+⚠️ **O pior caso é pessimista por uma margem grande, e isso foi medido.** Uma amostra diversa
+seleciona vários jogadores do *mesmo* fight (um kill mítico tem ~14 DPS de specs diferentes), e o
+2º jogador de um fight custa 2 pontos em vez de 17 porque as páginas de evento já foram baixadas.
+Medido no warehouse real do censo:
+
+| Amostra (d5/p4) | observações | fights | pontos | pts/obs |
+|---|---:|---:|---:|---:|
+| Campanha recomendada | 1.200 | 376 | **8.040** | 6,7 |
+| Pool inteiro | 7.333 | 584 | 23.426 | 3,2 |
+
+Ou seja, o pool mítico **inteiro** caberia sob o teto. A campanha recomendada usa 32% do
+orçamento por escolha metodológica (largura suficiente para S3/S4 com folga de sobra), não por
+limite financeiro.
 
 O teto é configurável (`--max-points`) mas **nunca implícito**: o planner recusa produzir uma
 campanha sem orçamento declarado.
@@ -290,7 +304,90 @@ campanha sem orçamento declarado.
 
 ---
 
-## 15. O que esta rodada NÃO faz
+## 15. Campanha recomendada (medida, não estimada)
+
+Produzida por `experiment-plan` contra o warehouse real do censo (cópia read-only; o arquivo
+original nunca é aberto para escrita). Nada foi coletado.
+
+```
+botgitgud experiment-plan --partition 4 --difficulty 5 --max-observations 1200
+```
+
+| Medida | Valor |
+|---|---:|
+| Observações candidatas disponíveis | 7.333 |
+| Estratos (spec × encounter × faixa) | 833 |
+| **Observações planejadas** | **1.200** |
+| Estratos cobertos | 833 / 833 |
+| Fights distintos | 376 |
+| Reports distintos | 212 |
+| Phase4Targets envolvidos | 213 |
+| Specs | **25** |
+| Encounters | **9** |
+| Cobertura temporal | 2026-08-13 13:48Z .. 2026-08-18 16:30Z (5,11 dias) |
+| **Custo estimado do Stage C** | **8.040 pontos** (6,7/observação) |
+| Restante sob o teto de 25.000 | 16.960 pontos |
+| Cobertura mínima S3/S4 | OK |
+
+Distribuição por faixa de rankPercent — o anti-viés funcionando, sem concentração em top parses:
+
+| 00-20 | 20-40 | 40-60 | 60-80 | 80-100 |
+|---:|---:|---:|---:|---:|
+| 240 | 231 | 239 | 238 | 252 |
+
+Distribuição por spec (25 specs, 23–61 observações cada; o piso é a oferta real de
+Warlock/Affliction no censo, não uma decisão do planner):
+
+```
+Druid/Balance 61 · DeathKnight/Unholy 60 · Hunter/BeastMastery 60 · Warrior/Arms 60
+Shaman/Elemental 59 · Paladin/Retribution 56 · Warlock/Demonology 56 · Warlock/Destruction 56
+Mage/Arcane 55 · Mage/Frost 55 · Priest/Shadow 54 · Rogue/Subtlety 54 · Monk/Windwalker 53
+Hunter/Marksmanship 52 · DemonHunter/Havoc 48 · Evoker/Devastation 47 · Shaman/Enhancement 42
+Hunter/Survival 40 · Rogue/Outlaw 39 · Rogue/Assassination 38 · Druid/Feral 36
+DeathKnight/Frost 34 · Mage/Fire 34 · Warrior/Fury 28 · Warlock/Affliction 23
+```
+
+Distribuição por encounter (9 encounters da zona 46):
+
+| 3176 | 3177 | 3178 | 3179 | 3180 | 3181 | 3182 | 3183 | 3306 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 145 | 143 | 118 | 141 | 136 | 84 | 172 | 171 | 90 |
+
+### Comandos que executariam a coleta futura (NÃO executados)
+
+Ainda **não existe** um executor de Stage C experimental; construí-lo é a primeira tarefa da
+próxima rodada, após aprovação. A sequência pretendida:
+
+```
+# 1. revisar o plano (read-only, custo zero)
+botgitgud experiment-plan --partition 4 --difficulty 5 --max-observations 1200
+
+# 2. executar a coleta — COMANDO AINDA NÃO IMPLEMENTADO, requer aprovação explícita
+#    botgitgud experiment-collect --partition 4 --difficulty 5 \
+#        --max-observations 1200 --max-points 25000
+
+# 3. conferir o que foi coletado (read-only, custo zero)
+botgitgud experiment-status --partition 4 --difficulty 5
+```
+
+## 16. Estado da infraestrutura
+
+| Peça | Módulo | Estado |
+|---|---|---|
+| Contratos (granularidades, splits, roles, orçamento) | `phase4/experiment.py` | ✅ |
+| Planner multi-target determinístico | `phase4/experiment_planner.py` | ✅ |
+| Tipos de campanha | `phase4/experiment_campaign.py` | ✅ |
+| Contrato de features / leakage | `phase4/experiment_features.py` | ✅ |
+| Dataset experimental | `phase4/experimental_dataset.py` | ✅ |
+| Splits S1–S5 | `phase4/experiment_splits.py` | ✅ |
+| Métricas + Baseline 0 | `phase4/experiment_metrics.py` | ✅ |
+| CLI de plano/status | `cli_experiment.py` | ✅ |
+| Executor de Stage C experimental | — | ⬜ próxima rodada |
+| Baseline 1 (regressão linear) | — | ⬜ com a execução |
+| LightGBM | — | ⬜ não instalado por decisão |
+| Arquitetura hierárquica (E) | — | ⬜ só após A–D |
+
+## 17. O que esta rodada NÃO faz
 
 - Não executa Stage C nem baixa observações.
 - Não treina modelo nem instala LightGBM/SHAP.

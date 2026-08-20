@@ -477,6 +477,25 @@ propriamente dita (T4.1-T4.4) continua bloqueada.**
 | CENSUS.BUG.2 | ✅ FEITA | fcbff6f | Ranking global filtra specs fora do scope gate; ver D-33. |
 | CENSUS.AB | ✅ FEITA | 66180a6 | 801 reports, 1.963 fights, 24.723 DPS brutos; relatório quantitativo completo. |
 
+## Experimento de arquitetura estatística (SAE)
+
+Etapa de validação prévia entre o censo e a Fase 4 definitiva, motivada pelo fato medido de que
+`1 Phase4Target = 1 dataset de ≥5.000 = 1 modelo` custaria ~23,7M de pontos para 25 specs × 9
+encounters. Protocolo completo em `docs/fase4-statistical-architecture-experiment.md`.
+**O gate de 5.000 continua vigente para a Fase 4 final e não foi alterado.** Nenhuma coleta Stage C
+foi executada, nenhum modelo foi treinado, nada foi registrado como `READY`, LightGBM não foi
+instalado.
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| SAE.1 | ✅ FEITA | 1f6359a | Documento do protocolo (pergunta, H0–H5, alternativas A–E, splits, métricas, leakage, critérios de aprovação/interrupção, teto de API) + `phase4/experiment.py` com granularidades, protocolos, roles de feature e `ExperimentBudget`. `MODEL_HIERARCHICAL` levanta `NotImplementedError` em vez de virar global silenciosamente. Previsão ≠ causalidade: SHAP fora desta etapa por decisão explícita. 33 testes. |
+| SAE.2 | ✅ FEITA | 4d58770 | Planner multi-target determinístico, read-only (só `Store`, sem `WclClient`; teste monkeypatcha `httpx` para explodir). Estratifica por (spec, encounter, faixa de rankPercent). `balanced_visit_order` existe porque `sorted()` agruparia por spec e truncaria a amostra nas specs alfabeticamente iniciais; `spread_order` existe porque pegar os primeiros k concentraria tudo no início da janela e degeneraria o S1. Duas correções vieram de rodar contra o warehouse real, não dos testes sintéticos: o teto derivado do orçamento mascarava `budget_exhausted` como `max_observations`, e o sentinela de `max_observations=None` virava limite de fato porque observações que compartilham fight custam 2 pontos em vez de 17. 42 testes. |
+| SAE.3 | ✅ FEITA | 4ef2c16 | Dataset experimental separado do da T4.1 + contrato de features. Agregados spec-agnósticos em vez de colunas por spell (um Frost Mage e um Unholy DK não compartilham spell ids, então colunas por spell impediriam avaliar MODEL_SPEC/GLOBAL). DPS bruto é `EXCLUDED_LEAKAGE` explícito: `rankPercent` **é** o percentil daquele DPS. `resource_waste` agrega para um total porque suas chaves são rótulos PT-BR. Alignment score deliberadamente ausente — é relativo à coorte e vazaria o período de validação para dentro de uma linha de treino. 28 testes. |
+| SAE.4 | ✅ FEITA | e524924 | Splits S1–S5. S1/S2 temporais (S2 descarta da validação linhas que compartilham report ou player, em vez de movê-las para o treino, que quebraria a ordem temporal); S3/S4/S5 hold-outs de dimensão com `temporal_cutoff_ms` opcional. Cada construtor verifica os próprios invariantes e levanta `SplitInvariantError` em vez de devolver um split contaminado. 33 testes, dois deles parametrizados exigindo de todos os cinco protocolos que nenhuma observação apareça dos dois lados. |
+| SAE.5 | ✅ FEITA | 5dbdb21 | MAE, RMSE, R², Spearman, erro por bucket/spec/encounter, e separação entre targets vistos e não vistos (a medição que decide H3/H4). Python puro — numpy não é dependência do projeto. R² e Spearman são `None` quando indefinidos, não 0.0. Baseline 0 (mediana do treino) implementado; `Predictor` é a costura para Baseline 1 e LightGBM. 24 testes. |
+| SAE.6 | ✅ FEITA | f66429f | `experiment-plan` e `experiment-status`, ambos read-only, nunca chamam a API. `experiment-status` funciona e reporta zeros antes de qualquer coleta. Verificado ponta a ponta contra cópia do warehouse real. 14 testes. |
+| SAE.7 | ✅ FEITA | (pendente) | Documentação da campanha medida e validação final. **Campanha recomendada:** 1.200 observações, 25 specs, 9 encounters, 213 Phase4Targets, buckets 240/231/239/238/252, 5,11 dias, **8.040 pontos** de um teto de 25.000. Achado relevante: o pior caso de 17 pts/observação é pessimista — com compartilhamento de fight o pool mítico inteiro (7.333 obs) custaria 23.426 pontos e ainda caberia sob o teto. 760 testes verdes, ruff e pyright limpos. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
