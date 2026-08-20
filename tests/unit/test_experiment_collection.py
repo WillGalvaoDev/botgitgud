@@ -44,13 +44,15 @@ def _observation(
 
 
 def _campaign(
-    *observations: PlannedExperimentObservation, ceiling: float = 1000
+    *observations: PlannedExperimentObservation,
+    ceiling: float | None = 1000,
+    max_observations: int | None = None,
 ) -> ExperimentCampaign:
     request = StatisticalExperimentPlan(
         partition=observations[0].partition,
         difficulties=frozenset({observations[0].difficulty}),
-        budget=ExperimentBudget(max_api_points=ceiling),
-        max_observations=len(observations),
+        budget=ExperimentBudget() if ceiling is None else ExperimentBudget(max_api_points=ceiling),
+        max_observations=max_observations or len(observations),
     )
     return ExperimentCampaign(
         request,
@@ -126,6 +128,17 @@ def test_campaign_id_is_deterministic_and_dimension_isolated() -> None:
     assert CampaignId.from_campaign(campaign) != CampaignId.from_campaign(different_difficulty)
 
 
+def test_campaign_id_ignores_execution_budget_but_not_scientific_plan() -> None:
+    observation = _observation(1)
+    identity = CampaignId.from_campaign(_campaign(observation, ceiling=8040))
+    assert identity == CampaignId.from_campaign(_campaign(observation, ceiling=9000))
+    assert identity == CampaignId.from_campaign(_campaign(observation, ceiling=None))
+    assert identity != CampaignId.from_campaign(
+        _campaign(observation, ceiling=8040, max_observations=2)
+    )
+    assert identity != CampaignId.from_campaign(_campaign(_observation(2), ceiling=8040))
+
+
 def test_freeze_persists_exact_plan_and_campaigns_do_not_collide(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         campaigns = ExperimentCampaignStore(store)
@@ -192,7 +205,7 @@ def test_campaign_ceiling_stops_before_external_call(tmp_path: Path) -> None:
         campaigns = ExperimentCampaignStore(store)
         frozen = campaigns.freeze(_campaign(_observation(0), ceiling=16))
         summary = ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
-    assert summary.stopped_reason == "max_api_points"
+    assert summary.stopped_reason == "budget_exhausted"
     assert summary.pending == 1
     assert backend.calls == []
 
@@ -219,3 +232,62 @@ def test_interrupted_collecting_is_recovered_as_pending(tmp_path: Path) -> None:
         campaigns.mark_collecting(frozen.campaign_id, 0, first=True)
         summary = ExperimentCollector(campaigns, FakeBackend()).run(frozen.campaign_id)
     assert summary.completed == 2
+
+
+def test_larger_cumulative_ceiling_preserves_history_and_limits_increment(tmp_path: Path) -> None:
+    observations = tuple(_observation(i, fight_id=i + 1) for i in range(58))
+    backend = FakeBackend()
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(*observations, ceiling=8040))
+        campaigns.finish(frozen.campaign_id, 0, status=CollectionStatus.COMPLETED, points=8040)
+        summary = ExperimentCollector(campaigns, backend).run(
+            frozen.campaign_id, authorized_api_ceiling=9000
+        )
+        current = campaigns.get(frozen.campaign_id)
+        status = campaign_status(current)  # type: ignore[arg-type]
+    assert summary.stopped_reason == "budget_exhausted"
+    assert summary.api_points_used == 8992
+    assert len(backend.calls) == 56
+    assert current.observations[0].status is CollectionStatus.COMPLETED  # type: ignore[union-attr]
+    assert status.authorized_api_ceiling == 9000
+    assert status.consumed_api_points == 8992
+    assert status.remaining_authorized_points == 8
+
+
+def test_ceiling_below_historical_consumption_makes_zero_calls(tmp_path: Path) -> None:
+    backend = FakeBackend()
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1)))
+        campaigns.finish(frozen.campaign_id, 0, status=CollectionStatus.FAILED, points=5000)
+        summary = ExperimentCollector(campaigns, backend).run(
+            frozen.campaign_id, authorized_api_ceiling=4000
+        )
+        current = campaigns.get(frozen.campaign_id)
+    assert summary.stopped_reason == "budget_exhausted"
+    assert summary.api_points_used == 5000
+    assert backend.calls == []
+    assert current.observations[0].status is CollectionStatus.FAILED  # type: ignore[union-attr]
+    assert len(current.observations) == 2  # type: ignore[union-attr]
+
+
+def test_larger_authorization_preserves_failed_and_rejected(tmp_path: Path) -> None:
+    backend = FakeBackend()
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1), ceiling=20))
+        campaigns.finish(frozen.campaign_id, 0, status=CollectionStatus.FAILED, reason="gone")
+        campaigns.finish(
+            frozen.campaign_id,
+            1,
+            status=CollectionStatus.REJECTED,
+            reason="partition_mismatch",
+        )
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id, authorized_api_ceiling=9000)
+        current = campaigns.get(frozen.campaign_id)
+    assert backend.calls == []
+    assert [item.status for item in current.observations] == [  # type: ignore[union-attr]
+        CollectionStatus.FAILED,
+        CollectionStatus.REJECTED,
+    ]

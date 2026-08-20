@@ -182,6 +182,9 @@ def cmd_experiment_collect(args: argparse.Namespace, *, build_deps: BuildDeps) -
             if frozen is None:
                 sys.stderr.write(f"erro: campaign desconhecida: {args.campaign}\n")
                 return 1
+            if not args.dry_run and args.max_api_points is None:
+                sys.stderr.write("erro: resume real exige --max-api-points explícito.\n")
+                return 1
         else:
             if args.partition is None or not args.difficulty:
                 sys.stderr.write("erro: nova campanha exige --partition e --difficulty.\n")
@@ -205,7 +208,7 @@ def cmd_experiment_collect(args: argparse.Namespace, *, build_deps: BuildDeps) -
             _print_frozen_dry_run(frozen)
             return 0
         summary = ExperimentCollector(campaigns, LogFetcherBackend(deps.fetcher)).run(
-            frozen.campaign_id
+            frozen.campaign_id, authorized_api_ceiling=args.max_api_points
         )
         sys.stdout.write(
             f"campaign_id={summary.campaign_id}\ncompleted={summary.completed}/"
@@ -213,7 +216,7 @@ def cmd_experiment_collect(args: argparse.Namespace, *, build_deps: BuildDeps) -
             f"rejected={summary.rejected}\napi_points={summary.api_points_used:.1f}\n"
             f"stopped_reason={summary.stopped_reason}\n"
         )
-        return 75 if summary.stopped_reason in {"rate_limit_budget", "max_api_points"} else 0
+        return 75 if summary.stopped_reason in {"rate_limit_budget", "budget_exhausted"} else 0
     finally:
         deps.store.close()
         deps.client.close()
@@ -350,8 +353,10 @@ def _print_collection_status(status: CampaignStatus) -> None:
         f"{status.collecting}\n"
         f"  completed/failed/rejected ........... {status.completed}/{status.failed}/"
         f"{status.rejected}\n"
-        f"  API points used/ceiling ............. {status.api_points_used:.1f}/"
-        f"{status.api_point_ceiling:.1f}\n"
+        f"  planned_api_points .................. {status.planned_cost:.1f}\n"
+        f"  authorized_api_ceiling .............. {status.authorized_api_ceiling:.1f}\n"
+        f"  consumed_api_points ................. {status.consumed_api_points:.1f}\n"
+        f"  remaining_authorized_points ......... {status.remaining_authorized_points:.1f}\n"
         f"  unique fights completed ............. {status.unique_fights_completed}\n"
         f"  observations/fight .................. {value(status.observations_per_fight)}\n"
         f"  cache hits/rate/pages reused ........ {status.event_cache_hits}/"

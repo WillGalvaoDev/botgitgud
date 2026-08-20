@@ -16,8 +16,9 @@ class CampaignStatus:
     completed: int
     failed: int
     rejected: int
-    api_points_used: float
-    api_point_ceiling: float
+    consumed_api_points: float
+    authorized_api_ceiling: float
+    remaining_authorized_points: float
     api_points_estimated: bool
     unique_fights_completed: int
     observations_per_fight: float | None
@@ -58,8 +59,9 @@ def campaign_status(campaign: StoredCampaign) -> CampaignStatus:
         completed=len(completed),
         failed=counts[CollectionStatus.FAILED],
         rejected=counts[CollectionStatus.REJECTED],
-        api_points_used=points,
-        api_point_ceiling=campaign.max_api_points,
+        consumed_api_points=points,
+        authorized_api_ceiling=campaign.max_api_points,
+        remaining_authorized_points=campaign.remaining_authorized_points,
         api_points_estimated=any(
             item.api_points_estimated for item in campaign.observations if item.api_points
         ),

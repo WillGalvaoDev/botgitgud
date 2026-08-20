@@ -78,7 +78,11 @@ class ExperimentCollector:
         self._campaigns = campaigns
         self._backend = backend
 
-    def run(self, campaign_id: str) -> CollectionSummary:
+    def run(
+        self, campaign_id: str, *, authorized_api_ceiling: float | None = None
+    ) -> CollectionSummary:
+        if authorized_api_ceiling is not None:
+            self._campaigns.authorize(campaign_id, authorized_api_ceiling)
         self._campaigns.reset_collecting(campaign_id)
         campaign = self._require_campaign(campaign_id)
         sessions: dict[tuple[str, int], FightSession] = {}
@@ -93,7 +97,7 @@ class ExperimentCollector:
             )
             estimated_delta = 2.0 if session.payload_loaded else 17.0
             if used + estimated_delta > campaign.max_api_points:
-                stopped = "max_api_points"
+                stopped = "budget_exhausted"
                 break
             first = not session.payload_loaded
             self._campaigns.mark_collecting(campaign_id, stored.ordinal, first=first)

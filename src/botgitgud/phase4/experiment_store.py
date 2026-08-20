@@ -36,7 +36,6 @@ class CampaignId:
             "planner_version": PLANNER_VERSION,
             "feature_schema_version": FEATURE_SCHEMA_VERSION,
             "max_observations": request.max_observations,
-            "budget": request.budget.max_api_points,
             "observations": [list(item.observation_key) for item in campaign.observations],
         }
         digest = hashlib.sha256(
@@ -70,6 +69,14 @@ class StoredCampaign:
     estimated_api_points: float
     stopped_reason: str | None
     observations: tuple[StoredObservation, ...]
+
+    @property
+    def consumed_api_points(self) -> float:
+        return sum(item.api_points for item in self.observations)
+
+    @property
+    def remaining_authorized_points(self) -> float:
+        return max(0.0, self.max_api_points - self.consumed_api_points)
 
 
 _CAMPAIGNS = """
@@ -221,6 +228,20 @@ class ExperimentCampaignStore:
             "UPDATE experiment_campaigns SET stopped_reason=? WHERE campaign_id=?",
             [reason, campaign_id],
         )
+
+    def authorize(self, campaign_id: str, total_api_ceiling: float) -> StoredCampaign:
+        """Set the cumulative execution ceiling without changing campaign identity."""
+        if total_api_ceiling < 0:
+            raise ValueError("authorized API ceiling must be non-negative")
+        if self.get(campaign_id) is None:
+            raise ValueError(f"unknown campaign: {campaign_id}")
+        self._store.execute(
+            "UPDATE experiment_campaigns SET max_api_points=? WHERE campaign_id=?",
+            [total_api_ceiling, campaign_id],
+        )
+        campaign = self.get(campaign_id)
+        assert campaign is not None
+        return campaign
 
 
 def _stored_observation(campaign_id: str, row: tuple[object, ...]) -> StoredObservation:
