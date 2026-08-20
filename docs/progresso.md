@@ -498,6 +498,12 @@ instalado.
 
 ## Executor da campanha experimental (EC)
 
+Correção pré-execução: budget foi removido da identidade científica da campaign. O teto agora é
+uma autorização operacional total acumulada e pode ser ampliado em resume sem replanejar ou
+trocar o campaign ID. A campanha pending d5/p4/1200 foi migrada, após comparação ordinal completa,
+de `exp-5c1f53f1aac54e5344de` para `exp-840b1ef99d76c33c8a0b`; as mesmas 1.200 observações foram
+preservadas e nenhum ponto WCL foi consumido.
+
 | Tarefa | Status | Commit | Notas |
 |---|---|---|---|
 | EC.1–EC.2 | ✅ FEITA | e813377 | Campaign ID determinístico, plano congelado e checkpoint por observação; resume idempotente sem replacement. |

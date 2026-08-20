@@ -14,9 +14,11 @@ em `experiment_campaign_observations` e só então permite coleta. Cada linha co
 carrega essas linhas; não chama o planner, não reestratifica e não cria replacements.
 
 O `campaign_id` tem formato `exp-<sha256[0:20]>`. O hash canônico inclui difficulty,
-partition, versão do planner, versão do schema de features, máximo de observações, seed/universo
-representado pela lista ordenada de chaves naturais e teto da campanha. A mesma seleção e os
-mesmos parâmetros produzem a mesma identidade; campanhas diferentes não compartilham estado.
+partition, versão do planner, versão do schema de features, máximo de observações e o universo
+representado pela lista ordenada de chaves naturais. A mesma seleção e os mesmos parâmetros
+científicos produzem a mesma identidade; campanhas diferentes não compartilham estado.
+
+API budget is an execution policy and is not part of ExperimentCampaign identity.
 
 ## Checkpoint, resume e idempotência
 
@@ -40,9 +42,12 @@ primeiro versus jogadores adicionais são medidos por observação.
 
 ## Accounting e budget
 
-Uma campanha real nova exige `--max-api-points`; estimativa nunca vira autorização. O teto é
-persistido e verificado antes de cada observação, além dos limites e da reserva interativa do
-`WclClient`. Pontos WCL são derivados do contador de queries quando a API não oferece medição
+Uma campanha real nova ou retomada exige `--max-api-points`; estimativa nunca vira autorização.
+O argumento representa o **teto total acumulado autorizado da campanha**, não uma franquia nova
+por processo. Assim, após consumir 8.040 pontos, retomar com teto 9.000 permite no máximo 960
+pontos adicionais. Um teto menor que o consumo histórico produz `budget_exhausted`, sem chamada,
+sem apagar accounting e sem alterar o campaign ID. O teto é persistido e verificado antes de cada
+observação, além dos limites e da reserva interativa do `WclClient`. Pontos WCL são derivados do contador de queries quando a API não oferece medição
 mais precisa e ficam marcados como estimados. `experiment-status --campaign` apresenta total,
 pontos por observação/fight, médias de primeiro/adicional, cache hit rate, páginas reutilizadas e
 razão actual/planned. O accounting acumulado não é duplicado em resume.
@@ -70,6 +75,7 @@ botgitgud experiment-collect --partition 4 --difficulty 5 `
   --max-observations 1200 --max-api-points 8040
 ```
 
-Resume usa `botgitgud experiment-collect --campaign <campaign_id>` e nunca recria a amostra.
+Resume usa `botgitgud experiment-collect --campaign <campaign_id> --max-api-points <teto-total>`
+e nunca recria a amostra.
 
 A campanha de 1.200 observações não foi executada durante a implementação deste módulo.
