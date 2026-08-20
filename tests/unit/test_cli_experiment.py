@@ -69,6 +69,34 @@ def test_experiment_status_needs_no_flags() -> None:
     assert args.func is not None
 
 
+def test_experiment_collect_parses_safe_campaign_arguments() -> None:
+    args = build_parser().parse_args(
+        [
+            "experiment-collect",
+            "--partition",
+            "4",
+            "--difficulty",
+            "5",
+            "--max-observations",
+            "1200",
+            "--max-api-points",
+            "8040",
+            "--dry-run",
+        ]
+    )
+    assert args.partition == 4
+    assert args.difficulty == [5]
+    assert args.max_observations == 1200
+    assert args.max_api_points == 8040
+    assert args.dry_run is True
+
+
+def test_experiment_collect_resume_uses_campaign_id() -> None:
+    args = build_parser().parse_args(["experiment-collect", "--campaign", "exp-abc"])
+    assert args.campaign == "exp-abc"
+    assert args.partition is None
+
+
 def test_parse_spec_accepts_class_slash_spec() -> None:
     assert _parse_spec("DeathKnight/Unholy") == SpecId("DeathKnight", "Unholy")
     assert _parse_spec(" Mage / Frost ") == SpecId("Mage", "Frost")

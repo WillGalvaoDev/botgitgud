@@ -29,7 +29,13 @@ from botgitgud.phase4.experiment import (
     ExperimentBudget,
 )
 from botgitgud.phase4.experiment_campaign import ExperimentCampaign, StatisticalExperimentPlan
+from botgitgud.phase4.experiment_collector import ExperimentCollector, LogFetcherBackend
 from botgitgud.phase4.experiment_planner import ExperimentPlanner
+from botgitgud.phase4.experiment_status import CampaignStatus, campaign_status
+from botgitgud.phase4.experiment_store import (
+    ExperimentCampaignStore,
+    StoredCampaign,
+)
 from botgitgud.phase4.experimental_dataset import (
     ExperimentalDatasetBuilder,
     ExperimentalFeatureDataset,
@@ -98,7 +104,28 @@ def add_experiment_status_parser(
     )
     p.add_argument("--partition", type=int, default=None, help="Restringe a esta partition.")
     p.add_argument("--difficulty", type=int, nargs="+", default=None, help="Restringe a estas.")
+    p.add_argument("--campaign", default=None, help="ID de uma campanha congelada.")
     p.set_defaults(func=functools.partial(cmd_experiment_status, build_deps=build_deps))
+
+
+def add_experiment_collect_parser(
+    sub: argparse._SubParsersAction,  # type: ignore[type-arg]
+    *,
+    build_deps: BuildDeps,
+) -> None:
+    p = sub.add_parser("experiment-collect", help="Executa/resume um plano experimental congelado.")
+    p.add_argument("--campaign", default=None, help="Retoma exatamente este campaign_id.")
+    p.add_argument("--partition", type=int, default=None)
+    p.add_argument("--difficulty", type=int, nargs="+", default=None)
+    p.add_argument("--max-observations", type=int, default=DEFAULT_MAX_OBSERVATIONS)
+    p.add_argument(
+        "--max-api-points",
+        type=float,
+        default=None,
+        help="Teto explícito obrigatório para coleta real nova.",
+    )
+    p.add_argument("--dry-run", action="store_true", help="Congela/valida o plano; zero WCL calls.")
+    p.set_defaults(func=functools.partial(cmd_experiment_collect, build_deps=build_deps))
 
 
 def cmd_experiment_plan(args: argparse.Namespace, *, build_deps: BuildDeps) -> int:
@@ -126,6 +153,14 @@ def cmd_experiment_status(args: argparse.Namespace, *, build_deps: BuildDeps) ->
     settings = Settings()  # type: ignore[call-arg]  # populada a partir do .env em runtime
     deps = build_deps(settings)
     try:
+        if args.campaign:
+            stored = ExperimentCampaignStore(deps.store).get(args.campaign)
+            if stored is None:
+                sys.stderr.write(f"erro: campaign desconhecida: {args.campaign}\n")
+                return 1
+            status = campaign_status(stored)
+            _print_collection_status(status)
+            return 0
         dataset = ExperimentalDatasetBuilder(deps.store).build(
             partition=args.partition,
             difficulties=frozenset(args.difficulty) if args.difficulty else None,
@@ -135,6 +170,53 @@ def cmd_experiment_status(args: argparse.Namespace, *, build_deps: BuildDeps) ->
         deps.client.close()
     _print_dataset(dataset)
     return 0
+
+
+def cmd_experiment_collect(args: argparse.Namespace, *, build_deps: BuildDeps) -> int:
+    settings = Settings()  # type: ignore[call-arg]
+    deps = build_deps(settings)
+    try:
+        campaigns = ExperimentCampaignStore(deps.store)
+        if args.campaign:
+            frozen = campaigns.get(args.campaign)
+            if frozen is None:
+                sys.stderr.write(f"erro: campaign desconhecida: {args.campaign}\n")
+                return 1
+        else:
+            if args.partition is None or not args.difficulty:
+                sys.stderr.write("erro: nova campanha exige --partition e --difficulty.\n")
+                return 1
+            if not args.dry_run and args.max_api_points is None:
+                sys.stderr.write("erro: coleta real exige --max-api-points explícito.\n")
+                return 1
+            ceiling = (
+                args.max_api_points
+                if args.max_api_points is not None
+                else ExperimentBudget().max_api_points
+            )
+            request = StatisticalExperimentPlan(
+                partition=args.partition,
+                difficulties=frozenset(args.difficulty),
+                budget=ExperimentBudget(max_api_points=ceiling),
+                max_observations=args.max_observations,
+            )
+            frozen = campaigns.freeze(ExperimentPlanner(deps.store).plan(request))
+        if args.dry_run:
+            _print_frozen_dry_run(frozen)
+            return 0
+        summary = ExperimentCollector(campaigns, LogFetcherBackend(deps.fetcher)).run(
+            frozen.campaign_id
+        )
+        sys.stdout.write(
+            f"campaign_id={summary.campaign_id}\ncompleted={summary.completed}/"
+            f"{summary.planned}\npending={summary.pending}\nfailed={summary.failed}\n"
+            f"rejected={summary.rejected}\napi_points={summary.api_points_used:.1f}\n"
+            f"stopped_reason={summary.stopped_reason}\n"
+        )
+        return 75 if summary.stopped_reason in {"rate_limit_budget", "max_api_points"} else 0
+    finally:
+        deps.store.close()
+        deps.client.close()
 
 
 def _fmt_span(span: tuple[int, int] | None) -> str:
@@ -233,4 +315,55 @@ def _print_dataset(dataset: ExperimentalFeatureDataset) -> None:
         "    S5 held-out spec+encounter ........ "
         f"{'OK' if enough_encounters and enough_specs else 'dados insuficientes'}\n"
         "\nNenhum modelo foi treinado.\n"
+    )
+
+
+def _print_frozen_dry_run(campaign: StoredCampaign) -> None:
+    observations = campaign.observations
+    fights = {item.planned.fight_key for item in observations}
+    specs = {item.planned.spec_key for item in observations}
+    encounters = {item.planned.encounter_id for item in observations}
+    targets = {item.planned.target.target_id for item in observations}
+    potential_hits = len(observations) - len(fights)
+    sys.stdout.write(
+        "DRY RUN — PLANO CONGELADO; ZERO CHAMADAS WCL\n\n"
+        f"  campaign_id ......................... {campaign.campaign_id}\n"
+        f"  observacoes ......................... {len(observations)}\n"
+        f"  fights unicos ....................... {len(fights)}\n"
+        f"  targets/specs/encounters ............ {len(targets)}/{len(specs)}/{len(encounters)}\n"
+        f"  custo planejado ..................... {campaign.estimated_api_points:.0f}\n"
+        f"  teto persistido ..................... {campaign.max_api_points:.0f}\n"
+        f"  event-sharing hits potenciais ....... {potential_hits}\n"
+        "  selection order ..................... ordinal congelado\n"
+        "  execution order ..................... fight-local, ordinal dentro do fight\n"
+        "  API points consumidos ............... 0\n"
+    )
+
+
+def _print_collection_status(status: CampaignStatus) -> None:
+    def value(item: float | None) -> str:
+        return "n/d" if item is None else f"{item:.2f}"
+
+    sys.stdout.write(
+        f"STATUS DA CAMPANHA {status.campaign_id}\n\n"
+        f"  planned/pending/collecting .......... {status.planned}/{status.pending}/"
+        f"{status.collecting}\n"
+        f"  completed/failed/rejected ........... {status.completed}/{status.failed}/"
+        f"{status.rejected}\n"
+        f"  API points used/ceiling ............. {status.api_points_used:.1f}/"
+        f"{status.api_point_ceiling:.1f}\n"
+        f"  unique fights completed ............. {status.unique_fights_completed}\n"
+        f"  observations/fight .................. {value(status.observations_per_fight)}\n"
+        f"  cache hits/rate/pages reused ........ {status.event_cache_hits}/"
+        f"{value(status.event_cache_hit_rate)}/{status.pages_reused}\n"
+        f"  points/observation .................. "
+        f"{value(status.points_per_completed_observation)} (estimado quando WCL)\n"
+        f"  points/unique fight ................. {value(status.points_per_unique_fight)}\n"
+        f"  first/additional player mean ........ {value(status.first_player_cost_mean)}/"
+        f"{value(status.additional_player_cost_mean)}\n"
+        f"  planned/actual ratio ................ {value(status.planned_vs_actual_ratio)}\n"
+        f"  specs/encounters/targets ............ {status.specs_represented}/"
+        f"{status.encounters_represented}/{status.targets_represented}\n"
+        f"  temporal coverage ................... {_fmt_span(status.temporal_span_ms)}\n"
+        f"  stopped_reason ...................... {status.stopped_reason or 'n/d'}\n"
     )

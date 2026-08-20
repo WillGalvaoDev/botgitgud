@@ -22,6 +22,7 @@ from botgitgud.cli_discovery import (
     add_triage_parser,
 )
 from botgitgud.cli_experiment import (
+    add_experiment_collect_parser,
     add_experiment_plan_parser,
     add_experiment_status_parser,
 )
@@ -206,6 +207,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_dataset_status_parser(sub, build_deps=_build_deps)
     add_experiment_plan_parser(sub, build_deps=_build_deps)
     add_experiment_status_parser(sub, build_deps=_build_deps)
+    add_experiment_collect_parser(sub, build_deps=_build_deps)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)

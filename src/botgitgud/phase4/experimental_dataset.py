@@ -151,8 +151,16 @@ class ExperimentalDatasetBuilder:
         *,
         partition: int | None = None,
         difficulties: frozenset[int] | None = None,
+        observation_keys: frozenset[tuple[str, int, str]] | None = None,
     ) -> ExperimentalFeatureDataset:
         rows = self._latest_logs(partition=partition, difficulties=difficulties)
+        if observation_keys is not None:
+            rows = [
+                row
+                for row in rows
+                if (str(row["report_code"]), int(str(row["fight_id"])), str(row["player_name"]))
+                in observation_keys
+            ]
         observations: list[ExperimentalObservation] = []
         skipped = 0
         for row in rows:
