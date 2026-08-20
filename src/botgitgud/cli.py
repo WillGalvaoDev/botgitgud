@@ -27,6 +27,8 @@ from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
 from botgitgud.logging_setup import configure_logging
+from botgitgud.phase4.registry import Phase4ModelRegistry
+from botgitgud.phase4.resolver import Phase4ModelResolver
 from botgitgud.report.text import render_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
@@ -62,7 +64,15 @@ def _build_deps(settings: Settings) -> Deps:
     catalog = SpellCatalog(Path("spells.json"), blizzard=blizzard)
     store = Store(settings.data_dir)
     fetcher = LogFetcher(client, store, catalog)
-    return Deps(client=client, fetcher=fetcher, store=store, catalog=catalog, settings=settings)
+    phase4_resolver = Phase4ModelResolver(Phase4ModelRegistry(store))
+    return Deps(
+        client=client,
+        fetcher=fetcher,
+        store=store,
+        catalog=catalog,
+        settings=settings,
+        phase4_resolver=phase4_resolver,
+    )
 
 
 def _cmd_analyze(args: argparse.Namespace) -> int:

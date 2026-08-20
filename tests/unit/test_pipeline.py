@@ -13,6 +13,7 @@ pipeline instead of a monkeypatched module.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +28,14 @@ from test_log_fetcher import (
 
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.config import Settings
+from botgitgud.domain.specs import SpecId
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import CohortNotReady, InsufficientCohort, PlayerNotFound, ScopeRejected
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
+from botgitgud.phase4.registry import ModelStatus, Phase4ModelRecord, Phase4ModelRegistry
+from botgitgud.phase4.resolver import Phase4ModelResolver, ResolutionStatus
+from botgitgud.phase4.target import Phase4Target
 from botgitgud.report.text import render_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
@@ -255,6 +260,31 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.header.reference_n == N_REFS
     assert result.header.player_dps == pytest.approx(10000.0)  # 1_000_000 / 100s
     assert len(result.comparisons) >= 1
+    assert result.phase4_resolution.status is ResolutionStatus.UNAVAILABLE
+
+
+def test_run_analysis_exposes_ready_capability_without_running_inference(tmp_path: Path) -> None:
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+    registry = Phase4ModelRegistry(deps.store)
+    target = Phase4Target(SpecId("Warlock", "Demonology"), 3179, 5, 3)
+    registry.register(
+        Phase4ModelRecord(
+            target,
+            model_version="m1",
+            dataset_version="d1",
+            number_of_observations=5000,
+            artifact_path="models/Warlock/Demonology/3179/5/3/m1.bin",
+            status=ModelStatus.READY,
+        )
+    )
+    deps = replace(deps, phase4_resolver=Phase4ModelResolver(registry))
+
+    result = run_analysis(_req(), deps)
+
+    assert result.phase4_resolution.status is ResolutionStatus.FOUND
+    assert result.header.char_name == "Zarad"
+    assert result.top_actions is not None
     assert any(c.spell.spell_id == 104316 for c in result.comparisons)
     assert result.manifest.cohort_id
     assert result.manifest.wcl_partition == 3

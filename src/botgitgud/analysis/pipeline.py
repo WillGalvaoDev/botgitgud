@@ -60,6 +60,8 @@ from botgitgud.ingest.rankings import (
     get_current_partition,
 )
 from botgitgud.ingest.store import Store
+from botgitgud.phase4.resolver import ModelResolution, Phase4ModelResolver, ResolutionStatus
+from botgitgud.phase4.target import Phase4Target
 from botgitgud.report.text import ReportHeader
 from botgitgud.runmanifest import build_run_manifest
 from botgitgud.wcl.client import WclClient
@@ -74,6 +76,7 @@ class Deps:
     store: Store
     catalog: SpellCatalog
     settings: Settings
+    phase4_resolver: Phase4ModelResolver | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +95,7 @@ class AnalysisResult:
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
+    phase4_resolution: ModelResolution = ModelResolution(ResolutionStatus.UNAVAILABLE)
 
 
 def run_analysis(
@@ -115,6 +119,17 @@ def run_analysis(
         raise ScopeRejected(message)
 
     partition = get_current_partition(deps.client, player_log.fight.encounter_id)
+    phase4_target = Phase4Target(
+        spec=spec_id,
+        encounter_id=player_log.fight.encounter_id,
+        difficulty=player_log.fight.difficulty,
+        partition=partition,
+    )
+    phase4_resolution = (
+        deps.phase4_resolver.resolve(phase4_target)
+        if deps.phase4_resolver is not None
+        else ModelResolution(ResolutionStatus.UNAVAILABLE)
+    )
     bucket_lo, bucket_hi = duration_bucket_bounds(duration_bucket_id(player_log.fight.duration_s))
     criteria = CohortCriteria(
         encounter_id=player_log.fight.encounter_id,
@@ -254,4 +269,5 @@ def run_analysis(
         performance=performance,
         dps_gap=dps_gap,
         top_actions=tuple(top_actions),
+        phase4_resolution=phase4_resolution,
     )
