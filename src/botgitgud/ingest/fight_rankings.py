@@ -37,6 +37,14 @@ log = structlog.get_logger(__name__)
 QueryFn = Callable[..., dict[str, Any]]
 
 
+def _optional_float(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 @dataclass(frozen=True, slots=True)
 class DpsRanking:
     player_name: str
@@ -131,10 +139,10 @@ def _parse_fight_entry(entry: dict[str, Any], *, fight_id: int) -> FightRankings
                 server_region=server.get("region"),
                 class_name=class_name,
                 spec_name=spec_name,
-                amount=c.get("amount"),
-                rank_percent=c.get("rankPercent"),
-                bracket_data=c.get("bracketData"),
-                total_parses=c.get("totalParses"),
+                amount=_optional_float(c.get("amount")),
+                rank_percent=_optional_float(c.get("rankPercent")),
+                bracket_data=_optional_float(c.get("bracketData")),
+                total_parses=_optional_int(c.get("totalParses")),
             )
         )
 

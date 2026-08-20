@@ -1,5 +1,16 @@
 # Desvios em relação a `docs/implementacao.md`
 
+## D-32 — campos numéricos opcionais de `report.rankings` podem ser `"-"`
+
+- **Tarefa:** censo real A+B da zona 46
+- **Documento diz:** o shape confirmado descreve `amount`, `rankPercent`, `bracketData` e
+  `totalParses` como números; as colunas locais correspondentes são numéricas.
+- **Realidade:** durante a triagem real, a WCL devolveu `"-"` em campo numérico opcional de DPS;
+  o DuckDB recusou a conversão para `DOUBLE`. O report permaneceu não triado, sem perda de dados.
+- **Ação tomada:** o parser valida os quatro campos numéricos e degrada sentinelas textuais para
+  `None`, seguindo o contrato best-effort. Teste parametrizado cobre cada campo.
+- **Impacto:** nenhum nas Fases 0–3; o Estágio B prossegue sem fabricar dado.
+
 ## D-1 — `bot.py` da raiz precisa ser excluído do ruff/pyright durante a Fase 0
 
 - **Tarefa:** T0.0

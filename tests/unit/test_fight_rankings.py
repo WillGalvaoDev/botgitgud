@@ -120,6 +120,25 @@ def test_parses_dps_character_fields() -> None:
     assert kilama.total_parses == 6410
 
 
+@pytest.mark.parametrize(
+    ("field", "attribute"),
+    [
+        ("amount", "amount"),
+        ("rankPercent", "rank_percent"),
+        ("bracketData", "bracket_data"),
+        ("totalParses", "total_parses"),
+    ],
+)
+def test_non_numeric_optional_character_fields_degrade_to_none(field: str, attribute: str) -> None:
+    payload = _real_shaped_response()
+    payload["data"]["reportData"]["report"]["rankings"]["data"][0]["roles"]["dps"]["characters"][0][
+        field
+    ] = "-"
+    result = parse_report_rankings(payload, fight_id=21)
+    assert result is not None
+    assert getattr(result.dps[0], attribute) is None
+
+
 def test_kill_false_when_zero() -> None:
     payload = _real_shaped_response()
     payload["data"]["reportData"]["report"]["rankings"]["data"][0]["kill"] = 0
