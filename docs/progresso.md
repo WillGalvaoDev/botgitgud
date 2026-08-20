@@ -503,7 +503,7 @@ instalado.
 | EC.1–EC.2 | ✅ FEITA | e813377 | Campaign ID determinístico, plano congelado e checkpoint por observação; resume idempotente sem replacement. |
 | EC.3–EC.4 | ✅ FEITA | e813377 | Execução fight-local, sessão compartilhável, accounting auditável e teto explícito. |
 | EC.5–EC.6 | ✅ FEITA | 7a72359 | `experiment-collect`, dry-run zero WCL, status de campanha e filtro exato do dataset. |
-| EC.7 | ✅ FEITA | backfill | Documento operacional e validação final; campanha real não executada. |
+| EC.7 | ✅ FEITA | 56b9a23 | Documento operacional e validação final; campanha real não executada. |
 
 ## Ambiente
 
