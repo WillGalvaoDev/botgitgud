@@ -496,6 +496,15 @@ instalado.
 | SAE.6 | ✅ FEITA | f66429f | `experiment-plan` e `experiment-status`, ambos read-only, nunca chamam a API. `experiment-status` funciona e reporta zeros antes de qualquer coleta. Verificado ponta a ponta contra cópia do warehouse real. 14 testes. |
 | SAE.7 | ✅ FEITA | 439cb6b | Documentação da campanha medida e validação final. **Campanha recomendada:** 1.200 observações, 25 specs, 9 encounters, 213 Phase4Targets, buckets 240/231/239/238/252, 5,11 dias, **8.040 pontos** de um teto de 25.000. Achado relevante: o pior caso de 17 pts/observação é pessimista — com compartilhamento de fight o pool mítico inteiro (7.333 obs) custaria 23.426 pontos e ainda caberia sob o teto. 760 testes verdes, ruff e pyright limpos. |
 
+## Executor da campanha experimental (EC)
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| EC.1–EC.2 | ✅ FEITA | e813377 | Campaign ID determinístico, plano congelado e checkpoint por observação; resume idempotente sem replacement. |
+| EC.3–EC.4 | ✅ FEITA | e813377 | Execução fight-local, sessão compartilhável, accounting auditável e teto explícito. |
+| EC.5–EC.6 | ✅ FEITA | 7a72359 | `experiment-collect`, dry-run zero WCL, status de campanha e filtro exato do dataset. |
+| EC.7 | ✅ FEITA | backfill | Documento operacional e validação final; campanha real não executada. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
