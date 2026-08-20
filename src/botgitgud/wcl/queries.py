@@ -155,3 +155,20 @@ query GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {
   }
 }
 """
+
+# T-DG.1 (docs/fase4-data-acquisition-plan.md §4.3, docs/schema_confirmado.md
+# §13.3): bulk per-fight source of rankPercent + partition, discovered
+# during the Fase 4 data-gate investigation. Costs 2.0 points regardless of
+# player count and measured 100% rankPercent coverage (169/169 live), versus
+# ~40% coverage and 1.0 point PER PLAYER for QUERY_PLAYER_PERCENTILE (the
+# source LogFetcher used before T-DG.0/T-DG.1). `rankings` is a JSON scalar
+# whose shape is documented in ingest/fight_rankings.py.
+QUERY_REPORT_RANKINGS = """
+query GetReportRankings($code: String!, $fightIDs: [Int]!) {
+  reportData {
+    report(code: $code) {
+      rankings(fightIDs: $fightIDs)
+    }
+  }
+}
+"""
