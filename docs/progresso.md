@@ -516,7 +516,7 @@ preservadas e nenhum ponto WCL foi consumido.
 | Tarefa | Status | Commit | Notas |
 |---|---|---|---|
 | FIX.1–FIX.4 | ✅ FEITA | 443781b | Label autoritativo do frozen plan, validação integral da identidade, ledger/reopen auditável e sharing HTTP real apenas para queries fight-wide. |
-| FIX.5 | ✅ FEITA | PENDING | Incidente documentado; 138 rejeições elegíveis reabertas localmente sem rede, plano intacto e accounting preservado em 3.880 pontos. |
+| FIX.5 | ✅ FEITA | 78b5725 | Incidente documentado; 138 rejeições elegíveis reabertas localmente sem rede, plano intacto e accounting preservado em 3.880 pontos. |
 
 ## Ambiente
 
