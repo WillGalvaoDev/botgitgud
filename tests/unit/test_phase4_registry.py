@@ -66,3 +66,17 @@ def test_ready_record_without_complete_metadata_is_invalid(tmp_path: Path) -> No
     registry.register(Phase4ModelRecord(_target(), status=ModelStatus.READY))
     assert Phase4ModelResolver(registry).resolve(_target()).status is ResolutionStatus.INVALID
     store.close()
+
+
+def test_corrupt_cross_target_registry_row_is_reported_incompatible(tmp_path: Path) -> None:
+    store = Store(tmp_path)
+    registry = Phase4ModelRegistry(store)
+    registry.register(_ready(_target()))
+    store.execute(
+        "UPDATE phase4_model_registry SET spec_name='Frost' WHERE target_id=?",
+        [_target().target_id],
+    )
+    resolution = Phase4ModelResolver(registry).resolve(_target())
+    assert resolution.status is ResolutionStatus.INCOMPATIBLE
+    assert not resolution.usable
+    store.close()

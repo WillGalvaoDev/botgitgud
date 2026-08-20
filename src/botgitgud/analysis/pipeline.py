@@ -27,7 +27,7 @@ survive THIS player's own matching cascade.
 from __future__ import annotations
 
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import structlog
 
@@ -95,7 +95,9 @@ class AnalysisResult:
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
-    phase4_resolution: ModelResolution = ModelResolution(ResolutionStatus.UNAVAILABLE)
+    phase4_resolution: ModelResolution = field(
+        default_factory=lambda: ModelResolution(ResolutionStatus.UNAVAILABLE)
+    )
 
 
 def run_analysis(

@@ -458,6 +458,17 @@ propriamente dita (T4.1-T4.4) continua bloqueada.**
 
 - **Rotacionar as 5 credenciais expostas** (Discord, WCL client id/secret, Blizzard client id/secret) — o `.env` foi lido em texto claro durante a auditoria. Recomendado antes de qualquer push para remoto. Não bloqueia a implementação local.
 
+## Preparação multi-target da Fase 4
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| MT.1 | ✅ FEITA | 6befcf1 | `Phase4Target` canônico, validado, serializável e path-safe. |
+| MT.2 | ✅ FEITA | daf9897 | Registry DuckDB multi-target e resolver exato com estados explícitos. |
+| MT.3/4 | ✅ FEITA | bd8ca97 | Boundary de capability; fallback Fases 0–3 normal. |
+| MT.5 | ✅ FEITA | 8629201 | Ranking global inclui progresso, gate e model status. |
+| MT.6 | ✅ FEITA | e665bcd | Planner local e genérico; nenhuma coleta ou rede. |
+| MT.7 | ✅ FEITA | (backfill) | Arquitetura documentada; 581 testes, ruff e pyright verdes. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
