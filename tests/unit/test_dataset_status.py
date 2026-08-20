@@ -139,10 +139,11 @@ def test_top_candidate_groups_excludes_non_kill_fights(tmp_path: Path) -> None:
 def test_top_candidate_groups_respects_limit(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         discovery = DiscoveryStore(store)
-        for i in range(5):
+        supported = [("Mage", "Fire"), ("Mage", "Frost"), ("Priest", "Shadow")]
+        for i, (class_name, spec_name) in enumerate(supported):
             discovery.write_fight_rankings(
                 _fight_rankings(
-                    i, dps=(_dps_ranking("P", class_name=f"Class{i}", spec_name="Spec"),)
+                    i, dps=(_dps_ranking("P", class_name=class_name, spec_name=spec_name),)
                 ),
                 report_code=f"CODE{i}",
             )
@@ -150,6 +151,21 @@ def test_top_candidate_groups_respects_limit(tmp_path: Path) -> None:
         groups = top_candidate_groups(store, limit=2)
 
     assert len(groups) == 2
+
+
+def test_top_candidate_groups_excludes_out_of_scope_and_unknown_specs(tmp_path: Path) -> None:
+    with Store(tmp_path) as store:
+        discovery = DiscoveryStore(store)
+        rankings = (
+            _dps_ranking("Supported", class_name="Mage", spec_name="Fire"),
+            _dps_ranking("Support", class_name="Evoker", spec_name="Augmentation"),
+            _dps_ranking("Unknown", class_name="DemonHunter", spec_name="Devourer"),
+        )
+        discovery.write_fight_rankings(_fight_rankings(1, dps=rankings), report_code="CODE1")
+
+        groups = top_candidate_groups(store)
+
+    assert [(group.class_name, group.spec_name) for group in groups] == [("Mage", "Fire")]
 
 
 # -- target_status: reports/fights/candidates from discovery -----------------

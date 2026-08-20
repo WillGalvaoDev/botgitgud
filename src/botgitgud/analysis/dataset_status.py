@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from botgitgud.analysis.cohort import SANITY_BAND_PCT
-from botgitgud.domain.specs import SpecId
+from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec
 from botgitgud.ingest.discovery_store import DiscoveryStore
 from botgitgud.ingest.store import Store
 from botgitgud.phase4.registry import ModelStatus, Phase4ModelRegistry
@@ -109,9 +109,7 @@ def top_candidate_groups(
         WHERE df.kill = true
         GROUP BY 1, 2, 3, 4, 5
         ORDER BY n_candidates DESC
-        LIMIT $limit
         """,
-        limit=limit,
     )
     groups = [
         CandidateGroup(
@@ -123,7 +121,8 @@ def top_candidate_groups(
             n_candidates=row["n_candidates"],
         )
         for row in df.iter_rows(named=True)
-    ]
+        if classify_spec(SpecId(row["class_name"], row["spec_name"])) is SpecSupport.SUPPORTED
+    ][:limit]
     records = {record.target: record for record in registry.list_all()} if registry else {}
     enriched: list[CandidateGroup] = []
     for group in groups:

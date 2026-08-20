@@ -11,6 +11,16 @@
   `None`, seguindo o contrato best-effort. Teste parametrizado cobre cada campo.
 - **Impacto:** nenhum nas Fases 0–3; o Estágio B prossegue sem fabricar dado.
 
+## D-33 — ranking global expunha specs fora do scope gate
+
+- **Tarefa:** censo real A+B da zona 46
+- **Documento diz:** Augmentation não é target e a ferramenta aceita somente specs DPS suportadas.
+- **Realidade:** `report.rankings.roles.dps` incluiu Augmentation e a nova spec desconhecida Devourer;
+  `top_candidate_groups` as mostrava entre candidatos operacionais.
+- **Ação tomada:** a matéria-prima permanece íntegra, mas a visão global aplica `classify_spec` e
+  mostra somente `SUPPORTED`. O limite é aplicado depois do filtro. Teste cobre suporte e unknown.
+- **Impacto:** dataset-status não sugere capability inválida; nenhuma spec nova é aceita sem decisão.
+
 ## D-1 — `bot.py` da raiz precisa ser excluído do ruff/pyright durante a Fase 0
 
 - **Tarefa:** T0.0
