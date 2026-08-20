@@ -24,21 +24,28 @@ API budget is an execution policy and is not part of ExperimentCampaign identity
 
 Cada observação passa por `pending`, `collecting` e um estado terminal: `completed`, `failed` ou
 `rejected`. Tentativas, horários, pontos, motivo, referência de saída e métricas de cache ficam
-persistidos. Uma retomada converte um `collecting` interrompido em `pending`; estados terminais
-não são coletados novamente. Falhas e rejeições permanecem auditáveis e nunca são substituídas.
+persistidos. `experiment_observation_attempts` conserva cada resultado terminal e seu custo.
+Uma retomada converte um `collecting` interrompido em `pending`; estados terminais não são
+coletados novamente. A única exceção é uma reabertura administrativa explícita de motivo
+autorizado. O incidente 001 autoriza somente `percentile_missing`: ordinal, campaign, observação
+congelada, contador de tentativas e custo histórico permanecem imutáveis. Não há replacement.
 
 Falhas operacionais distinguem player/fight indisponível e erro de API. Rejeições distinguem
-partition, difficulty, encounter ou spec divergente, e percentile ausente. Exaustão do budget
+report, fight, player, partition, difficulty, encounter ou spec divergente. O label experimental
+é `rank_percent` congelado pelo planner a partir de `report.rankings`; o collector não consulta
+`character.encounterRankings` para redescobri-lo. Exaustão do budget
 para normalmente, preserva o checkpoint e define `stopped_reason`.
 
 ## Localidade de fight e event sharing
 
 A seleção mantém o ordinal original. A ordem de execução agrupa observações do mesmo fight pela
 ordem da primeira ocorrência e conserva o ordinal dentro do fight. Isso não muda o conjunto
-selecionado. Um `FightSession` permite que backends reutilizem payload fight-wide com segurança.
-O adapter atual do `LogFetcher` só declara cache hit quando nenhuma query foi feita; ele não
-finge compartilhamento para queries WCL player-specific. Hits, páginas reutilizadas e custo do
-primeiro versus jogadores adicionais são medidos por observação.
+selecionado. Um `FightSession` reutiliza respostas cuja query é realmente fight-wide: meta e
+Summary, páginas de Casts, DamageDone e Resources, e `report.rankings`. A chave contém query e
+todos os argumentos (report, fight, intervalo e shape). Buffs e Debuffs incluem `sourceID` e
+continuam player-specific. Cache hit e `pages_reused` só são registrados quando uma resposta
+HTTP existente evita uma chamada real. O cache é em memória e limitado a uma execução; após
+interrupção, checkpoints persistem, mas respostas cruas não são serializadas.
 
 ## Accounting e budget
 
@@ -64,9 +71,10 @@ botgitgud experiment-collect --partition 4 --difficulty 5 `
   --max-observations 1200 --max-api-points 8040 --dry-run
 ```
 
-Observações `completed` apontam para o log persistido e podem ser filtradas pelas chaves exatas
-da campanha no builder experimental. O contrato temporal e a allowlist de SAE.3 continuam sendo
-a autoridade contra leakage.
+Observações `completed` apontam para o log persistido. Em materialização por `campaign_id`, o
+builder junta o log à observação congelada e usa seu `rank_percent` como `y_rank_percent`; eventos
+e atributos do log são somente features/contexto. O contrato temporal e a allowlist de SAE.3
+continuam sendo a autoridade contra leakage. `alignment_score` e `total_parses` continuam fora.
 
 Com autorização explícita futura, o comando real seria:
 
@@ -78,4 +86,5 @@ botgitgud experiment-collect --partition 4 --difficulty 5 `
 Resume usa `botgitgud experiment-collect --campaign <campaign_id> --max-api-points <teto-total>`
 e nunca recria a amostra.
 
-A campanha de 1.200 observações não foi executada durante a implementação deste módulo.
+A primeira tentativa da campanha de 1.200 observações é registrada no incidente 001. A correção
+desse incidente não executou resume nem fez chamadas WCL.

@@ -511,6 +511,13 @@ preservadas e nenhum ponto WCL foi consumido.
 | EC.5–EC.6 | ✅ FEITA | 7a72359 | `experiment-collect`, dry-run zero WCL, status de campanha e filtro exato do dataset. |
 | EC.7 | ✅ FEITA | 56b9a23 | Documento operacional e validação final; campanha real não executada. |
 
+## Incidente experimental 001
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| FIX.1–FIX.4 | ✅ FEITA | 443781b | Label autoritativo do frozen plan, validação integral da identidade, ledger/reopen auditável e sharing HTTP real apenas para queries fight-wide. |
+| FIX.5 | ✅ FEITA | PENDING | Incidente documentado; 138 rejeições elegíveis reabertas localmente sem rede, plano intacto e accounting preservado em 3.880 pontos. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
