@@ -9,6 +9,7 @@ from botgitgud.errors import (
     AuthError,
     ConfigError,
     RateLimitBudgetExceeded,
+    RateLimitCheckFailed,
     TransientApiError,
     WclGraphQLError,
 )
@@ -257,6 +258,128 @@ def test_refresh_budget_never_raises_even_below_floor() -> None:
 
     assert client.points_remaining == 400
     assert client.points_limit == 3600
+
+
+# -- rate-limit refresh: transport-fault injection ---------------------------
+# Reproduces the incident: a transient network failure during the periodic
+# budget refresh (never the main query itself) used to propagate a raw
+# httpx.TransportError straight out of query() and crash the caller
+# (docs/fase4-experiment-collection.md).
+
+
+@pytest.mark.parametrize(
+    "transport_error", [httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError]
+)
+def test_rate_limit_refresh_retries_transient_transport_error_then_succeeds(
+    transport_error: type[httpx.TransportError],
+) -> None:
+    counts = {"refresh": 0}
+    sleeps: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            counts["refresh"] += 1
+            if counts["refresh"] == 1:
+                raise transport_error("boom", request=request)
+            return _rate_limit_ok_response()
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(_config(), transport=httpx.MockTransport(handler), sleep=sleeps.append)
+
+    result = client.query("query { x }", {}, op_name="op")
+
+    assert result == {"data": {"ok": True}}
+    assert counts["refresh"] == 2  # one failure, one successful retry
+    assert len(sleeps) == 1
+
+
+def test_rate_limit_refresh_exhausted_retries_fails_closed_before_real_call() -> None:
+    counts = {"refresh": 0, "real_query": 0}
+    sleeps: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            counts["refresh"] += 1
+            raise httpx.ConnectTimeout("boom", request=request)
+        counts["real_query"] += 1
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(_config(), transport=httpx.MockTransport(handler), sleep=sleeps.append)
+
+    with pytest.raises(RateLimitCheckFailed):
+        client.query("query { x }", {}, op_name="op")
+
+    assert counts["refresh"] == 4  # default max_attempts, no infinite retry
+    assert counts["real_query"] == 0  # fail closed: never assumed budget existed
+    assert len(sleeps) == 3
+
+
+def test_rate_limit_refresh_retry_count_respects_configured_max_attempts() -> None:
+    counts = {"refresh": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            counts["refresh"] += 1
+            raise httpx.ConnectError("boom", request=request)
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(
+        _config(max_attempts=2), transport=httpx.MockTransport(handler), sleep=lambda _s: None
+    )
+
+    with pytest.raises(RateLimitCheckFailed):
+        client.query("query { x }", {}, op_name="op")
+
+    assert counts["refresh"] == 2  # reuses the project's own configured limit
+
+
+def test_refresh_budget_fails_closed_after_exhausted_transport_retries() -> None:
+    """refresh_budget() gains the same protection as query() — previously a
+    transport failure here had zero handling and crashed uncaught.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            raise httpx.ConnectError("boom", request=request)
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(_config(), transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+
+    with pytest.raises(RateLimitCheckFailed):
+        client.refresh_budget()
+
+
+def test_rate_limit_refresh_non_200_status_keeps_original_soft_fail_untouched() -> None:
+    """This fix only adds retries for transport-level failures — a non-200
+    HTTP response must keep its pre-existing, deliberately soft-fail path
+    (no retry, query proceeds), unchanged.
+    """
+    counts = {"refresh": 0, "real_query": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url == httpx.URL(TOKEN_URL):
+            return _token_response()
+        if _is_rate_limit_query(request):
+            counts["refresh"] += 1
+            return httpx.Response(500, json={})
+        counts["real_query"] += 1
+        return httpx.Response(200, json={"data": {"ok": True}})
+
+    client = WclClient(_config(), transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+
+    result = client.query("query { x }", {}, op_name="op")
+
+    assert result == {"data": {"ok": True}}
+    assert counts["refresh"] == 1  # not retried — different, pre-existing code path
+    assert counts["real_query"] == 1  # proceeded, exactly like before this fix
 
 
 def test_client_uses_expected_wcl_endpoint() -> None:

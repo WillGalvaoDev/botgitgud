@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
-from botgitgud.errors import PlayerNotFound, RateLimitBudgetExceeded
+from botgitgud.errors import PlayerNotFound, RateLimitBudgetExceeded, RateLimitCheckFailed
 from botgitgud.ingest.store import Store
 from botgitgud.phase4.experiment import ExperimentBudget
 from botgitgud.phase4.experiment_campaign import (
@@ -96,11 +96,18 @@ def _log(observation: PlannedExperimentObservation, *, percentile: float | None 
 
 
 class FakeBackend:
-    def __init__(self, *, fail_player: str | None = None, rate_once: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_player: str | None = None,
+        rate_once: bool = False,
+        refresh_fails_once: bool = False,
+    ) -> None:
         self.calls: list[str] = []
         self.payload_loads = 0
         self.fail_player = fail_player
         self.rate_once = rate_once
+        self.refresh_fails_once = refresh_fails_once
 
     def collect(
         self, observation: PlannedExperimentObservation, session: FightSession
@@ -109,6 +116,13 @@ class FakeBackend:
         if self.rate_once:
             self.rate_once = False
             raise RateLimitBudgetExceeded("pause", points_remaining=0, reset_in_seconds=10)
+        if self.refresh_fails_once:
+            # Fails exactly between "observation -> collecting" and any real
+            # network I/O for this observation — mirroring the real incident,
+            # where the crash happened before any bytes for this attempt were
+            # exchanged (mark_collecting already ran; collect() raises first).
+            self.refresh_fails_once = False
+            raise RateLimitCheckFailed("refresh unavailable")
         if observation.player_name == self.fail_player:
             raise PlayerNotFound("gone")
         hit = session.payload_loaded
@@ -365,3 +379,144 @@ def test_reopen_known_incident_preserves_plan_attempt_and_accounting(tmp_path: P
     assert [(item.status, item.reason, item.api_points) for item in history] == [
         (CollectionStatus.REJECTED, "percentile_missing", 28)
     ]
+
+
+# -- rate-limit refresh failure: fault injection at the collector boundary ----
+# Reproduces the real incident (docs/fase4-experiment-collection.md): a
+# transient network failure during WclClient's periodic budget refresh
+# crashed the collector process with an unhandled exception, leaving one
+# observation stuck `collecting` and the campaign's stopped_reason stale.
+
+
+def test_rate_limit_refresh_failure_stops_cleanly_with_a_distinct_reason(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1)))
+        summary = ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+    assert summary.stopped_reason == "rate_limit_refresh_failed"
+    assert summary.stopped_reason not in {"budget_exhausted", "rate_limit_budget"}
+
+
+def test_rate_limit_refresh_failure_makes_zero_further_collection_calls(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1), _observation(2)))
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+    assert backend.calls == ["Player0"]  # the failing attempt only — no further players tried
+
+
+def test_stale_stopped_reason_never_survives_a_new_run(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0)))
+        campaigns.set_stopped_reason(frozen.campaign_id, "rate_limit_budget")  # stale, prior run
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    assert current.stopped_reason == "rate_limit_refresh_failed"  # not the old value
+
+
+def test_rate_limit_refresh_failure_recovers_collecting_to_pending_immediately(
+    tmp_path: Path,
+) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0)))
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    assert current.observations[0].status is CollectionStatus.PENDING
+    assert current.observations[0].reason == "interrupted"
+
+
+def test_rate_limit_refresh_failure_preserves_prior_terminal_observations(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(
+            _campaign(_observation(0), _observation(1), _observation(2), ceiling=1000)
+        )
+        campaigns.finish(frozen.campaign_id, 0, status=CollectionStatus.COMPLETED, points=17)
+        campaigns.finish(frozen.campaign_id, 1, status=CollectionStatus.FAILED, reason="gone")
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    assert current.observations[0].status is CollectionStatus.COMPLETED
+    assert current.observations[1].status is CollectionStatus.FAILED
+    assert current.observations[2].status is CollectionStatus.PENDING  # the one that hit the fault
+
+
+def test_rate_limit_refresh_failure_does_not_fabricate_accounting(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1), ceiling=1000))
+        campaigns.finish(frozen.campaign_id, 0, status=CollectionStatus.COMPLETED, points=17)
+        summary = ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    # Historical points untouched; nothing invented for the incomplete attempt.
+    assert current.consumed_api_points == 17
+    assert summary.api_points_used == 17
+    assert current.observations[1].api_points == 0
+    assert current.observations[1].attempts == 1  # exactly the one real attempt, not doubled
+
+
+def test_rate_limit_refresh_failure_does_not_change_the_authorized_ceiling(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), ceiling=500))
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)  # no ceiling kwarg passed
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    assert current.max_api_points == 500  # unchanged — a retry never grants extra budget
+
+
+def test_recovery_after_refresh_failure_does_not_replan_or_change_identity(tmp_path: Path) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0), _observation(1)))
+        original_id = frozen.campaign_id
+        original_keys = tuple(item.planned.observation_key for item in frozen.observations)
+
+        collector = ExperimentCollector(campaigns, backend)
+        first_summary = collector.run(original_id)  # hits the fault, recovers ordinal 0
+
+        clean_backend = FakeBackend()
+        second_summary = ExperimentCollector(campaigns, clean_backend).run(original_id)
+        current = campaigns.get(original_id)
+        assert current is not None
+
+    assert first_summary.campaign_id == original_id
+    assert second_summary.campaign_id == original_id
+    assert current.campaign_id == original_id  # no replacement campaign was created
+    assert len(current.observations) == 2  # frozen plan size unchanged — no replanning
+    assert (
+        tuple(item.planned.observation_key for item in current.observations) == original_keys
+    )  # same ordinals, same report/fight/player identity — byte-equivalent plan
+    assert second_summary.completed == 2  # second run continues cleanly via the fake backend
+    assert second_summary.stopped_reason == "completed"
+
+
+def test_rate_limit_refresh_failure_never_fabricates_a_replacement_observation(
+    tmp_path: Path,
+) -> None:
+    backend = FakeBackend(refresh_fails_once=True)
+    with Store(tmp_path) as store:
+        campaigns = ExperimentCampaignStore(store)
+        frozen = campaigns.freeze(_campaign(_observation(0)))
+        target = frozen.observations[0].planned
+        ExperimentCollector(campaigns, backend).run(frozen.campaign_id)
+        current = campaigns.get(frozen.campaign_id)
+        assert current is not None
+    recovered = current.observations[0].planned
+    assert recovered.report_code == target.report_code
+    assert recovered.fight_id == target.fight_id
+    assert recovered.player_name == target.player_name
+    assert recovered.rank_percent == target.rank_percent

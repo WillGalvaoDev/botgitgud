@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from botgitgud.domain.models import PlayerLog
-from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
+from botgitgud.errors import (
+    ApiError,
+    FightNotFound,
+    PlayerNotFound,
+    RateLimitBudgetExceeded,
+    RateLimitCheckFailed,
+)
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.phase4.experiment_campaign import PlannedExperimentObservation
 from botgitgud.phase4.experiment_store import (
@@ -93,6 +99,12 @@ class ExperimentCollector:
         if authorized_api_ceiling is not None:
             self._campaigns.authorize(campaign_id, authorized_api_ceiling)
         self._campaigns.reset_collecting(campaign_id)
+        # A stale stopped_reason from a previous run must never be mistaken
+        # for this run's outcome — if this run itself crashes via some
+        # future, still-undiscovered uncaught path, the persisted value
+        # will honestly read "in_progress" rather than an old terminal
+        # reason. Every exit below overwrites this before returning.
+        self._campaigns.set_stopped_reason(campaign_id, "in_progress")
         campaign = self._require_campaign(campaign_id)
         sessions: dict[tuple[str, int], FightSession] = {}
         execution = _execution_order(campaign.observations)
@@ -115,6 +127,14 @@ class ExperimentCollector:
             except RateLimitBudgetExceeded:
                 self._campaigns.reset_collecting(campaign_id)
                 stopped = "rate_limit_budget"
+                break
+            except RateLimitCheckFailed:
+                # The rate-limit check itself failed after retries (remote
+                # state unknown) — fail closed exactly like a known-low
+                # budget: never assume points exist. Distinct reason so
+                # this is never confused with an actually-measured floor.
+                self._campaigns.reset_collecting(campaign_id)
+                stopped = "rate_limit_refresh_failed"
                 break
             except PlayerNotFound as exc:
                 self._fail(stored, "player_unavailable", exc)

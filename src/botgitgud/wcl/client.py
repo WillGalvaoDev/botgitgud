@@ -21,6 +21,7 @@ from botgitgud.errors import (
     AuthError,
     ConfigError,
     RateLimitBudgetExceeded,
+    RateLimitCheckFailed,
     TransientApiError,
     WclGraphQLError,
 )
@@ -117,7 +118,10 @@ class WclClient:
         """T1.8: forces a rateLimitData check now, ignoring the cache TTL —
         never raises RateLimitBudgetExceeded (unlike _ensure_budget, called
         internally by query()); the job scheduler needs the raw numbers to
-        decide which job types are currently allowed, not an exception.
+        decide which job types are currently allowed, not an exception. May
+        still raise RateLimitCheckFailed if transport retries are exhausted
+        (the check itself is unreachable) — a connectivity failure, not a
+        budget-floor decision.
         """
         token = self._get_token()
         headers = {
@@ -170,11 +174,34 @@ class WclClient:
     # -- rate limit -----------------------------------------------------------
 
     def _refresh_rate_limit(self, headers: dict[str, str]) -> None:
-        res = self._client.post(API_URL, json={"query": _RATE_LIMIT_QUERY}, headers=headers)
+        # Same retry/backoff as query() — an unretried transport failure here
+        # used to crash the caller with a raw exception (fase4-experiment-
+        # collection.md incident). Only connection-level failures retry; a
+        # non-200 response keeps its original soft-fail path below.
+        last_exc: httpx.TransportError | None = None
+        for attempt in range(1, self._config.max_attempts + 1):
+            try:
+                res = self._client.post(API_URL, json={"query": _RATE_LIMIT_QUERY}, headers=headers)
+            except httpx.TransportError as exc:
+                last_exc = exc
+                log.warning(
+                    "wcl.rate_limit_refresh_transport_error", attempt=attempt, error=str(exc)
+                )
+                if attempt >= self._config.max_attempts:
+                    break
+                self._sleep(self._backoff_delay(attempt))
+                continue
+            self._apply_rate_limit_response(res)
+            return
+        # Fail closed: state genuinely unknown, never assume budget exists.
+        attempts = self._config.max_attempts
+        msg = f"orçamento de API indisponível após {attempts} tentativas: {last_exc}"
+        raise RateLimitCheckFailed(msg) from last_exc
+
+    def _apply_rate_limit_response(self, res: httpx.Response) -> None:
         if res.status_code != 200:
-            # Non-fatal: if we can't even check the budget, don't block the
-            # caller on that alone — the retry/timeout machinery around the
-            # real query will surface any actual outage.
+            # Non-fatal: query()'s own retry/timeout machinery surfaces a
+            # real systemic outage; a single bad check shouldn't block.
             log.warning("wcl.rate_limit_check_failed", status=res.status_code)
             return
         data = (res.json().get("data") or {}).get("rateLimitData") or {}

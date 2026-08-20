@@ -5,6 +5,7 @@ BotGitGudError
 ├── ApiError
 │   ├── AuthError
 │   ├── RateLimitBudgetExceeded
+│   ├── RateLimitCheckFailed
 │   ├── WclGraphQLError
 │   └── TransientApiError
 ├── DataError
@@ -42,6 +43,15 @@ class RateLimitBudgetExceeded(ApiError):
         super().__init__(message)
         self.points_remaining = points_remaining
         self.reset_in_seconds = reset_in_seconds
+
+
+class RateLimitCheckFailed(ApiError):
+    """The rate-limit budget could not be determined after retries — the
+    remote state is unknown, not known-low. Distinct from
+    RateLimitBudgetExceeded (which means the budget IS known to be below
+    the floor): this means the check itself failed, so a caller must fail
+    closed rather than assume a budget exists.
+    """
 
 
 class WclGraphQLError(ApiError):

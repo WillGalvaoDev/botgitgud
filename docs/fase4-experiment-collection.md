@@ -36,6 +36,44 @@ report, fight, player, partition, difficulty, encounter ou spec divergente. O la
 `character.encounterRankings` para redescobri-lo. Exaustão do budget
 para normalmente, preserva o checkpoint e define `stopped_reason`.
 
+## Robustez do refresh de rate limit
+
+Durante a primeira execução real da campanha experimental, um timeout transitório de rede durante
+o refresh periódico de orçamento expôs um caminho de falha sem tratamento. O refresh de rate limit
+agora tenta novamente falhas transitórias e falha fechado quando o estado de rate limit não pode
+ser estabelecido.
+
+Concretamente: `WclClient._refresh_rate_limit` fazia uma chamada HTTP direta sem a política de
+retry/backoff que o caminho normal de `query()` já tinha. Uma falha de transporte (timeout de
+conexão, timeout de leitura, erro de conexão) nesse ponto se propagava sem tipo definido e
+derrubava o processo inteiro — diferente de uma resposta HTTP não-200 do mesmo endpoint, que
+sempre teve um caminho de degradação suave (log + retorno, sem exceção) porque o próprio `query()`
+acaba revelando uma indisponibilidade sistêmica real por conta própria.
+
+O refresh agora reusa exatamente a mesma política de tentativas e backoff de `query()`
+(`max_attempts`, `_backoff_delay`), mas só para falhas de transporte — o comportamento de resposta
+não-200 permanece inalterado. Se as tentativas se esgotarem, o cliente levanta
+`RateLimitCheckFailed` (`ApiError`) em vez de propagar a exceção de transporte crua. Isso é
+distinto de `RateLimitBudgetExceeded`: aquela significa "sabemos que o orçamento está baixo";
+esta significa "não sabemos o estado, então não presumimos que existe orçamento" — falha fechada.
+`refresh_budget()` (usado pelo agendador de jobs do Discord) ganha a mesma proteção; ele continua
+nunca levantando `RateLimitBudgetExceeded`, mas agora pode levantar `RateLimitCheckFailed` após
+esgotar as tentativas — um `ApiError`, já tratado pelo `except ApiError` existente do worker loop
+sem qualquer mudança nesse código.
+
+No `ExperimentCollector`, `RateLimitCheckFailed` é tratado exatamente como `RateLimitBudgetExceeded`
+já era: a observação em `collecting` volta imediatamente para `pending` (mesmo `reset_collecting`
+existente, sem inventar tentativas nem pontos), a execução para com `stopped_reason =
+"rate_limit_refresh_failed"` — nunca `budget_exhausted` nem `rate_limit_budget`, já que nenhum dos
+dois foi de fato observado — e nenhuma observação posterior é tentada. `completed`, `failed` e
+`rejected` anteriores permanecem exatamente como estavam; accounting histórico não é alterado nem
+inventado.
+
+Toda execução de `run()` também marca `stopped_reason = "in_progress"` antes de processar qualquer
+observação, sobrescrito ao final pelo motivo real. Isso garante que um valor antigo (de uma
+execução anterior) nunca seja confundido com o resultado da execução atual, mesmo se um caminho de
+falha ainda não descoberto voltar a derrubar o processo sem tratamento.
+
 ## Localidade de fight e event sharing
 
 A seleção mantém o ordinal original. A ordem de execução agrupa observações do mesmo fight pela

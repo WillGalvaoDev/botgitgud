@@ -518,6 +518,19 @@ preservadas e nenhum ponto WCL foi consumido.
 | FIX.1–FIX.4 | ✅ FEITA | 443781b | Label autoritativo do frozen plan, validação integral da identidade, ledger/reopen auditável e sharing HTTP real apenas para queries fight-wide. |
 | FIX.5 | ✅ FEITA | 78b5725 | Incidente documentado; 138 rejeições elegíveis reabertas localmente sem rede, plano intacto e accounting preservado em 3.880 pontos. |
 
+## Incidente experimental 002 (robustez do rate-limit refresh)
+
+Primeira execução real da campanha `exp-840b1ef99d76c33c8a0b` (`--max-api-points 5500`): 214
+observações concluídas, 676 pontos novos, 93,5% cache hit — depois derrubada por um
+`httpx.ConnectTimeout` sem tratamento dentro de `WclClient._refresh_rate_limit`, deixando uma
+observação presa em `collecting` (ordinal 40) e `stopped_reason` desatualizado. Nenhum código foi
+alterado naquela execução (relatório apenas); a correção veio nesta tarefa seguinte, sem nenhuma
+chamada WCL real.
+
+| Tarefa | Status | Commit | Notas |
+|---|---|---|---|
+| FIX.6 | ✅ FEITA | (pendente) | `_refresh_rate_limit` ganha o mesmo retry/backoff de `query()` para falhas de transporte; esgotadas as tentativas, levanta `RateLimitCheckFailed` (novo, `ApiError`) em vez de propagar a exceção crua. `ExperimentCollector` trata isso como falha fechada: `collecting` volta a `pending` sem inventar tentativas/pontos, execução para com `stopped_reason = "rate_limit_refresh_failed"` (nunca `budget_exhausted` nem `rate_limit_budget`), e todo `run()` marca `stopped_reason = "in_progress"` no início para que um valor antigo nunca seja confundido com o resultado da execução atual. Accounting, campaign ID, plano congelado e as 1.200 observações originais não foram tocados. 16 testes novos (7 em `test_wcl_client.py`, 9 em `test_experiment_collection.py`) cobrindo retry/backoff, exaustão, `stopped_reason`, recovery de `collecting`, preservação de estados terminais e accounting, e não-replanejamento em resume — só transporte falso, zero chamadas WCL reais. |
+
 ## Ambiente
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
