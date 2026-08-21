@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 
 from botgitgud.phase4.experiment_features import controllable_feature_names, modellable_features
 from botgitgud.phase4.experiment_metrics import regression_metrics, spearman
@@ -115,6 +115,41 @@ class LinearRegressionModel:
         x = feature_space.transform(train)
         y = [o.y_rank_percent for o in train]
         model = LinearRegression()
+        model.fit(x, y)
+        return cls(feature_space, model)
+
+    def predict(self, observations: Sequence[ExperimentalObservation]) -> list[float]:
+        x = self._feature_space.transform(observations)
+        return [float(v) for v in self._model.predict(x)]  # type: ignore[attr-defined]
+
+
+# Fixed, not tuned: a conservative regularization strength picked once to
+# stabilize the OLS instability actually measured under F2 (condition
+# numbers ~10^5-10^6, SAE.8), never selected against validation data. Ridge
+# is a DIAGNOSTIC only — it never replaces Baseline 1 in the protocol.
+RIDGE_ALPHA = 10.0
+
+
+class RidgeRegressionModel:
+    """DIAGNOSTIC_BASELINE_RIDGE — a numerically stable linear reference,
+    used only to check whether LightGBM's advantage survives against a
+    linear model that isn't collapsing from collinearity. Not part of the
+    official Baseline 0/1/LightGBM protocol.
+    """
+
+    def __init__(self, feature_space: FittedFeatureSpace, model: object) -> None:
+        self._feature_space = feature_space
+        self._model = model
+
+    @classmethod
+    def fit(
+        cls, train: Sequence[ExperimentalObservation], feature_space: FittedFeatureSpace
+    ) -> RidgeRegressionModel | _ConstantFallback:
+        if not feature_space.columns:
+            return _ConstantFallback(_mean([o.y_rank_percent for o in train]))
+        x = feature_space.transform(train)
+        y = [o.y_rank_percent for o in train]
+        model = Ridge(alpha=RIDGE_ALPHA)
         model.fit(x, y)
         return cls(feature_space, model)
 
@@ -249,6 +284,73 @@ def bootstrap_mae_spearman(
             _percentile(spearman_samples, 2.5),
             _percentile(spearman_samples, 97.5),
             len(spearman_samples),
+            True,
+        )
+    return mae_ci, spearman_ci
+
+
+def paired_bootstrap_delta(
+    y_true: Sequence[float],
+    pred_a: Sequence[float],
+    pred_b: Sequence[float],
+    *,
+    seed: int,
+    n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
+) -> tuple[BootstrapCI, BootstrapCI]:
+    """Paired bootstrap of ΔMAE = MAE(a) - MAE(b) and ΔSpearman =
+    Spearman(a) - Spearman(b), over exactly the same validation rows for
+    both predictors. Each resample draws ONE set of row indices and applies
+    it to `y_true`, `pred_a` and `pred_b` together — the pairing is what
+    lets the interval speak to "does a beat b on these rows", rather than
+    the wider, less informative interval two independent bootstraps would
+    give. Sign convention: negative ΔMAE means `a` has lower (better)
+    error; positive ΔSpearman means `a` ranks better than `b`.
+    """
+    n = len(y_true)
+    if n != len(pred_a) or n != len(pred_b):
+        raise ValueError("paired_bootstrap_delta requires equal-length sequences")
+    if n < MIN_ROWS_FOR_BOOTSTRAP:
+        unmeasurable = BootstrapCI(None, None, None, 0, False)
+        return unmeasurable, unmeasurable
+
+    rng = random.Random(seed)
+    mae_deltas: list[float] = []
+    spearman_deltas: list[float] = []
+    for _ in range(n_resamples):
+        idx = [rng.randrange(n) for _ in range(n)]
+        t = [y_true[i] for i in idx]
+        a = [pred_a[i] for i in idx]
+        b = [pred_b[i] for i in idx]
+        mae_deltas.append(regression_metrics(t, a).mae - regression_metrics(t, b).mae)
+        rho_a, rho_b = spearman(t, a), spearman(t, b)
+        if rho_a is not None and rho_b is not None:
+            spearman_deltas.append(rho_a - rho_b)
+
+    mae_deltas.sort()
+    point_delta_mae = (
+        regression_metrics(y_true, pred_a).mae - regression_metrics(y_true, pred_b).mae
+    )
+    mae_ci = BootstrapCI(
+        point_delta_mae,
+        _percentile(mae_deltas, 2.5),
+        _percentile(mae_deltas, 97.5),
+        n_resamples,
+        True,
+    )
+
+    if len(spearman_deltas) < MIN_ROWS_FOR_BOOTSTRAP:
+        spearman_ci = BootstrapCI(None, None, None, len(spearman_deltas), False)
+    else:
+        spearman_deltas.sort()
+        rho_a_point, rho_b_point = spearman(y_true, pred_a), spearman(y_true, pred_b)
+        point_delta_rho = (
+            None if rho_a_point is None or rho_b_point is None else rho_a_point - rho_b_point
+        )
+        spearman_ci = BootstrapCI(
+            point_delta_rho,
+            _percentile(spearman_deltas, 2.5),
+            _percentile(spearman_deltas, 97.5),
+            len(spearman_deltas),
             True,
         )
     return mae_ci, spearman_ci
