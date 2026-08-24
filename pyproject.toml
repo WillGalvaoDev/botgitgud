@@ -37,6 +37,12 @@ exclude = ["legacy"]
 extraPaths = ["tests/fixtures"]
 typeCheckingMode = "standard"
 pythonVersion = "3.11"
+# Sem isto o pyright cai no interpretador do PATH, que não tem as dependências
+# nem o install editável — `pyright src tests` acusava 416 erros de import.
+# Caminhos relativos ao pyproject.toml; o pyright escolhe Scripts/ ou bin/
+# conforme a plataforma, então isto continua portável.
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

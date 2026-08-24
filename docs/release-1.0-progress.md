@@ -169,6 +169,26 @@ rastreado. Nenhum push, tag, reescrita, API WCL real ou Phase 4 foi executado.
 - Status anterior/gap: PENDING; tag explicitamente humana. Nenhuma tag criada.
 - Testes/arquivos/limitações/status final: depende commit aprovado; PENDING_DEPENDENCY.
 
+## RC-PYRIGHT — tornar o gate Pyright reproduzível (DONE)
+
+- Status anterior/gap: lacuna de Release Candidate descoberta na validação do checkpoint
+  `eccad6a`. O gate do roadmap está escrito como `pyright src tests`, mas esse comando retornava
+  **416 erros**; só passava com a flag manual `--pythonpath .venv/Scripts/python.exe`. Registrar
+  R4-02 como mecanicamente verde nessas condições seria falso: o comando documentado não
+  reproduzia o resultado documentado.
+- Causa raiz: `[tool.pyright]` não declarava o ambiente virtual, então o Pyright caía no
+  interpretador do PATH — sem as dependências e sem o install editável. Não era dívida de tipagem:
+  os 416 diagnósticos eram 399 `reportMissingImports` (inclusive `httpx`, importado desde a T0.1)
+  mais 17 achados em arquivos intocados por aquele diff.
+- Decisão/RED/GREEN/refactor: RED = `pyright src tests` com 416 erros; GREEN = `venvPath = "."` e
+  `venv = ".venv"` em `[tool.pyright]`; refactor = nenhum. Nenhum código de produção, dependência
+  ou versão foi tocado.
+- Arquivos/testes/validações: `pyproject.toml`. Verificado em três invocações — `pyright src tests`,
+  `pyright` sem argumentos e `pyright.exe src tests` — todas 0 erros / 0 warnings, sem flag.
+- Limitações/status final: não foi adicionado teste automatizado. Um teste que apenas afirmasse a
+  presença das duas chaves no TOML seria tautológico, e reproduzir a falha real exigiria invocar o
+  Pyright de dentro do pytest — caro e redundante com o próprio gate. DONE.
+
 ## Validação final automatizada
 
 - Coleta: 931 testes.

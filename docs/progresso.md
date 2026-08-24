@@ -561,3 +561,9 @@ chamada WCL real.
 - Gates ainda humanos: R0-01 (rotação), R1-01 (smoke real), depois RC/soak/análises/release.
 - Validação final: 931/931 testes, 2/2 snapshots, ruff check/format verdes e pyright com 0 erros.
   HEAD permaneceu `3f7667f`; sem commit, push, tag, Phase 4 ou chamada real à WCL.
+- RC-PYRIGHT (após `eccad6a`): o gate `pyright src tests` só passava com
+  `--pythonpath .venv/Scripts/python.exe`; sem a flag acusava 416 erros, todos de resolução de
+  ambiente (399 `reportMissingImports`, incluindo `httpx`), não de tipagem. `[tool.pyright]` não
+  declarava o venv, então o Pyright usava o interpretador do PATH. Corrigido com `venvPath = "."`
+  e `venv = ".venv"`; o comando documentado agora reproduz 0 erros sem flag. R4-02 não podia ser
+  considerado mecanicamente verde antes disso.
