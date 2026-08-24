@@ -120,8 +120,15 @@ def _render_timelines(comparisons: Sequence[SpellComparison], duration_s: float)
 
 
 def _render_top_actions(top_actions: Sequence[Finding]) -> str:
+    scope = (
+        "<p>Este ranking inclui somente achados com ganho de DPS quantificável; "
+        "outros problemas podem aparecer nas seções abaixo.</p>"
+    )
     if not top_actions:
-        return "<p>✅ Nenhum problema material detectado.</p>"
+        return scope + (
+            "<p>Nenhum achado com ganho de DPS quantificável. "
+            "Veja as seções abaixo para achados sem estimativa de ganho.</p>"
+        )
     items = "".join(
         "<li>"
         f"<strong>{escape(f.title)}</strong> — ganho estimado: "
@@ -131,7 +138,7 @@ def _render_top_actions(top_actions: Sequence[Finding]) -> str:
         "</li>"
         for f in top_actions
     )
-    return f"<ol>{items}</ol>"
+    return f"{scope}<ol>{items}</ol>"
 
 
 def render_html_report(
@@ -163,7 +170,7 @@ def render_html_report(
             f"Coorte: {header.reference_n} logs</p>"
         ),
         '<div class="section">',
-        "<h2>🎯 Top 3 Ações</h2>",
+        "<h2>🎯 Top 3 Ações com Ganho de DPS Quantificável</h2>",
         _render_top_actions(top_actions),
         "</div>",
     ]

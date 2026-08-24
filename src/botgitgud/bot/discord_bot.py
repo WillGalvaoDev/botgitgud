@@ -36,7 +36,7 @@ from botgitgud.errors import (
     ScopeRejected,
 )
 from botgitgud.report.html_report import render_html_report
-from botgitgud.report.text import chunk_report_for_discord, render_header_and_top3
+from botgitgud.report.text import render_header_and_top3
 
 log = structlog.get_logger(__name__)
 
@@ -84,9 +84,16 @@ async def _notify_outcome(bot: commands.Bot, outcome: JobOutcome) -> None:
         await channel.send(f"{mention} ❌ {outcome.message}")  # type: ignore[union-attr]
         return
     if outcome.job.job_type == "analyze":
-        await channel.send(f"{mention} ✅ análise concluída:")  # type: ignore[union-attr]
-        for chunk in chunk_report_for_discord(outcome.message):
-            await channel.send(f"```markdown\n{chunk}\n```")  # type: ignore[union-attr]
+        if outcome.html_report is None:
+            log.error("discord_bot.analyze_outcome_missing_html", job_id=outcome.job.job_id)
+            await channel.send(f"{mention} ❌ relatório HTML indisponível.")  # type: ignore[union-attr]
+            return
+        html_file = discord.File(
+            io.BytesIO(outcome.html_report.encode("utf-8")), filename="relatorio.html"
+        )
+        await channel.send(  # type: ignore[union-attr]
+            f"{mention}\n```markdown\n{outcome.message}\n```", file=html_file
+        )
     else:
         await channel.send(f"{mention} ✅ {outcome.message}")  # type: ignore[union-attr]
 

@@ -31,10 +31,12 @@ def _header(**overrides: object) -> ReportHeader:
     return ReportHeader(**defaults)  # type: ignore[arg-type]
 
 
-def test_shows_nothing_material_message_when_no_actions() -> None:
+def test_empty_ranking_is_honest_about_unquantified_findings() -> None:
     lines = render_top_actions_section([])
     text = "\n".join(lines)
-    assert "Nenhum problema material detectado" in text
+    assert "Nenhum achado com ganho de DPS quantificável" in text
+    assert "outros problemas podem aparecer nas seções abaixo" in text
+    assert "Nenhum problema material detectado" not in text
 
 
 def test_renders_between_one_and_three_numbered_actions() -> None:

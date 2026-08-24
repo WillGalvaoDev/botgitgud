@@ -20,6 +20,8 @@ from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import RateLimitBudgetExceeded
 from botgitgud.ingest.store import Store
+from botgitgud.report.html_report import render_html_report
+from botgitgud.report.text import render_header_and_top3
 
 ENCOUNTER_ID = 3179
 
@@ -56,7 +58,7 @@ def _claimed_build_cohort_job(dedup_key: str) -> Job:
     )
 
 
-def test_run_claimed_analyze_job_marks_done_and_returns_the_report(tmp_path: Path) -> None:
+def test_run_claimed_analyze_job_returns_summary_and_html(tmp_path: Path) -> None:
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
     store = Store(tmp_path / "queue_data")
@@ -67,8 +69,35 @@ def test_run_claimed_analyze_job_marks_done_and_returns_the_report(tmp_path: Pat
 
     assert outcome.ok is True
     assert "Zarad" in outcome.message
-    assert "GITGUD MAJOR CD ANALYSIS" in outcome.message
+    assert "TOP 3 AÇÕES COM GANHO" in outcome.message
+    assert outcome.html_report is not None
+    assert "<html" in outcome.html_report
+    assert "DE ONDE VEIO O GAP DE DPS" not in outcome.message
     store.close()
+
+
+def test_queue_and_hot_path_render_the_same_delivery_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps = _build_deps(tmp_path, _DispatchTransport(_happy_path_responses()))
+    result = worker_module.run_analysis(
+        worker_module.AnalysisRequest("ABCDEFGHIJKLMNOP", 1, "Zarad"),
+        deps,
+        allow_cold_build=True,
+    )
+    monkeypatch.setattr(worker_module, "run_analysis", lambda *_args, **_kwargs: result)
+    summary, html = worker_module._run_analyze(_claimed_analyze_job(), deps)
+    assert summary == render_header_and_top3(result.header, result.top_actions)
+    assert html == render_html_report(
+        result.header,
+        result.comparisons,
+        manifest=result.manifest,
+        build_divergence=result.build_divergence,
+        performance=result.performance,
+        dps_gap=result.dps_gap,
+        top_actions=result.top_actions,
+        duration_s=result.header.duration_max_s,
+    )
 
 
 def test_run_claimed_analyze_job_marks_queue_entry_done_when_enqueued_first(

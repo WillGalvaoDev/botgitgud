@@ -549,3 +549,15 @@ chamada WCL real.
 
 - Python 3.14.6 (o documento pedia `>=3.11`; `uv` não está instalado no ambiente, usado `venv` + `pip` conforme fallback previsto em §1.2).
 - Dependências `data` (duckdb, pyarrow, polars) e `dev` (pytest, hypothesis, syrupy, ruff, pyright) instaladas sem erro em `.venv/`.
+
+## Execução operacional v1.0 — 2026-08-24
+
+- R0-02: auditoria sanitizada de 91 revisões sem segredos versionados; `.env` nunca versionado.
+- R2: contrato Discord unificado em resumo + HTML; `backfill` removido; Top 3 honesto; D-26/27/28
+  verificadas e aceitas; D-30 mantida como regressão estrutural sem consumo de API.
+- R3: `ops-status` e `recover-jobs`; política e runbook criados. Ensaio backup/restore em diretórios
+  separados: 172.503.638 bytes, 1,066 s + 0,438 s, 741 Parquets, 15 tabelas e todas as contagens
+  iguais, inclusive as seis irreproduzíveis.
+- Gates ainda humanos: R0-01 (rotação), R1-01 (smoke real), depois RC/soak/análises/release.
+- Validação final: 931/931 testes, 2/2 snapshots, ruff check/format verdes e pyright com 0 erros.
+  HEAD permaneceu `3f7667f`; sem commit, push, tag, Phase 4 ou chamada real à WCL.

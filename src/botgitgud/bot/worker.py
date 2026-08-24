@@ -22,7 +22,8 @@ from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.job_models import Job
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
-from botgitgud.report.text import render_report
+from botgitgud.report.html_report import render_html_report
+from botgitgud.report.text import render_header_and_top3
 
 log = structlog.get_logger(__name__)
 
@@ -32,6 +33,7 @@ class JobOutcome:
     job: Job
     ok: bool
     message: str
+    html_report: str | None = None
     requeued: bool = False
 
 
@@ -46,9 +48,10 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
     """
     try:
         if job.job_type == "analyze":
-            message = _run_analyze(job, deps)
+            message, html_report = _run_analyze(job, deps)
         else:
             message = _run_build_cohort(job, deps)
+            html_report = None
     except RateLimitBudgetExceeded as e:
         log.info("worker.job_requeued_budget_exceeded", job_id=job.job_id, error=str(e))
         queue.requeue(job.job_id)
@@ -59,10 +62,10 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         return JobOutcome(job=job, ok=False, message=str(e))
 
     queue.mark_done(job.job_id)
-    return JobOutcome(job=job, ok=True, message=message)
+    return JobOutcome(job=job, ok=True, message=message, html_report=html_report)
 
 
-def _run_analyze(job: Job, deps: Deps) -> str:
+def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
     report_code, fight_id_s, character_name = job.dedup_key.split(":", 2)
     req = AnalysisRequest(
         report_code=report_code, fight_id=int(fight_id_s), character_name=character_name
@@ -71,15 +74,18 @@ def _run_analyze(job: Job, deps: Deps) -> str:
     # (unlike the interactive path, which never builds cold) — allowed to
     # do the full cohort fetch if the fast warm-profile lookup missed.
     result = run_analysis(req, deps, allow_cold_build=True)
-    return render_report(
+    summary = render_header_and_top3(result.header, result.top_actions)
+    html = render_html_report(
         result.header,
         result.comparisons,
-        result.manifest,
-        result.build_divergence,
-        result.performance,
-        result.dps_gap,
-        result.top_actions,
+        manifest=result.manifest,
+        build_divergence=result.build_divergence,
+        performance=result.performance,
+        dps_gap=result.dps_gap,
+        top_actions=result.top_actions,
+        duration_s=result.header.duration_max_s,
     )
+    return summary, html
 
 
 def _run_build_cohort(job: Job, deps: Deps) -> str:

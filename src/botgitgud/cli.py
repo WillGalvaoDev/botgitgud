@@ -2,9 +2,8 @@
 for batch/debug work (docs/implementacao.md §1.1/T1.6 step 4): lets the
 pipeline be exercised without Discord.
 
-`analyze`, `build-cohort`, and `probe-schema` are fully implemented.
-`backfill` (mentioned once in the spec with zero further detail anywhere
-in the document) is a documented stub — see docs/desvios.md D-13.
+Every public command is implemented. The former `backfill` placeholder was
+removed for v1.0 because no product requirement or caller exists (D-13).
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ from botgitgud.cli_experiment import (
 from botgitgud.cli_experiment_calibrate import add_experiment_calibrate_parser
 from botgitgud.cli_experiment_decide import add_experiment_decide_parser
 from botgitgud.cli_experiment_evaluate import add_experiment_evaluate_parser
+from botgitgud.cli_ops import add_ops_parsers
 from botgitgud.config import Settings
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
@@ -146,13 +146,6 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_backfill(_args: argparse.Namespace) -> int:
-    sys.stderr.write(
-        "backfill ainda não implementado — sem especificação (docs/desvios.md D-13).\n"
-    )
-    return 1
-
-
 def _cmd_serve(_args: argparse.Namespace) -> int:
     """T1.8 (docs/desvios.md D-23): no task in the plan ever wires
     bot/discord_bot.py's build_bot() into an actual entrypoint — this is
@@ -214,12 +207,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_experiment_evaluate_parser(sub)
     add_experiment_decide_parser(sub)
     add_experiment_calibrate_parser(sub)
+    add_ops_parsers(sub)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)
-
-    p_backfill = sub.add_parser("backfill", help="Placeholder sem especificação (D-13).")
-    p_backfill.set_defaults(func=_cmd_backfill)
 
     p_serve = sub.add_parser("serve", help="Inicia o bot do Discord (processo de longa duração).")
     p_serve.set_defaults(func=_cmd_serve)

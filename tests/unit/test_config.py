@@ -1,9 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
 from botgitgud.config import Settings
+
+
+def test_env_example_documents_every_settings_field() -> None:
+    env_path = Path(__file__).parents[2] / ".env.example"
+    declared = {
+        line.split("=", 1)[0].strip().lower()
+        for line in env_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and "=" in line
+    }
+    assert declared == set(Settings.model_fields)
 
 
 def _settings(**overrides: object) -> Settings:

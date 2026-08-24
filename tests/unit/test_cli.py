@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from botgitgud.cli import _cmd_backfill, build_parser
+from botgitgud.cli import build_parser
 
 
 def test_analyze_subcommand_parses_required_flags() -> None:
@@ -23,7 +23,7 @@ def test_analyze_missing_required_flag_exits_nonzero() -> None:
         parser.parse_args(["analyze", "--report", "ABCDEFGHIJKLMNOP"])
 
 
-@pytest.mark.parametrize("command", ["probe-schema", "backfill", "serve"])
+@pytest.mark.parametrize("command", ["probe-schema", "serve"])
 def test_every_no_arg_subcommand_exists(command: str) -> None:
     parser = build_parser()
     args = parser.parse_args([command])
@@ -87,12 +87,10 @@ def test_no_subcommand_exits_nonzero() -> None:
         parser.parse_args([])
 
 
-def test_backfill_stub_returns_failure_and_explains_why(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    exit_code = _cmd_backfill(build_parser().parse_args(["backfill"]))
-    assert exit_code == 1
-    assert "D-13" in capsys.readouterr().err
+def test_backfill_is_not_a_public_command() -> None:
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["backfill"])
+    assert exc.value.code == 2
 
 
 # -- T-DG.3: discover subcommand ----------------------------------------------

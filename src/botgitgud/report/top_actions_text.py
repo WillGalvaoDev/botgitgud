@@ -13,9 +13,18 @@ _SEPARATOR_THIN = "-" * 42
 
 
 def render_top_actions_section(top_actions: Sequence[Finding]) -> list[str]:
-    lines = ["", "🎯 **TOP 3 AÇÕES**", _SEPARATOR_THIN]
+    lines = [
+        "",
+        "🎯 **TOP 3 AÇÕES COM GANHO DE DPS QUANTIFICÁVEL**",
+        _SEPARATOR_THIN,
+        "Este ranking inclui somente achados com ganho de DPS quantificável; "
+        "outros problemas podem aparecer nas seções abaixo.",
+    ]
     if not top_actions:
-        lines.append("✅ Nenhum problema material detectado.")
+        lines.append(
+            "Nenhum achado com ganho de DPS quantificável. "
+            "Veja as seções abaixo para achados sem estimativa de ganho."
+        )
         return lines
 
     for i, finding in enumerate(top_actions, start=1):

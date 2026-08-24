@@ -453,13 +453,11 @@ de um projeto pessoal/comunidade pequena).
   `discord.ext.commands.Bot`/event loop real, e construir uma do zero para testar código que é, em
   sua maioria, roteamento fino (parsear → chamar lógica já testada → formatar → enviar) não parecia
   proporcional ao valor.
-- **Ação tomada:** toda a lógica de negócio que os comandos chamam (`run_analysis`, `JobQueue`,
-  `run_claimed_job`, `BudgetStatus`) tem cobertura de unidade completa e é exercitada isoladamente.
-  `discord_bot.py` em si foi revisado manualmente com cuidado (fluxo de exceções, ordem de
-  operações, wiring do worker loop) mas fica de fora da cobertura automatizada — consistente com o
-  precedente já estabelecido desde a T1.6.
-- **Impacto:** cobertura total do repositório (86%) continua bem acima do piso de 75% exigido pelo
-  portão de saída da Fase 1, mesmo com `discord_bot.py` em 0%.
+- **Ação tomada (R1-02, 2026-08-24):** `RESOLVIDO`. Fakes determinísticos cobrem parse,
+  `!analisar` feliz e todos os ramos de erro, `!status`, enqueue, notify, worker loop e o guard de
+  `on_ready`, sem rede, token ou Discord real.
+- **Impacto:** os contratos críticos agora têm regressão automatizada. A cola de
+  conexão/autenticação real permanece fora do teste unitário por design e pertence a R1-01.
 
 ## D-23 — Nenhuma tarefa liga `build_bot()` a um processo executável de fato
 
@@ -723,3 +721,55 @@ de um projeto pessoal/comunidade pequena).
   no documento como "maior retorno/esforço"). Se uma fórmula honesta para as outras 6 categorias for
   definida numa tarefa futura, `build_findings` é o único lugar que precisa mudar — o tipo `Finding`
   e `select_top_actions` já suportam qualquer `FindingKind` sem alteração.
+
+## R1.0-01 — Auditoria histórica de segredos concluída
+
+- **Classificação:** segurança/release; `DONE` em 2026-08-24.
+- **Evidência sanitizada:** 91 revisões cobertas; `.env` em zero árvores; zero correspondências de
+  token Discord, Bearer não redigido, atribuição de client secret ou OAuth access token. Nos
+  cassetes atuais, os 2 arquivos com chave `access_token` e os 131 com `Authorization` usam redação.
+- **Decisão:** nenhuma reescrita de histórico é necessária. A rotação externa R0-01 continua
+  obrigatória e independente; nenhum valor foi reproduzido durante a auditoria.
+
+## R1.0-02 — D-13 resolvida: `backfill` removido da CLI
+
+- **Classificação:** `RESOLVIDO` em 2026-08-24.
+- **Evidência:** não há requisito ou consumidor do subcomando; a única especificação era a lista
+  inicial da T1.6. `ingest/backfill_planner.py` e `backfill_checkpoints` pertencem à discovery e
+  permanecem intactos.
+- **Decisão:** remover o stub público, sem inventar feature nova.
+
+## R1.0-03 — Dívidas D-26, D-27 e D-28 aceitas para v1
+
+- **Classificação:** `ACCEPTED_V1_DEBT` em 2026-08-24.
+- **D-26:** `(nodeID, rank)` é inequívoco embora menos legível; nenhuma fonte confiável foi
+  encontrada nas APIs já verificadas.
+- **D-27:** banda posicional conservadora pode reduzir `n`, mas banners de baixa confiança e
+  `amostra insuficiente (n<15)` impedem interpretação forte.
+- **D-28:** o fallback usa a cadência observada. Uma classificação MAJOR/MINOR imperfeita altera o
+  rótulo/posição de apresentação, não cria alinhamentos: casts esperados, MISSED/EXTRA e grades
+  vêm da coorte observada. Os testes provam que um valor curado vence quando existe e que sua
+  ausência mantém o alinhamento. Não há fonte de cooldown inventada.
+
+## R1.0-04 — D-30 aceita como limitação explícita do golden
+
+- **Classificação:** `ACCEPTED_V1_DEBT` em 2026-08-24.
+- O snapshot continua útil como regressão de estrutura, ordenação, renderização e integração. Os
+  números do gap de DPS na coorte truncada não são autoritativos; identidade e semântica do
+  algoritmo são guardadas por testes sintéticos e 1.000 casos property-based. Regravar consumiria
+  WCL e não foi necessário nem autorizado.
+
+## R1.0-05 — Convenção de 300 linhas triada por arquivo
+
+- **Classificação:** desvio formal aceito em 2026-08-24; nenhuma mudança de comportamento.
+- `phase4/experiment_decision.py` (439), `experiment_calibration.py` (433),
+  `experiment_evaluate.py` (411), `experiment_store.py` (384), `cli_experiment.py` (377),
+  `experiment_models.py` (356), `cli_experiment_calibrate.py` (324): trilha experimental fora da
+  v1.0; dividir agora seria churn sem benefício para produção.
+- `analysis/dataset_status.py` (317): ferramenta offline do data gate, coesa e estável; aceita.
+- `ingest/log_fetcher.py` (352): uma única responsabilidade de orquestração de fetch, já separa
+  helpers em `log_fetcher_aux.py`; aceita.
+- `wcl/client.py` (326): uma única fronteira HTTP com retry/orçamento; separar estado de transporte
+  e budget aumentaria acoplamento sem problema concreto de teste; aceita.
+- A regra permanece sinal de revisão, não limite mecânico. Reavaliar somente junto de mudança
+  funcional que revele responsabilidade nova.
