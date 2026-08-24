@@ -18,14 +18,16 @@ import asyncio
 import functools
 import io
 import re
+from collections.abc import Sequence
 
 import discord
 import structlog
 from discord.ext import commands
 
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
-from botgitgud.bot.job_models import BudgetStatus, EnqueueResult
+from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job
 from botgitgud.bot.jobs import JobQueue
+from botgitgud.bot.ops_snapshot import write_snapshot
 from botgitgud.bot.worker import JobOutcome, run_claimed_job
 from botgitgud.errors import (
     ApiError,
@@ -99,9 +101,16 @@ async def _notify_outcome(bot: commands.Bot, outcome: JobOutcome) -> None:
 
 
 async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
+    last_points: float | None = None
+    last_limit: float | None = None
     while True:
         await asyncio.sleep(_WORKER_POLL_INTERVAL_S)
-        if not any(j.status == "queued" for j in queue.list_active()):
+        active = queue.list_active()
+        # D-34: enquanto este processo vive, ele segura o arquivo do DuckDB e
+        # nenhum outro consegue abri-lo. Publicar o resumo a cada tick é o que
+        # permite ao `ops-status` responder com o bot no ar.
+        _publish_snapshot(deps, active, last_points, last_limit)
+        if not any(j.status == "queued" for j in active):
             continue  # never spend a rate-limit check when there's nothing to run
 
         try:
@@ -109,6 +118,7 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         except ApiError as e:
             log.warning("discord_bot.budget_check_failed", error=str(e))
             continue
+        last_points, last_limit = budget.points_remaining, budget.limit_per_hour
 
         job = queue.claim_next(budget)
         if job is None:
@@ -117,6 +127,26 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         loop = asyncio.get_running_loop()
         outcome = await loop.run_in_executor(None, run_claimed_job, queue, job, deps)
         await _notify_outcome(bot, outcome)
+
+
+def _publish_snapshot(
+    deps: Deps,
+    active: Sequence[Job],
+    points_remaining: float | None,
+    points_limit: float | None,
+) -> None:
+    """Publica o estado para o `ops-status` (D-34). Best-effort por desenho:
+    falhar ao escrever um arquivo de diagnóstico nunca pode derrubar o worker.
+    """
+    try:
+        write_snapshot(
+            deps.settings.data_dir,
+            active=active,
+            points_remaining=points_remaining,
+            points_limit=points_limit,
+        )
+    except OSError as e:
+        log.warning("discord_bot.ops_snapshot_write_failed", error=str(e))
 
 
 def _enqueue_message(result: EnqueueResult) -> str:
@@ -145,6 +175,10 @@ def build_bot(deps: Deps) -> commands.Bot:
         if not worker_started["started"]:
             bot.loop.create_task(_worker_loop(bot, deps, queue))
             worker_started["started"] = True
+            # D-34: publica já no boot, para que `ops-status` responda desde o
+            # primeiro segundo em vez de esperar o primeiro tick do worker.
+            _publish_snapshot(deps, queue.list_active(), None, None)
+            log.info("discord_bot.worker_started")
         log.info("discord_bot.ready", user=str(bot.user))
 
     @bot.command(name="analisar")

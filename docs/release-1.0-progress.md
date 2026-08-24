@@ -3,13 +3,24 @@
 Baseline: HEAD inicial `3f7667f`; `CLAUDE.md` ausente; única mudança inicial era o roadmap não
 rastreado. Nenhum push, tag, reescrita, API WCL real ou Phase 4 foi executado.
 
-## R0-01 — BLOCKED_ON_HUMAN
+## R0-01 — ACCEPTED_RISK (2026-08-24)
 
-- Status anterior/gap: PENDING; cinco credenciais exigem consoles e comprovação externa.
-- Decisão/RED/GREEN/refactor: nenhuma credencial tocada; checklist seguro criado; n/a; n/a; n/a.
-- Arquivos/testes/validações: `docs/credential-rotation-checklist.md`; auditoria garante que valores
-  não entram no Git.
-- Limitações/status final: revogação e autenticação real dependem do humano; BLOCKED_ON_HUMAN.
+- Status anterior/gap: `BLOCKED_ON_HUMAN`; cinco credenciais exigem consoles e comprovação externa.
+- Decisão do proprietário: **não rotacionar nesta release.** A rotação NÃO foi executada e não deve
+  ser lida como concluída; as credenciais atuais permanecem em uso. Nenhuma credencial foi tocada
+  pelo agente.
+- Fatos verificados que sustentam a aceitação: `.env` nunca versionado; R0-02 auditou 91 revisões;
+  zero segredos no histórico; cassetes com `access_token`/`Authorization` redigidos; nenhum segredo
+  nos commits da release (`eccad6a`, `cc4f06d`); nenhum remote configurado e nenhum push público.
+- Risco residual aceito: enquanto a mesma credencial continuar válida, não é possível provar que
+  nenhuma cópia dela existe fora do Git.
+- Gatilhos que revogam a aceitação: vazamento suspeito, segredo em arquivo/log, publicação
+  acidental, ambiente compartilhado, novo colaborador, incidente de segurança, máquina/conta
+  comprometida.
+- Efeito no plano: R0-01 sai do caminho crítico e deixa de ser BLOCKER; o gate RC passa a exigir
+  decisão explícita de segurança (rotação OU risco aceito), não revogação comprovada.
+- Arquivos: `docs/roadmap-1.0.md` (R0-01, §3.3, §5, §8, §11),
+  `docs/credential-rotation-checklist.md` (mantido pronto para uso futuro).
 
 ## R0-02 — DONE
 
@@ -188,6 +199,54 @@ rastreado. Nenhum push, tag, reescrita, API WCL real ou Phase 4 foi executado.
 - Limitações/status final: não foi adicionado teste automatizado. Um teste que apenas afirmasse a
   presença das duas chaves no TOML seria tautológico, e reproduzir a falha real exigiria invocar o
   Pyright de dentro do pytest — caro e redundante com o próprio gate. DONE.
+
+## R1-01 — Smoke A (parcial, 2026-08-24)
+
+Primeira execução real de `python -m botgitgud.cli serve`. **Zero pontos WCL consumidos.**
+
+| Passo | Resultado |
+|---|---|
+| Processo inicia | PASS |
+| Discord conecta | PASS |
+| Bot fica online | PASS (`user='GITGUD - performance analyst#6108'`) |
+| `on_ready` executa | PASS |
+| Worker sobe uma vez | PARCIAL — o start passou a ser observável em runtime (`discord_bot.worker_started`, visto no boot com a correção D-34). O invariante "apenas uma vez através de reconexões" continua coberto só por teste unitário, porque só houve um boot. |
+| `!status` responde | PENDENTE — exige um humano digitar no Discord; `cmd_status` não emite log. |
+| `!analisar` ponta a ponta | NÃO AUTORIZADO — consome WCL. |
+
+Achado do smoke: D-34 (`ops-status` inutilizável com o bot no ar), corrigido em R3-01 reaberta.
+O smoke completo não deve ser reiniciado antes dessa correção estar no lugar — e agora está.
+
+## R3-01 (reaberta) — `ops-status` seguro com o bot rodando (DONE)
+
+- Status anterior/gap: `DONE` prematuro. O smoke A provou que `ops-status` abortava com traceback
+  cru enquanto o `serve` segurava o warehouse, e que o runbook mandava rodá-lo nesse estado.
+- Causa raiz: lock exclusivo do DuckDB 1.5.5. Verificado ao vivo contra o bot real que nem
+  `read_only=True` nem `access_mode=READ_ONLY` abrem o arquivo a partir de outro processo.
+- Alternativas: (A) leitura concorrente — impossível; (B) o bot publica o estado num arquivo;
+  (C) só documentar "pare o bot" — rejeitada, deixaria runtime só via Discord; (D) copiar o arquivo
+  ativo — rejeitada, frágil e sujeita a leitura pela metade.
+- Decisão: (B), mínima. `bot/ops_snapshot.py` (~110 linhas), publicado atomicamente no `on_ready` e
+  a cada tick do worker. Sem daemon, socket, porta HTTP ou segundo banco.
+- RED: 5 testes novos falhando, incluindo reprodução real do lock **entre processos** (subprocess
+  segurando o banco) e a exigência de exit 75 sem traceback. GREEN: 37 testes focados.
+- Tratamento de erro: lock virou condição esperada — mensagem acionável + `EX_TEMPFAIL` (75).
+  `recover-jobs` recusa pelo mesmo caminho, apontando que exige o bot parado.
+- Verificação ao vivo: com o bot antigo (sem publisher) → exit 75 controlado nos dois comandos; com
+  o bot corrigido → `source=running_bot`, `bot_pid=12104`, `snapshot_age_s=1.2`,
+  `points_remaining=not_queried_yet`, exit 0.
+- Limitação documentada: no modo `running_bot` o snapshot cobre fila, PID e último orçamento
+  observado, mas não tabelas, tamanho do banco nem Parquets — para isso, pare o bot.
+
+## R3-04 (revisado) — runbook alinhado ao comportamento real (DONE)
+
+- Tabela nova no topo explicando os dois modos de `ops-status` e o exit 75.
+- Item 1 (orçamento) e item 10 (saúde básica) reescritos: agora funcionam com o bot no ar e
+  explicam `not_queried_yet` como estado normal de bot ocioso, não como orçamento zerado.
+- Item 3 (job travado) passa a usar `running=`/`oldest_running_started_at=`/`snapshot_stale=`.
+- Item 4 (recuperação) explicita que exige bot parado e que o boot já reverte sozinho.
+- Itens 6, 7, 9 ajustados para citar o comando certo em cada estado. Nenhum passo instrui algo que
+  falhe no estado operacional descrito.
 
 ## Validação final automatizada
 

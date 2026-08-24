@@ -773,3 +773,35 @@ de um projeto pessoal/comunidade pequena).
   e budget aumentaria acoplamento sem problema concreto de teste; aceita.
 - A regra permanece sinal de revisão, não limite mecânico. Reavaliar somente junto de mudança
   funcional que revele responsabilidade nova.
+
+## D-34 — `ops-status` não podia ler o warehouse com o `serve` no ar
+
+- **Classificação:** defeito de operabilidade encontrado pelo Smoke A de R1-01 em 2026-08-24;
+  `RESOLVIDO` na reabertura de R3-01.
+- **Sintoma medido:** com `python -m botgitgud.cli serve` rodando,
+  `python -m botgitgud.cli ops-status` abortava com traceback cru
+  (`_duckdb.IOException: Cannot open file ... being used by another process`), citando o PID do bot.
+- **Causa raiz:** o DuckDB 1.5.5 mantém lock exclusivo do arquivo. Verificado ao vivo contra o bot
+  real que **nem `read_only=True` nem `config={"access_mode": "READ_ONLY"}`** conseguem abrir o
+  banco enquanto outro processo o segura. Dentro do mesmo processo o erro é outro
+  (`ConnectionException`), então os dois precisam ser tratados.
+- **Impacto:** `ops-status` falhava exatamente quando é mais necessário — com o bot no ar. Os itens
+  1 e 10 do runbook mandavam rodá-lo sem mandar parar o bot, violando a regra de R3-04 de nunca
+  documentar procedimento que o código não suporta. Os itens 3, 4, 7, 8 e 9 já diziam "bot parado"
+  e estavam corretos.
+- **Alternativas avaliadas:** (A) leitura concorrente do mesmo warehouse — impossível, provado
+  acima; (B) o bot publicar o estado num arquivo local; (C) apenas documentar que exige bot parado
+  — rejeitada porque deixaria o estado de runtime acessível só pelo Discord; (D) copiar o arquivo
+  ativo para consultar — rejeitada por ser frágil e por poder ler um banco em escrita pela metade.
+- **Decisão:** (B). O bot, que já é o dono da conexão, publica `data/ops-snapshot.json` de forma
+  atômica a cada tick do worker e no `on_ready`. Sem daemon, socket, porta HTTP ou segundo banco.
+  `ops-status` lê o snapshot quando o banco está travado e rotula a origem (`source=running_bot` vs
+  `source=local_warehouse`), declarando o que aquele modo **não** cobre.
+- **Tratamento de erro:** lock virou condição operacional esperada — mensagem acionável e exit 75
+  (`EX_TEMPFAIL`, mesma convenção de `build-cohort`), nunca traceback. `recover-jobs`, que exige
+  escrita, recusa pelo mesmo caminho controlado.
+- **Limitação aceita e documentada:** com o bot no ar, o snapshot cobre fila, PID e último
+  orçamento observado, mas não tabelas, tamanho do banco nem contagem de Parquets — para isso é
+  preciso parar o bot. O runbook diz isso explicitamente.
+- **Orçamento:** o snapshot nunca dispara consulta à WCL; ele só carrega o que o bot já havia
+  observado por conta própria, e diz `not_queried_yet` quando não observou nada.

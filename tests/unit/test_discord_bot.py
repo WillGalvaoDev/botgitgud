@@ -10,6 +10,7 @@ import pytest
 import botgitgud.bot.discord_bot as discord_module
 from botgitgud.bot.discord_bot import _enqueue_message, _notify_outcome, parse_report_input
 from botgitgud.bot.job_models import EnqueueResult, Job, now_utc_naive
+from botgitgud.bot.ops_snapshot import read_snapshot
 from botgitgud.bot.worker import JobOutcome
 from botgitgud.errors import (
     ApiError,
@@ -23,16 +24,16 @@ from botgitgud.ingest.store import Store
 from botgitgud.report.text import ReportHeader
 
 
-def _job(job_type: str = "analyze") -> Job:
+def _job(job_type: str = "analyze", status: str = "running") -> Job:
     return Job(
         job_id="job-1",
         job_type=job_type,  # type: ignore[arg-type]
         dedup_key="ABCDEFGHIJKLMNOP:1:Zarad",
         discord_user_id="123",
         discord_channel_id="456",
-        status="running",
+        status=status,  # type: ignore[arg-type]
         created_at=now_utc_naive(),
-        started_at=now_utc_naive(),
+        started_at=now_utc_naive() if status == "running" else None,
         finished_at=None,
         error=None,
         report_path=None,
@@ -69,7 +70,12 @@ class _ImmediateLoop:
 
 
 def _deps(tmp_path: Path) -> SimpleNamespace:
-    return SimpleNamespace(store=Store(tmp_path), client=SimpleNamespace())
+    return SimpleNamespace(
+        store=Store(tmp_path),
+        client=SimpleNamespace(),
+        # D-34: o worker loop e o on_ready publicam o ops-snapshot em data_dir.
+        settings=SimpleNamespace(data_dir=tmp_path),
+    )
 
 
 def test_parse_report_input_url_bare_and_invalid() -> None:
@@ -110,7 +116,7 @@ def test_notify_build_failure_and_requeued_contracts() -> None:
 
 
 def test_worker_loop_does_not_check_budget_when_queue_is_empty(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     async def stop(_seconds: float) -> None:
         raise asyncio.CancelledError
@@ -122,9 +128,10 @@ def test_worker_loop_does_not_check_budget_when_queue_is_empty(
         lambda _deps: pytest.fail("budget must not be checked for an empty queue"),
     )
     queue = SimpleNamespace(list_active=lambda: [])
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), SimpleNamespace(), queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
 
 
 @pytest.mark.parametrize(
@@ -239,7 +246,9 @@ def test_analisar_happy_path_sends_summary_and_attachment(
     deps.store.close()
 
 
-def test_worker_loop_survives_budget_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_worker_loop_survives_budget_api_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     calls = 0
 
     async def one_iteration(_seconds: float) -> None:
@@ -252,10 +261,61 @@ def test_worker_loop_survives_budget_api_error(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         discord_module, "_current_budget", lambda _deps: (_ for _ in ()).throw(ApiError("down"))
     )
-    queue = SimpleNamespace(list_active=lambda: [SimpleNamespace(status="queued")])
+    queue = SimpleNamespace(list_active=lambda: [_job(status="queued")])
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), SimpleNamespace(), queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+    assert calls == 2
+
+
+def test_worker_loop_publishes_the_ops_snapshot_each_tick(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D-34: é este publish que faz `ops-status` responder com o bot no ar."""
+    calls = 0
+
+    async def one_iteration(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", one_iteration)
+    queue = SimpleNamespace(list_active=lambda: [_job(status="running")])
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+
+    snapshot = read_snapshot(tmp_path)
+    assert snapshot is not None
+    assert (snapshot.queued, snapshot.running) == (0, 1)
+    assert snapshot.points_remaining is None  # fila sem queued: nunca consultou orçamento
+
+
+def test_snapshot_write_failure_never_kills_the_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+
+    async def one_iteration(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", one_iteration)
+    monkeypatch.setattr(
+        discord_module,
+        "write_snapshot",
+        lambda *_a, **_k: (_ for _ in ()).throw(OSError("disco cheio")),
+    )
+    queue = SimpleNamespace(list_active=lambda: [])
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
     assert calls == 2
 
 
