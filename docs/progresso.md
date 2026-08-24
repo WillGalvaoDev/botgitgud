@@ -558,7 +558,13 @@ chamada WCL real.
 - R3: `ops-status` e `recover-jobs`; política e runbook criados. Ensaio backup/restore em diretórios
   separados: 172.503.638 bytes, 1,066 s + 0,438 s, 741 Parquets, 15 tabelas e todas as contagens
   iguais, inclusive as seis irreproduzíveis.
-- Gates ainda humanos: R0-01 (rotação), R1-01 (smoke real), depois RC/soak/análises/release.
+- Gates ainda humanos: R1-01 (smoke real), depois RC/soak/análises/release.
+- R0-01 (rotação de credenciais): `ACCEPTED_RISK` por decisão do proprietário em 2026-08-24. A
+  rotação **não** foi executada; as credenciais atuais seguem em uso. Base da aceitação: `.env`
+  nunca versionado, 91 revisões auditadas sem segredos, cassetes redigidos, nenhum segredo nos
+  commits da release e nenhum remote/push público. Risco residual: não se prova ausência de cópia
+  fora do Git enquanto a credencial continuar válida. Sete gatilhos registrados no roadmap tornam a
+  rotação obrigatória de imediato. R0-01 sai do caminho crítico e do papel de BLOCKER.
 - Validação final: 931/931 testes, 2/2 snapshots, ruff check/format verdes e pyright com 0 erros.
   HEAD permaneceu `3f7667f`; sem commit, push, tag, Phase 4 ou chamada real à WCL.
 - RC-PYRIGHT (após `eccad6a`): o gate `pyright src tests` só passava com

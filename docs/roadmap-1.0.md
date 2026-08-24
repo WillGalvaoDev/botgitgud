@@ -121,9 +121,11 @@ Toda tarefa registra: **Objetivo**, **Problema**, **Evidência atual**, **Escopo
 
 ### 3.3 Vocabulário de status
 
-`PENDING` · `IN_PROGRESS` · `BLOCKED_ON_HUMAN` · `DONE` · `DROPPED`
+`PENDING` · `IN_PROGRESS` · `BLOCKED_ON_HUMAN` · `DONE` · `DROPPED` · `ACCEPTED_RISK`
 
-Todas as tarefas nascem `PENDING`. Nenhuma tarefa deste documento está `DONE`.
+Todas as tarefas nascem `PENDING`. `ACCEPTED_RISK` significa que a tarefa **não** foi executada e o
+proprietário decidiu, explicitamente e por escrito, assumir o risco residual para esta release —
+nunca deve ser lido como equivalente a `DONE`.
 
 ### 3.4 Esforço
 
@@ -168,16 +170,51 @@ Tarefas `HUMAN_REQUIRED` de observação (soak) têm esforço em tempo de calend
 - **Fora do escopo:** qualquer automação de rotação. **O agente não deve tentar rotacionar,
   revogar, ou acessar consoles de terceiros.**
 - **Dependências:** nenhuma. É a raiz do caminho crítico.
-- **Critérios de aceite:**
+- **Critérios de aceite (caso a rotação venha a ser executada):**
   - As 5 credenciais novas estão no `.env` local e o bot autentica com elas (verificado em R1-01).
   - As 5 credenciais antigas estão revogadas e comprovadamente inválidas.
   - Nenhum valor de credencial aparece em nenhum arquivo versionado (verificado por R0-02).
 - **Testes/validações:** autenticação WCL e Blizzard bem-sucedida com as credenciais novas
   (exercitada indiretamente por R1-01); tentativa de uso da credencial antiga falha.
-- **Risco:** **alto se não feita.** Baixo de execução.
+- **Risco:** ver risco residual abaixo.
 - **Esforço:** S (humano).
 - **Automação:** `HUMAN_REQUIRED`
-- **Status:** `BLOCKED_ON_HUMAN` — checklist em `docs/credential-rotation-checklist.md`; **BLOCKER**
+- **Status:** `ACCEPTED_RISK` — decisão do proprietário em 2026-08-24. **A rotação NÃO foi
+  executada;** as credenciais atuais permanecem em uso. Deixa de ser BLOCKER desta release.
+
+#### Decisão de segurança registrada (2026-08-24)
+
+O proprietário decidiu conscientemente **não rotacionar as credenciais nesta release**. Isto não é
+tarefa concluída nem esquecida: é risco residual formalmente aceito.
+
+**Fatos verificados que sustentam a aceitação** (nenhum presumido):
+
+- `.env` nunca foi versionado — ausente de todas as árvores do histórico.
+- R0-02 auditou **91 revisões** por conteúdo, com padrões de token do Discord, `Bearer`,
+  atribuição de client secret e OAuth access token.
+- **Zero segredos** encontrados no histórico.
+- Fixtures e cassetes relevantes verificados: os arquivos com chave `access_token` e os com
+  cabeçalho `Authorization` usam redação (correção de D-6, T0.2).
+- Nenhum segredo entrou nos commits desta release (`eccad6a`, `cc4f06d`) — varredura do diff
+  staged executada antes de cada commit.
+- **Nenhum remote configurado** neste repositório; nenhum push público foi feito.
+
+**Risco residual aceito:** enquanto a mesma credencial continuar válida, não é possível provar que
+nenhuma cópia dela existe fora do Git. O histórico limpo prova ausência no repositório, não
+ausência no mundo.
+
+**Gatilhos que revogam esta aceitação e tornam a rotação obrigatória e imediata:**
+
+1. suspeita de vazamento;
+2. segredo encontrado em qualquer arquivo ou log;
+3. publicação acidental (push, gist, captura de tela, anexo);
+4. compartilhamento do ambiente com terceiros;
+5. novo colaborador com acesso ao ambiente;
+6. incidente de segurança de qualquer natureza;
+7. comprometimento da máquina ou de qualquer conta associada.
+
+O procedimento continua pronto em `docs/credential-rotation-checklist.md`. Nenhum valor de
+credencial é reproduzido em nenhum documento deste repositório.
 
 ---
 
@@ -911,8 +948,8 @@ Tarefas `HUMAN_REQUIRED` de observação (soak) têm esforço em tempo de calend
 ### 5.1 Grafo (simplificado)
 
 ```
-R0-01 (rotação) ─────────────┐
-                             ├──> R1-01 (smoke real) ──> R4-02 (RC) ─┬─> R5-01 (soak) ────┬─> R5-03 ─> R5-04
+R0-01 ACCEPTED_RISK (fora do caminho crítico desde 2026-08-24)
+                             ┌──> R1-01 (smoke real) ──> R4-02 (RC) ─┬─> R5-01 (soak) ────┬─> R5-03 ─> R5-04
 R0-02 (auditoria git) ───────┤                              ^        └─> R5-02 (3 análises) ┘
 R0-04 (.env.example) ──> R0-03 (README) ───────────────────>┤            (pode correr durante o soak)
                                                             │
@@ -930,11 +967,16 @@ R4-01 (>300 linhas) ────────────────────
 
 ### 5.2 Caminho crítico
 
-**R0-01 → R2-01 → R1-02 → R1-01 → R4-02 → R5-01 → R5-03 → R5-04**
+**R2-01 → R1-02 → R1-01 → R4-02 → R5-01 → R5-03 → R5-04**
 
-Justificativa: R0-01 é humana e bloqueia R1-01 (fazer o smoke com credenciais que serão revogadas
-obriga a repetir tudo). R2-01 e R1-02 devem preceder R1-01 para que o smoke encontre apenas o que
-teste determinístico não alcança. R4-02 exige tudo. O soak é irredutível em tempo de calendário.
+Justificativa: R2-01 e R1-02 devem preceder R1-01 para que o smoke encontre apenas o que teste
+determinístico não alcança. R4-02 exige tudo. O soak é irredutível em tempo de calendário.
+
+**R0-01 saiu do caminho crítico em 2026-08-24.** Enquanto a rotação estava pendente, ela bloqueava
+R1-01 — fazer o smoke com credenciais que seriam revogadas obrigaria a repeti-lo. Com a decisão de
+`ACCEPTED_RISK`, o smoke roda com as credenciais atuais e não precisa ser refeito. Se qualquer
+gatilho de R0-01 ocorrer, a rotação volta a ser obrigatória e o smoke precisa ser repetido depois
+dela.
 
 **R5-02 não está no caminho crítico:** ela parte de R4-02, corre em paralelo com R5-01
 (preferencialmente durante o soak, gerando carga real observada) e se junta antes de R5-03. Com
@@ -1010,7 +1052,9 @@ Todos os itens devem estar verdes para promover a RC. Verificado por R4-02.
 - [ ] `pyright src tests` — GREEN
 - [ ] Suíte completa (`pytest`) — GREEN
 - [ ] Nenhum segredo conhecido no histórico Git (R0-02)
-- [ ] Credenciais antigas revogadas e comprovadamente inválidas (R0-01)
+- [ ] R0-01 tem decisão explícita de segurança: rotação concluída **OU** risco residual
+      formalmente aceito pelo proprietário — no estado atual, **risco formalmente aceito**
+      (`ACCEPTED_RISK`, 2026-08-24), com os gatilhos de revogação registrados em R0-01
 - [ ] README completo (R0-03)
 - [ ] Runbook completo (R3-04)
 - [ ] `serve` validado em execução real (R1-01)
@@ -1079,7 +1123,9 @@ Esse roadmap futuro precisará, no mínimo:
 
 ## 11. Decisões humanas ainda necessárias
 
-1. **Quando executar a rotação de credenciais (R0-01).** Bloqueia o caminho crítico inteiro.
+1. ~~Quando executar a rotação de credenciais (R0-01).~~ **Decidido em 2026-08-24:** não rotacionar
+   nesta release; risco residual formalmente aceito (`ACCEPTED_RISK`). Revisar imediatamente se
+   qualquer um dos 7 gatilhos listados em R0-01 ocorrer.
 2. **Como proceder se R0-02 encontrar segredo no histórico** — reescrever histórico é decisão
    humana, com plano apresentado antes.
 3. **Destino do `backfill` (R2-02)** — remover é a recomendação, mas confirme se você tem algum uso
