@@ -212,8 +212,13 @@ def _publish_snapshot(
             points_remaining=points_remaining,
             points_limit=points_limit,
         )
-    except OSError as e:
-        log.warning("discord_bot.ops_snapshot_write_failed", error=str(e))
+    except (OSError, TypeError, ValueError) as e:
+        # Contrato non-fatal (D-34): observabilidade nunca derruba o worker. O
+        # `except OSError` original era estreito demais — um TypeError de
+        # serializacao escapou e matou a task no smoke de hot-path #1.
+        log.warning(
+            "discord_bot.ops_snapshot_write_failed", error=str(e), error_type=type(e).__name__
+        )
 
 
 class WorkerSupervisor:

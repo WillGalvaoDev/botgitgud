@@ -405,3 +405,75 @@ o preflight seguiu **conservador em pontos**, que é a dimensão que protege o p
 introduzimos modelo por spec ou por duração. Duas medições (uma de 100 refs, uma de 37) não bastam
 para recalibrar sem risco de trocar um viés por outro. **Precisamos de mais prewarms reais antes de
 mexer.**
+
+---
+
+# HOT-PATH smoke attempt #1: FAIL antes da análise
+
+Tentativa de validar o caminho quente após o prewarm. **Não chegou a executar `!analisar`.**
+
+Target preparado: Fiskowl · Warlock/Demonology · report `FhYZDLMbwBVAx4KX` fight 19 · encounter
+3183 · difficulty 5 · partition 3 · duração 511,307 s · `cohort_id=f91dffaf13ddc899` (READY, 37
+membros, 37/37 logs em cache).
+
+## O que aconteceu
+
+O gateway do Discord conectou, exatamente um worker iniciou, e `on_ready` tentou publicar o ops
+snapshot. A serialização falhou:
+
+```
+TypeError: Object of type datetime is not JSON serializable
+```
+
+O primeiro tick do worker repetiu a falha, `worker_crashed` foi registrado, e o bot foi encerrado
+**antes de qualquer análise**.
+
+## Causa
+
+`Store.list_ready_cohorts()` devolve `updated_at` como `datetime` — a coluna
+`cohort_registry.updated_at` é `TIMESTAMP` e o DuckDB legitimamente entrega um objeto Python
+tipado. Esse valor ia direto de `discord_bot._publish_snapshot` para `write_snapshot` e daí para
+`json.dumps`, sem nenhuma fronteira de conversão.
+
+**Duas falhas independentes se somaram:**
+
+1. **Sem fronteira de serialização.** O snapshot montava o payload com objetos de domínio e
+   entregava a `json.dumps` cru.
+2. **Contenção estreita demais.** `_publish_snapshot` capturava apenas `OSError`, embora sua
+   própria docstring declare o contrato: *"Best-effort por desenho: falhar ao escrever um arquivo
+   de diagnóstico nunca pode derrubar o worker."* O `TypeError` escapou e matou a task.
+
+Não houve contradição de contrato: a intenção documentada sempre foi **non-fatal**; a implementação
+é que não a cumpria para essa classe de erro.
+
+## Proteções que funcionaram
+
+- **0 pontos WCL consumidos** — a falha foi no boot, antes de qualquer query.
+- Coorte `f91dffaf13ddc899` permaneceu **READY**, com os 37 membros intactos.
+- Cache de logs intacto.
+- Nenhum relatório gerado, nenhuma entrega tentada, nenhum job órfão.
+
+## Correção
+
+**A. Fronteira JSON-safe.** `_json_safe()` normaliza o payload imediatamente antes de `json.dumps`:
+`datetime`/`date` → ISO-8601 via `.isoformat()`, mapas e sequências recursivamente, escalares
+inalterados. A responsabilidade de produzir JSON pertence a quem produz JSON — o `CohortRegistry`
+não foi alterado e continua devolvendo objetos tipados.
+
+**Fail closed, deliberadamente sem `default=str`.** Um tipo desconhecido levanta `TypeError`
+nomeando o tipo **e o caminho exato** dentro do payload (`$.ready_cohorts[0].updated_at`). Com
+`default=str`, qualquer tipo novo viraria uma string plausível e a regressão ficaria escondida — que
+é como esse bug chegaria à produção de novo.
+
+**Formato temporal:** reusa a convenção que o projeto já aplicava a `finished_at` e
+`oldest_running_started_at` (`.isoformat()` puro). Timezone-aware preserva o offset
+(`...+00:00`); naive permanece sem offset, coerente com `now_utc_naive()` (T1.8: todo datetime deste
+domínio é naive-porém-UTC). Nenhum segundo formato foi introduzido.
+
+**B. Contenção alinhada ao contrato.** `_publish_snapshot` passou a capturar
+`(OSError, TypeError, ValueError)`, logando `ops_snapshot_write_failed` com o tipo do erro; o
+`ColdBuildPublisher` recebeu o mesmo tratamento. Observabilidade nunca derruba o worker, e o tick
+seguinte volta a publicar normalmente.
+
+As duas propriedades têm testes separados, como devem: serializar corretamente e sobreviver a uma
+falha futura de observabilidade são garantias distintas.

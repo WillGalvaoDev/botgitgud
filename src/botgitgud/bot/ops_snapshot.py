@@ -23,8 +23,9 @@ import json
 import os
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,37 @@ class OpsSnapshot:
     @property
     def is_stale(self) -> bool:
         return self.age_seconds > STALE_AFTER_S
+
+
+def _json_safe(value: Any, path: str = "$") -> Any:
+    """Fronteira de serialização do snapshot: converte o payload para tipos
+    JSON e **falha fechado** em qualquer tipo inesperado.
+
+    O smoke de hot-path #1 morreu aqui: `cohort_registry.updated_at` chegava
+    como `datetime` e ia direto para `json.dumps`. A responsabilidade de
+    converter pertence a quem produz JSON — não ao registry, que legitimamente
+    devolve objetos Python tipados.
+
+    Deliberadamente **sem** `json.dumps(default=str)`: aquilo transformaria
+    qualquer tipo novo e inesperado numa string plausível e esconderia a
+    regressão. Aqui um tipo desconhecido levanta `TypeError` nomeando o tipo e
+    o caminho exato dentro do payload.
+    """
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    # datetime antes de date: datetime é subclasse de date.
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Mapping):
+        return {str(k): _json_safe(v, f"{path}.{k}") for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(v, f"{path}[{i}]") for i, v in enumerate(value)]
+    raise TypeError(
+        f"ops snapshot: valor nao serializavel em {path}: {type(value).__name__}. "
+        "Converta explicitamente na fronteira em vez de usar default=str."
+    )
 
 
 def write_snapshot(
@@ -135,7 +167,8 @@ def write_snapshot(
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / SNAPSHOT_FILENAME
     tmp = target.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    # Sem `default=`: tipo inesperado tem de estourar aqui, nao virar string.
+    tmp.write_text(json.dumps(_json_safe(payload)), encoding="utf-8")
     tmp.replace(target)
 
 
@@ -227,8 +260,9 @@ class ColdBuildPublisher:
             cold.update(lifecycle)
         points_remaining = getattr(self._budget, "points_remaining", None)
         points_limit = getattr(self._budget, "points_limit", None)
-        # Publicar diagnostico nunca pode derrubar o prewarm.
-        with contextlib.suppress(OSError):
+        # Publicar diagnostico nunca pode derrubar o prewarm — inclui erro de
+        # serializacao, que foi como o worker morreu no smoke de hot-path #1.
+        with contextlib.suppress(OSError, TypeError, ValueError):
             write_snapshot(
                 self._data_dir,
                 active=[],
