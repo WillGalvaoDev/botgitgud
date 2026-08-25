@@ -60,7 +60,19 @@ class Settings(BaseSettings):
     api_points_floor: float = 1000.0
     hot_path_reserve: float = 1000.0
     cold_build_safety_margin: float = 250.0
-    cold_build_points_per_query: float = 2.0
+    # Margem menor no modo prewarm: o operador esta gastando budget de
+    # proposito, e o piso da API continua sendo respeitado.
+    cold_build_batch_safety_margin: float = 100.0
+    # Custo por query MEDIDO no smoke real de 2026-08-25: 2.131,29 pontos para
+    # 1.508 queries = 1,413 pts/query. O valor antigo (2,0) superestimava em
+    # 42% e era a metade da politica impossivel. `upper` mantem uma banda
+    # conservadora para o preflight sem fingir precisao que nao existe.
+    cold_build_points_per_query: float = 1.413
+    # Banda derivada, nao uma segunda constante solta: sobrescrever o custo
+    # esperado escala o limite superior junto, e os dois nunca divergem em
+    # silencio. 1,2x cobre a variacao por tipo de query documentada em
+    # docs/schema_confirmado.md sem fingir precisao que nao temos.
+    cold_build_cost_uncertainty: float = 1.2
     cold_build_queries_per_reference: int = 15
     cold_build_fixed_queries: int = 6
 

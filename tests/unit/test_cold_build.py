@@ -29,8 +29,11 @@ def settings(**overrides: object) -> Settings:
 
 
 class BudgetClient:
-    def __init__(self, points: float) -> None:
+    def __init__(self, points: float, limit: float | None = 3600.0) -> None:
         self.points_remaining = points
+        # O preflight usa o teto para distinguir "adiado agora" de "politica
+        # impossivel por configuracao".
+        self.points_limit = limit
         self.refreshes = 0
 
     def refresh_budget(self) -> None:
@@ -38,7 +41,8 @@ class BudgetClient:
 
 
 def test_preflight_allows_only_when_projected_budget_preserves_floor_and_margin() -> None:
-    cfg = settings(cold_build_points_per_query=1.0)
+    # incerteza 1.0: banda degenerada, que e o caso historico deste teste.
+    cfg = settings(cold_build_points_per_query=1.0, cold_build_cost_uncertainty=1.0)
     estimate = estimate_cold_build(cfg, available=3000.0)
     assert estimate.estimated_api_points == 1506.0
     assert estimate.projected_remaining == 1494.0
@@ -47,7 +51,7 @@ def test_preflight_allows_only_when_projected_budget_preserves_floor_and_margin(
 
 
 def test_preflight_defers_at_boundary_and_is_a_distinct_domain_state() -> None:
-    cfg = settings(cold_build_points_per_query=1.0)
+    cfg = settings(cold_build_points_per_query=1.0, cold_build_cost_uncertainty=1.0)
     client = BudgetClient(2755.0)  # projected=1249, required floor+margin=1250
     with pytest.raises(CohortDeferredBudget) as caught:
         preflight_cold_build(client, cfg, "cohort-a")

@@ -23,12 +23,18 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import cast
 
 import structlog
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, duration_bucket_bounds, duration_bucket_id
-from botgitgud.analysis.cold_build import preflight_cold_build, record_cold_lifecycle
+from botgitgud.analysis.cold_build import (
+    ColdBuildMode,
+    affordable_references,
+    preflight_cold_build,
+    record_cold_lifecycle,
+)
 from botgitgud.analysis.pipeline import Deps
 from botgitgud.domain.models import CohortCriteria, RankingCandidate
 from botgitgud.ingest.rankings import (
@@ -40,6 +46,16 @@ from botgitgud.ingest.rankings import (
 log = structlog.get_logger(__name__)
 
 
+class CohortState(StrEnum):
+    """Um pool parcial NUNCA e READY: a analise interativa nao pode usa-lo
+    como se estivesse completo.
+    """
+
+    READY = "ready"
+    DEFERRED_BUDGET = "deferred_budget"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True, slots=True)
 class BucketBuildResult:
     bucket_id: int
@@ -47,6 +63,13 @@ class BucketBuildResult:
     duration_max_s: float
     n_members: int
     cohort_id: str
+    state: CohortState = CohortState.READY
+    planned: int = 0
+    completed: int = 0
+
+    @property
+    def is_ready(self) -> bool:
+        return self.state is CohortState.READY
 
 
 def build_cohorts(
@@ -88,10 +111,16 @@ def build_cohorts(
     # The batch identity is refined to canonical cohort_ids after partition
     # and duration buckets are known. This gate intentionally precedes even
     # those discovery calls: a deferred batch makes zero construction calls.
+    # Prewarm usa a politica de batch (piso da API, sem reserva interativa) e
+    # avanca incrementalmente: exigir que ~100 logs caibam numa unica janela
+    # horaria excede o proprio teto da conta — ver docs/production-readiness-
+    # cold-build.md.
     preflight_cold_build(
         deps.client,
         deps.settings,
         f"prewarm:{encounter_id}:{difficulty}:{class_name}:{spec_name}:{duration_bucket_s}",
+        mode=ColdBuildMode.PREWARM,
+        references=1,
     )
     partition = get_current_partition(deps.client, encounter_id)
     candidates = fetch_ranking_candidates(
@@ -148,19 +177,77 @@ def build_cohorts(
             continue
         # Reference logs inherit the criteria partition. This avoids the
         # redundant per-report rankings query without changing analyzed logs.
-        record_cold_lifecycle("build_started", cohort_id)
+        record_cold_lifecycle("build_started", cohort_id, planned=len(bucket_candidates))
+        # Resume sem refetch: `fetch_many` ja consulta o cache de logs antes de
+        # qualquer rede, entao as referencias concluidas numa janela anterior
+        # nao voltam a custar pontos.
+        pending = [
+            c
+            for c in bucket_candidates
+            if deps.store.read_log(c.report_code, c.fight_id, c.player_name) is None
+        ]
+        completed_before = len(bucket_candidates) - len(pending)
+        affordable = affordable_references(
+            deps.settings,
+            deps.client.points_remaining or 0.0,
+            mode=ColdBuildMode.PREWARM,
+            planned=len(pending),
+        )
         try:
-            fetch_cohort_logs(
-                deps.fetcher,
-                bucket_candidates,
-                max_workers=deps.settings.max_workers,
-                expected_partition=partition,
-            )
-            deps.store.write_candidate_pool(cohort_id, bucket_candidates, criteria=criteria)
+            if affordable:
+                fetch_cohort_logs(
+                    deps.fetcher,
+                    pending[:affordable],
+                    max_workers=deps.settings.max_workers,
+                    expected_partition=partition,
+                )
         except Exception as exc:
             record_cold_lifecycle("build_failed", cohort_id, reason=type(exc).__name__)
             raise
-        record_cold_lifecycle("build_completed", cohort_id, n_members=len(bucket_candidates))
+
+        still_pending = [
+            c
+            for c in bucket_candidates
+            if deps.store.read_log(c.report_code, c.fight_id, c.player_name) is None
+        ]
+        completed = len(bucket_candidates) - len(still_pending)
+        if still_pending:
+            # Progresso preservado nos logs individuais; o POOL so e escrito
+            # quando tudo esta pronto, entao a coorte nao vira READY parcial.
+            record_cold_lifecycle(
+                "deferred_budget",
+                cohort_id,
+                planned=len(bucket_candidates),
+                completed=completed,
+                remaining=len(still_pending),
+            )
+            log.warning(
+                "cohort_builder.bucket_deferred_budget",
+                cohort_id=cohort_id,
+                completed=completed,
+                planned=len(bucket_candidates),
+            )
+            results.append(
+                BucketBuildResult(
+                    bucket_id=bucket_id,
+                    duration_min_s=bucket_lo,
+                    duration_max_s=bucket_hi,
+                    n_members=completed,
+                    cohort_id=cohort_id,
+                    state=CohortState.DEFERRED_BUDGET,
+                    planned=len(bucket_candidates),
+                    completed=completed,
+                )
+            )
+            continue
+
+        deps.store.write_candidate_pool(cohort_id, bucket_candidates, criteria=criteria)
+        record_cold_lifecycle(
+            "build_completed",
+            cohort_id,
+            n_members=len(bucket_candidates),
+            resumed_from=completed_before,
+        )
         log.info(
             "cohort_builder.bucket_built",
             bucket_id=bucket_id,
@@ -174,6 +261,9 @@ def build_cohorts(
                 duration_max_s=bucket_hi,
                 n_members=len(bucket_candidates),
                 cohort_id=cohort_id,
+                state=CohortState.READY,
+                planned=len(bucket_candidates),
+                completed=len(bucket_candidates),
             )
         )
 

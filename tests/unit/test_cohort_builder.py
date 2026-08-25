@@ -14,6 +14,7 @@ from test_log_fetcher import _events_response, _meta_response, _percentile_respo
 from test_pipeline import _build_deps, _DispatchTransport, _zone_partitions_response
 
 from botgitgud.analysis.cohort_builder import build_cohorts
+from botgitgud.analysis.cold_build import ImpossibleColdBuildPolicy
 from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
 
 ENCOUNTER_ID = 3179
@@ -22,11 +23,21 @@ ENCOUNTER_ID = 3179
 def test_budget_defer_makes_zero_construction_queries(tmp_path: Path) -> None:
     transport = _DispatchTransport(_responses_for({100.0: 8}))
     deps = _build_deps(tmp_path, transport)
+    # build-cohort e PREWARM: quem o governa e a margem de batch. Aqui o piso
+    # protegido consome todo o teto da conta do fixture, entao nem uma unica
+    # referencia cabe.
+    #
+    # Nota: o fixture reporta pointsSpentThisHour=0, logo available == limit.
+    # Nesse regime "adiado agora" e "impossivel por configuracao" coincidem
+    # matematicamente — o que importa aqui, e o que este teste guarda, e que
+    # nenhuma query de construcao sai em qualquer um dos dois casos.
     deps = replace(
         deps,
-        settings=deps.settings.model_copy(update={"cold_build_safety_margin": 10000.0}),
+        settings=deps.settings.model_copy(
+            update={"api_points_floor": 9990.0, "cold_build_batch_safety_margin": 5.0}
+        ),
     )
-    with pytest.raises(CohortDeferredBudget):
+    with pytest.raises((CohortDeferredBudget, ImpossibleColdBuildPolicy)):
         build_cohorts(
             deps,
             encounter_id=ENCOUNTER_ID,
