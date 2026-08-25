@@ -18,8 +18,10 @@ chamada à WCL para preencher o campo.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, fields
@@ -142,3 +144,72 @@ def read_snapshot(data_dir: Path, *, now: float | None = None) -> OpsSnapshot | 
         )
     except (TypeError, ValueError):
         return None
+
+
+class ColdBuildPublisher:
+    """D-34 aplicado ao prewarm: durante `build-cohort` o processo dono do
+    DuckDB e o proprio CLI, entao e ele quem precisa publicar o snapshot.
+
+    Reusa `write_snapshot` (mesma escrita atomica); nao ha segunda
+    implementacao. Um thread daemon reamostra o lifecycle enquanto o build
+    corre, e o estado final e escrito de forma sincrona na saida — para que
+    `ops-status` explique o ultimo desfecho mesmo com o processo ja encerrado.
+    """
+
+    def __init__(
+        self,
+        data_dir: Path,
+        *,
+        budget: Any | None = None,
+        interval_s: float = 1.0,
+    ) -> None:
+        self._data_dir = data_dir
+        self._budget = budget
+        self._interval_s = interval_s
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._extra: dict[str, Any] = {}
+
+    def update(self, **fields: Any) -> None:
+        """Campos que o CLI conhece e o lifecycle global nao (planned agregado,
+        decisao por bucket, resultado final).
+        """
+        self._extra.update(fields)
+        self.publish()
+
+    def publish(self) -> None:
+        from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
+
+        cold: dict[str, Any] = {"mode": "prewarm"}
+        lifecycle = cold_lifecycle_snapshot()
+        if lifecycle is not None:
+            cold.update(lifecycle)
+        cold.update(self._extra)
+        points_remaining = getattr(self._budget, "points_remaining", None)
+        points_limit = getattr(self._budget, "points_limit", None)
+        # Publicar diagnostico nunca pode derrubar o prewarm.
+        with contextlib.suppress(OSError):
+            write_snapshot(
+                self._data_dir,
+                active=[],
+                worker_alive=False,
+                cold_build=cold,
+                points_remaining=points_remaining,
+                points_limit=points_limit,
+            )
+
+    def __enter__(self) -> ColdBuildPublisher:
+        self.publish()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=self._interval_s * 2)
+        self.publish()  # estado final, sincrono
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._interval_s):
+            self.publish()

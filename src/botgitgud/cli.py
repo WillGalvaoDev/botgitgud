@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
-from botgitgud.analysis.cohort_builder import build_cohorts
+from botgitgud.analysis.cohort_builder import BucketBuildResult, CohortState, build_cohorts
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
+from botgitgud.bot.ops_snapshot import ColdBuildPublisher
 from botgitgud.cli_discovery import (
     add_dataset_status_parser,
     add_discover_parser,
@@ -119,38 +121,110 @@ def _cmd_probe_schema(_args: argparse.Namespace) -> int:
     return probe_main()
 
 
+def _render_bucket(result: BucketBuildResult) -> str:
+    """Mensagem honesta por bucket. Num bucket adiado, `completed` é progresso —
+    nunca dizer "construída" para trabalho incompleto.
+    """
+    span = f"[{result.duration_min_s:.0f}s-{result.duration_max_s:.0f}s]"
+    head = f"bucket {result.bucket_id} {span} cohort_id={result.cohort_id}"
+    counts = f"  planned: {result.planned}\n  completed: {result.completed}\n"
+    if result.state is CohortState.READY:
+        return f"{head}\n  Cohort ready\n{counts}"
+    if result.state is CohortState.DEFERRED_BUDGET:
+        return (
+            f"{head}\n  Cohort prewarm deferred by WCL budget\n{counts}"
+            f"  remaining: {result.planned - result.completed}\n"
+            "  resume: execute the same command after budget reset\n"
+        )
+    return f"{head}\n  Cohort prewarm failed\n{counts}"
+
+
+def build_cohort_exit_code(results: Sequence[BucketBuildResult]) -> int:
+    """Agregado explícito: trabalho incompleto por orçamento nunca é sucesso.
+
+    - qualquer FAILED             -> 1  (hard failure domina)
+    - algum DEFERRED, sem failure -> 75 (EX_TEMPFAIL, retomável)
+    - todos READY                 -> 0
+    - nenhum bucket elegível      -> 1  (nada foi preparado)
+    """
+    if not results:
+        return 1
+    if any(r.state is CohortState.FAILED for r in results):
+        return 1
+    if any(r.state is CohortState.DEFERRED_BUDGET for r in results):
+        return EX_TEMPFAIL
+    return 0
+
+
 def _cmd_build_cohort(args: argparse.Namespace) -> int:
     settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
     deps = _build_deps(settings)
+    # D-34: durante o prewarm este processo é o dono do DuckDB, então é ele quem
+    # publica o ops-snapshot. Sem isso `ops-status` fica com o snapshot obsoleto
+    # do bot e não enxerga progresso nenhum.
+    publisher = ColdBuildPublisher(settings.data_dir, budget=deps.client)
     try:
-        results = build_cohorts(
-            deps,
-            encounter_id=args.encounter,
-            class_name=args.klass,
-            spec_name=args.spec,
-            difficulty=args.difficulty,
-            duration_bucket_s=args.duration_bucket,
-        )
-    except CohortDeferredBudget as e:
-        sys.stderr.write(f"coorte adiada por orçamento: {e}\n")
-        return EX_TEMPFAIL
-    except RateLimitBudgetExceeded as e:
-        sys.stderr.write(f"orçamento de API esgotado — progresso parcial salvo. {e}\n")
-        return EX_TEMPFAIL
-    except BotGitGudError as e:
-        sys.stderr.write(f"erro: {e}\n")
-        return 1
+        with publisher:
+            publisher.update(stage="preflight", requested_bucket=args.duration_bucket)
+            try:
+                results = build_cohorts(
+                    deps,
+                    encounter_id=args.encounter,
+                    class_name=args.klass,
+                    spec_name=args.spec,
+                    difficulty=args.difficulty,
+                    duration_bucket_s=args.duration_bucket,
+                )
+            except CohortDeferredBudget as e:
+                publisher.update(stage="deferred_budget", outcome="deferred_budget")
+                sys.stderr.write(
+                    "Cohort prewarm deferred by WCL budget "
+                    "(nenhuma referência coube no orçamento atual).\n"
+                    f"  {e}\n"
+                    "  resume: execute the same command after budget reset\n"
+                )
+                return EX_TEMPFAIL
+            except RateLimitBudgetExceeded as e:
+                publisher.update(stage="deferred_budget", outcome="rate_limit")
+                sys.stderr.write(
+                    "Cohort prewarm deferred by WCL budget — progresso parcial preservado.\n"
+                    f"  {e}\n"
+                    "  resume: execute the same command after budget reset\n"
+                )
+                return EX_TEMPFAIL
+            except BotGitGudError as e:
+                publisher.update(stage="failed", outcome="failed")
+                sys.stderr.write(f"erro: {e}\n")
+                return 1
+
+            exit_code = build_cohort_exit_code(results)
+            publisher.update(
+                stage="completed" if exit_code == 0 else "deferred_budget",
+                outcome={0: "ready", EX_TEMPFAIL: "deferred_budget"}.get(exit_code, "failed"),
+                buckets=[
+                    {
+                        "cohort_id": r.cohort_id,
+                        "bucket_id": r.bucket_id,
+                        "state": str(r.state),
+                        "planned": r.planned,
+                        "completed": r.completed,
+                        "remaining": r.planned - r.completed,
+                    }
+                    for r in results
+                ],
+            )
     finally:
         deps.store.close()
         deps.client.close()
 
+    stream = sys.stdout if exit_code == 0 else sys.stderr
     for r in results:
-        sys.stdout.write(
-            f"bucket {r.bucket_id} [{r.duration_min_s:.0f}s-{r.duration_max_s:.0f}s]: "
-            f"{r.n_members} membros (cohort_id={r.cohort_id})\n"
-        )
-    sys.stdout.write(f"\n{len(results)} coorte(s) construída(s).\n")
-    return 0
+        stream.write(_render_bucket(r))
+    if exit_code == 0:
+        stream.write(f"\n{len(results)} coorte(s) pronta(s).\n")
+    else:
+        stream.write("\nPrewarm incompleto: repita o mesmo comando após o reset de orçamento.\n")
+    return exit_code
 
 
 def _cmd_serve(_args: argparse.Namespace) -> int:

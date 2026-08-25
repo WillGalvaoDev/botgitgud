@@ -250,3 +250,88 @@ matematicamente — a distinção só existe com orçamento parcialmente gasto.
 Fora de horário de pico, com `build-cohort`. Se o comando parar por orçamento, **repita o mesmo
 comando após o reset**: ele continua de onde parou, sem refetch. Acompanhe por `ops-status`, que lê
 o snapshot do processo dono (D-34) e não exige derrubar o bot.
+
+---
+
+# Safety gate pré-prewarm — dois bugs abortaram o primeiro prewarm real
+
+O primeiro prewarm real foi abortado **antes de qualquer chamada WCL**, na revisão do gate
+operacional. Alvo candidato: `Warlock/Demonology`, encounter 3183, difficulty 5, bucket 493,312,
+`cohort_id=380ec0ee516f8f8a` — NOT READY, 0 candidatos, 3 logs já cacheados. **WCL calls = 0.**
+
+## INCIDENT
+
+**Bug 1 — `DEFERRED_BUDGET` retornava sucesso.** `build_cohorts` podia devolver um
+`BucketBuildResult` com `state=DEFERRED_BUDGET`, mas `_cmd_build_cohort` seguia pelo retorno
+normal: **exit 0** e a mensagem *"N coorte(s) construída(s)"*. Trabalho incompleto por orçamento
+era reportado como conclusão — um operador (ou script) não teria como saber que a coorte não estava
+pronta nem que precisava retomar.
+
+**Bug 2 — o processo batch não publicava ops-snapshot.** Durante o prewarm, quem detém o lock do
+DuckDB é o próprio `build-cohort`. Como ele não chamava `write_snapshot`, `ops-status` continuava
+lendo o último snapshot do bot — obsoleto — e não enxergava `mode=prewarm`, `cohort_id`, progresso,
+decisão de orçamento nem lifecycle. Isso contradizia a D-34, cuja decisão é que **observabilidade
+passa pelo processo dono do warehouse**.
+
+## FIX
+
+### Exit semantics
+
+| Estado agregado | Exit |
+|---|---|
+| Todos os buckets `READY` | **0** |
+| Algum `DEFERRED_BUDGET`, nenhum hard failure | **75** (`EX_TEMPFAIL`) |
+| Qualquer `FAILED` | **1** (hard failure domina) |
+| Nenhum bucket elegível | **1** (nada foi preparado) |
+
+`CohortDeferredBudget` e `RateLimitBudgetExceeded` continuam em 75. Saída de sucesso vai para
+stdout; qualquer resultado incompleto vai para **stderr**.
+
+### Mensagens
+
+```
+READY:     Cohort ready
+             planned: 100 / completed: 100
+
+DEFERRED:  Cohort prewarm deferred by WCL budget
+             planned: 100 / completed: 43 / remaining: 57
+             resume: execute the same command after budget reset
+
+FAILED:    Cohort prewarm failed
+             planned: 100 / completed: 0
+```
+
+A palavra "construída" deixou de existir em qualquer caminho parcial — há teste que falha se ela
+reaparecer.
+
+### Snapshot lifecycle
+
+`ColdBuildPublisher` (em `bot/ops_snapshot.py`, **reusando** `write_snapshot` — não há segunda
+implementação) publica desde antes do preflight até depois do desfecho:
+
+`preflight` → `building` → `completed` | `deferred_budget` | `failed`
+
+Um thread daemon reamostra o lifecycle a cada 1 s enquanto o build corre; o estado final é escrito
+de forma **síncrona** na saída, então `ops-status` explica o último desfecho mesmo com o processo já
+encerrado. Campos publicados: `mode=prewarm`, `cohort_id`, `stage`, `outcome`, e por bucket
+`planned`/`completed`/`remaining`/`state`, mais `points_remaining`/`points_limit` quando conhecidos.
+Nada é inventado — o que o processo não sabe simplesmente não aparece.
+
+Escrita atômica preservada (tmp + `replace`); `ops-status` nunca lê JSON parcial. Falha de disco ao
+publicar diagnóstico nunca derruba o prewarm.
+
+### Multi-bucket
+
+O snapshot lista os buckets individualmente e o agregado nunca reporta `ready` se algum estiver
+adiado — a mesma regra do exit code.
+
+### D-34 compliance
+
+`ops-status` acompanha o prewarm **sem abrir o DuckDB externamente**: há teste que roda o publisher
+num diretório onde o `warehouse.duckdb` sequer existe e ainda assim lê `mode=prewarm` e o
+`cohort_id`.
+
+## Contrato de READY (inalterado)
+
+`completed < planned` → NOT READY · `completed == planned` → READY. O pool só é escrito quando tudo
+está em cache.
