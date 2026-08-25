@@ -12,6 +12,13 @@ from typing import Literal
 JobStatus = Literal["queued", "running", "done", "failed", "cancelled"]
 JobType = Literal["analyze", "build_cohort"]
 
+# RC.2 — o estado da ANALISE e o estado da ENTREGA sao fatos diferentes. Uma
+# falha do Discord nao pode reescrever "a analise terminou" como "o job
+# falhou": o incidente real produziu exatamente esse buraco (analise done,
+# relatorio perdido, usuario sem nada). Ver docs/rc-discord-delivery-
+# resilience.md.
+DeliveryStatus = Literal["pending", "delivered", "failed"]
+
 INTERACTIVE_RESERVE_PCT = 0.25
 
 # docs/desvios.md D-20: the literal `jobs` DDL in docs/implementacao.md has
@@ -26,9 +33,17 @@ CREATE TABLE IF NOT EXISTS jobs (
     discord_user_id VARCHAR, discord_channel_id VARCHAR,
     status VARCHAR,
     created_at TIMESTAMP, started_at TIMESTAMP, finished_at TIMESTAMP,
-    error VARCHAR, report_path VARCHAR
+    error VARCHAR, report_path VARCHAR,
+    delivery_status VARCHAR, delivery_error VARCHAR
 )
 """
+
+# CREATE TABLE IF NOT EXISTS nao adiciona coluna a uma tabela que ja existe —
+# um warehouse anterior ao RC precisa destas colunas para nao quebrar.
+MIGRATE_JOBS_TABLE = (
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS delivery_status VARCHAR",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS delivery_error VARCHAR",
+)
 # Plain TIMESTAMP, not TIMESTAMPTZ: DuckDB's TIMESTAMPTZ support needs the
 # optional `pytz` package (not in this project's dependency list, §1.2 —
 # "não adicione dependências fora desta lista sem registrar um desvio").
@@ -38,7 +53,8 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 JOB_COLUMNS = (
     "job_id, job_type, dedup_key, discord_user_id, discord_channel_id, "
-    "status, created_at, started_at, finished_at, error, report_path"
+    "status, created_at, started_at, finished_at, error, report_path, "
+    "delivery_status, delivery_error"
 )
 
 
@@ -62,6 +78,13 @@ class Job:
     finished_at: datetime | None
     error: str | None
     report_path: str | None
+    delivery_status: DeliveryStatus = "pending"
+    delivery_error: str | None = None
+
+    @property
+    def analysis_completed(self) -> bool:
+        """RC.2: verdadeiro mesmo quando a entrega falhou."""
+        return self.status == "done"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,4 +137,6 @@ def row_to_job(row: tuple[object, ...]) -> Job:
         finished_at=row[8],  # type: ignore[arg-type]
         error=row[9],  # type: ignore[arg-type]
         report_path=row[10],  # type: ignore[arg-type]
+        delivery_status=row[11] or "pending",  # type: ignore[arg-type]
+        delivery_error=row[12],  # type: ignore[arg-type]
     )

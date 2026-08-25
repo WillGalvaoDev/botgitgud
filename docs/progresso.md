@@ -573,3 +573,28 @@ chamada WCL real.
   declarava o venv, então o Pyright usava o interpretador do PATH. Corrigido com `venvPath = "."`
   e `venv = ".venv"`; o comando documentado agora reproduz 0 erros sem flag. R4-02 não podia ser
   considerado mecanicamente verde antes disso.
+
+## RC blocker — resiliência de entrega no Discord (2026-08-25)
+
+Descoberto pelo smoke real de R1-01: análise do Zilbag concluída, `403/50013 Missing Permissions`
+no envio do HTML, exceção matou a task do worker e o relatório (só em memória) foi perdido.
+Correção em `docs/rc-discord-delivery-resilience.md`.
+
+- Relatório persistido em `data/reports/<job_id>.html` **antes** da entrega, escrita atômica;
+  `jobs.report_path` finalmente preenchido.
+- `jobs` ganhou `delivery_status`/`delivery_error` (migração idempotente): falha de entrega deixou
+  de ser confundida com falha de análise.
+- `bot/delivery.py` contém toda exceção do Discord; `Forbidden` aciona fallback textual que nunca
+  expõe caminho local; segunda falha também é contida.
+- `_run_one_job` isola cada job; `CancelledError` continua propagando.
+- `WorkerSupervisor` substitui o booleano histórico: liveness real, worker morto é recriado no
+  `on_ready` seguinte, nunca dois workers concorrentes.
+- `deliver_existing_report` permite reenvio com **zero** chamadas WCL.
+- `!status` passou a reportar worker parado/travado em vez de aparentar saúde.
+- 34 testes novos, incluindo a regressão Zilbag-like completa. 0 WCL, 0 envios reais ao Discord.
+
+**Achado separado (não corrigido aqui):** `spells.json`, arquivo rastreado, foi mutado pelas
+execuções reais do bot — 100 → 362 entradas e a chave `category` removida pela migração da T0.4.
+`legacy/bot.py:532` exige `category`, então os 2 golden tests legados falham. Verificado por
+isolamento: revertendo **apenas** `spells.json`, a suíte fica 982/982 verde. Nenhum snapshot foi
+alterado. Decisão pendente do usuário (ver relatório).

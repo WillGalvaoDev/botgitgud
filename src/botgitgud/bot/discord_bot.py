@@ -16,15 +16,21 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import io
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Coroutine, Sequence
+from typing import Any
 
 import discord
 import structlog
 from discord.ext import commands
 
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
+from botgitgud.bot.delivery import (
+    ChannelResolver,
+    send_interactive_report,
+    send_report,
+    send_text,
+)
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import write_snapshot
@@ -71,33 +77,46 @@ def _current_budget(deps: Deps) -> BudgetStatus:
     return BudgetStatus(points_remaining=remaining, limit_per_hour=limit)
 
 
-async def _notify_outcome(bot: commands.Bot, outcome: JobOutcome) -> None:
+async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQueue) -> None:
+    """RC.3 — fronteira de entrega. Nenhuma excecao do Discord sai daqui: a
+    camada bot/delivery.py classifica cada falha e devolve um DeliveryOutcome,
+    que este nivel persiste sem jamais tocar no estado da analise (RC.2).
+    """
     if outcome.requeued:
         # T1.8 §3: budget ran out mid-job — silently back to `queued` for
         # after pointsResetIn, no user-facing noise (it isn't done, and
         # it isn't an error the user needs to react to).
         return
-    channel = bot.get_channel(int(outcome.job.discord_channel_id))
+    job = outcome.job
+    channel = bot.get_channel(int(job.discord_channel_id))
     if channel is None:
-        log.warning("discord_bot.notify_channel_missing", job_id=outcome.job.job_id)
+        log.warning("discord_bot.notify_channel_missing", job_id=job.job_id)
+        queue.mark_delivery_failed(job.job_id, error="canal indisponivel")
         return
-    mention = f"<@{outcome.job.discord_user_id}>"
+
+    mention = f"<@{job.discord_user_id}>"
     if not outcome.ok:
-        await channel.send(f"{mention} ❌ {outcome.message}")  # type: ignore[union-attr]
-        return
-    if outcome.job.job_type == "analyze":
-        if outcome.html_report is None:
-            log.error("discord_bot.analyze_outcome_missing_html", job_id=outcome.job.job_id)
-            await channel.send(f"{mention} ❌ relatório HTML indisponível.")  # type: ignore[union-attr]
-            return
-        html_file = discord.File(
-            io.BytesIO(outcome.html_report.encode("utf-8")), filename="relatorio.html"
-        )
-        await channel.send(  # type: ignore[union-attr]
-            f"{mention}\n```markdown\n{outcome.message}\n```", file=html_file
+        result = await send_text(channel, job=job, content=f"{mention} ❌ {outcome.message}")
+    elif job.job_type != "analyze":
+        result = await send_text(channel, job=job, content=f"{mention} ✅ {outcome.message}")
+    elif outcome.html_report is None:
+        log.error("discord_bot.analyze_outcome_missing_html", job_id=job.job_id)
+        result = await send_text(
+            channel, job=job, content=f"{mention} ❌ relatório HTML indisponível."
         )
     else:
-        await channel.send(f"{mention} ✅ {outcome.message}")  # type: ignore[union-attr]
+        result = await send_report(
+            channel,
+            job=job,
+            summary=outcome.message,
+            html=outcome.html_report,
+            mention=mention,
+        )
+
+    if result.delivered:
+        queue.mark_delivered(job.job_id)
+    else:
+        queue.mark_delivery_failed(job.job_id, error=result.error or "falha de entrega")
 
 
 async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
@@ -124,9 +143,30 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         if job is None:
             continue
 
+        await _run_one_job(bot, deps, queue, job)
+
+
+async def _run_one_job(bot: ChannelResolver, deps: Deps, queue: JobQueue, job: Job) -> None:
+    """RC.4 — ultima fronteira de isolamento: um job nunca pode matar o
+    consumidor da fila. CancelledError passa direto (shutdown continua
+    funcionando); qualquer outra excecao inesperada e logada com stack e
+    deixa o job num estado terminal, nunca silenciosamente `running`.
+    """
+    try:
         loop = asyncio.get_running_loop()
         outcome = await loop.run_in_executor(None, run_claimed_job, queue, job, deps)
-        await _notify_outcome(bot, outcome)
+        await _notify_outcome(bot, outcome, queue)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("discord_bot.job_crashed", job_id=job.job_id, job_type=job.job_type)
+        _fail_job_quietly(queue, job)
+
+
+def _fail_job_quietly(queue: JobQueue, job: Job) -> None:
+    current = queue.get(job.job_id)
+    if current is not None and current.status == "running":
+        queue.mark_failed(job.job_id, error="erro inesperado no processamento do job")
 
 
 def _publish_snapshot(
@@ -149,6 +189,46 @@ def _publish_snapshot(
         log.warning("discord_bot.ops_snapshot_write_failed", error=str(e))
 
 
+class WorkerSupervisor:
+    """RC.5/RC.6 — a pergunta certa nao e "o worker ja iniciou alguma vez?" e
+    sim "existe um worker vivo agora?". O boolean historico da T1.8 deixava o
+    sistema permanentemente sem consumidor depois que a task morria: o guard
+    continuava True e nem uma reconexao recriava o worker.
+    """
+
+    def __init__(self) -> None:
+        self._task: asyncio.Task[None] | None = None
+
+    @property
+    def is_alive(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def ensure_running(self, factory: Callable[[], Coroutine[Any, Any, None]]) -> bool:
+        """Cria um worker somente se nao houver um vivo. Devolve True quando
+        criou. Nunca deixa dois workers concorrentes (RC.7).
+        """
+        if self.is_alive:
+            return False
+        restarted = self._task is not None
+        task = asyncio.get_event_loop().create_task(factory())
+        task.add_done_callback(self._on_done)
+        self._task = task
+        log.info("discord_bot.worker_restarted" if restarted else "discord_bot.worker_started")
+        return True
+
+    def _on_done(self, task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            log.info("discord_bot.worker_stopped", reason="cancelled")
+            return
+        error = task.exception()
+        if error is None:
+            log.info("discord_bot.worker_stopped", reason="returned")
+        else:
+            # Nao deveria acontecer: _run_one_job ja isola cada job. Se chegar
+            # aqui e bug do proprio loop, e precisa aparecer nos logs.
+            log.error("discord_bot.worker_crashed", error=repr(error), exc_info=error)
+
+
 def _enqueue_message(result: EnqueueResult) -> str:
     if result.job is None:
         return f"❌ {result.rejected_reason}"
@@ -165,20 +245,19 @@ def build_bot(deps: Deps) -> commands.Bot:
     intents.message_content = True
     bot = commands.Bot(command_prefix="!", intents=intents)
     queue = JobQueue(deps.store)
-    worker_started = {"started": False}
+    supervisor = WorkerSupervisor()
 
     @bot.event
     async def on_ready() -> None:
         n_reverted = queue.recover_from_crash()
         if n_reverted:
             log.info("discord_bot.crash_recovery", n_reverted=n_reverted)
-        if not worker_started["started"]:
-            bot.loop.create_task(_worker_loop(bot, deps, queue))
-            worker_started["started"] = True
+        # RC.5/RC.7: reconexao com worker vivo nao cria um segundo; worker morto
+        # (crash anterior) e recriado aqui em vez de ficar sem consumidor.
+        if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue)):
             # D-34: publica já no boot, para que `ops-status` responda desde o
             # primeiro segundo em vez de esperar o primeiro tick do worker.
             _publish_snapshot(deps, queue.list_active(), None, None)
-            log.info("discord_bot.worker_started")
         log.info("discord_bot.ready", user=str(bot.user))
 
     @bot.command(name="analisar")
@@ -230,10 +309,9 @@ def build_bot(deps: Deps) -> commands.Bot:
             await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
             return
 
-        # T3.4: "Discord passa a enviar: cabeçalho + Top 3 em texto, e o
-        # HTML como anexo" — the full text report is no longer posted
-        # inline (it stopped fitting in Discord's own message limits once
-        # every T3.1-T3.3 section was added).
+        # T3.4: cabeçalho + Top 3 em texto, HTML como anexo. RC.3: o envio
+        # passa pela mesma fronteira de entrega da fila — um 403 aqui responde
+        # ao usuário com o aviso curto em vez de estourar no handler.
         summary_text = render_header_and_top3(result.header, result.top_actions)
         html_report = render_html_report(
             result.header,
@@ -245,15 +323,23 @@ def build_bot(deps: Deps) -> commands.Bot:
             top_actions=result.top_actions,
             duration_s=result.header.duration_max_s,
         )
-        html_file = discord.File(io.BytesIO(html_report.encode("utf-8")), filename="relatorio.html")
-        await ctx.send(f"```markdown\n{summary_text}\n```", file=html_file)
+        # ctx satisfaz Sendable em runtime; as sobrecargas de Context.send do
+        # discord.py nao casam nominalmente com o Protocol.
+        await send_interactive_report(ctx, summary=summary_text, html=html_report)  # type: ignore[arg-type]
 
     @bot.command(name="status")
     async def cmd_status(ctx: commands.Context) -> None:
-        """Uso: !status — mostra a fila de análises/coortes em andamento."""
+        """Uso: !status — fila de análises/coortes e saúde do worker."""
+        # RC.14: antes o bot podia parecer saudável com o worker morto. O
+        # estado do gateway (estarmos respondendo) não implica consumidor vivo.
+        worker_line = (
+            "⚙️ Worker: **rodando**"
+            if supervisor.is_alive
+            else "🛑 Worker: **parado/travado** — jobs na fila não estão sendo processados."
+        )
         active = queue.list_active()
         if not active:
-            await ctx.send("📋 Fila vazia — nenhum job ativo.")
+            await ctx.send("📋 Fila vazia - nenhum job ativo.\n" + worker_line)
             return
 
         lines = ["📋 **Fila de análises**"]
@@ -262,6 +348,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             lines.append(
                 f"{i}. {status_icon} `{job.job_type}` — <@{job.discord_user_id}> ({job.status})"
             )
+        lines.append(worker_line)
         await ctx.send("\n".join(lines))
 
     return bot

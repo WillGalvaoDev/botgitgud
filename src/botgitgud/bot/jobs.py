@@ -15,6 +15,7 @@ from datetime import datetime
 from botgitgud.bot.job_models import (
     CREATE_JOBS_TABLE,
     JOB_COLUMNS,
+    MIGRATE_JOBS_TABLE,
     BudgetStatus,
     EnqueueResult,
     Job,
@@ -43,6 +44,8 @@ class JobQueue:
         self._store = store
         self._lock = threading.Lock()
         self._store.execute(CREATE_JOBS_TABLE)
+        for statement in MIGRATE_JOBS_TABLE:
+            self._store.execute(statement)
 
     # -- enqueue / dedup / fairness -----------------------------------------------
 
@@ -95,7 +98,7 @@ class JobQueue:
                 report_path=None,
             )
             self._store.execute(
-                f"INSERT INTO jobs ({JOB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"INSERT INTO jobs ({JOB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     job.job_id,
                     job.job_type,
@@ -108,6 +111,8 @@ class JobQueue:
                     job.finished_at,
                     job.error,
                     job.report_path,
+                    job.delivery_status,
+                    job.delivery_error,
                 ],
             )
             position = self._count_by_status("queued")  # this job included: it's last-in-line
@@ -166,6 +171,22 @@ class JobQueue:
         self._store.execute(
             "UPDATE jobs SET status = 'done', finished_at = ?, report_path = ? WHERE job_id = ?",
             [now_utc_naive(), report_path, job_id],
+        )
+
+    def mark_delivered(self, job_id: str) -> None:
+        """RC.2: entrega confirmada. Nunca toca no estado da analise."""
+        self._store.execute(
+            "UPDATE jobs SET delivery_status = 'delivered', delivery_error = NULL WHERE job_id = ?",
+            [job_id],
+        )
+
+    def mark_delivery_failed(self, job_id: str, *, error: str) -> None:
+        """RC.2: a entrega falhou e a analise continua valida — `status` e
+        `report_path` ficam intactos para o reenvio (RC.10).
+        """
+        self._store.execute(
+            "UPDATE jobs SET delivery_status = 'failed', delivery_error = ? WHERE job_id = ?",
+            [error, job_id],
         )
 
     def mark_failed(self, job_id: str, *, error: str) -> None:

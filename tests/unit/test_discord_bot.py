@@ -10,6 +10,7 @@ import pytest
 import botgitgud.bot.discord_bot as discord_module
 from botgitgud.bot.discord_bot import _enqueue_message, _notify_outcome, parse_report_input
 from botgitgud.bot.job_models import EnqueueResult, Job, now_utc_naive
+from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import read_snapshot
 from botgitgud.bot.worker import JobOutcome
 from botgitgud.errors import (
@@ -94,10 +95,11 @@ def test_enqueue_message_new_deduped_and_rejected() -> None:
     assert _enqueue_message(EnqueueResult(None, False, rejected_reason="limite")) == "❌ limite"
 
 
-def test_notify_analyze_success_sends_summary_and_html_once() -> None:
+def test_notify_analyze_success_sends_summary_and_html_once(tmp_path: Path) -> None:
     channel = _Channel()
     outcome = JobOutcome(_job(), True, "resumo curto", html_report="<html></html>")
-    asyncio.run(_notify_outcome(_Bot(channel), outcome))  # type: ignore[arg-type]
+    with Store(tmp_path) as store:
+        asyncio.run(_notify_outcome(_Bot(channel), outcome, JobQueue(store)))
     assert len(channel.sent) == 1
     message, attachment = channel.sent[0]
     assert "resumo curto" in message
@@ -105,13 +107,19 @@ def test_notify_analyze_success_sends_summary_and_html_once() -> None:
     assert attachment.filename == "relatorio.html"
 
 
-def test_notify_build_failure_and_requeued_contracts() -> None:
+def test_notify_build_failure_and_requeued_contracts(tmp_path: Path) -> None:
     channel = _Channel()
-    asyncio.run(_notify_outcome(_Bot(channel), JobOutcome(_job("build_cohort"), True, "feito")))  # type: ignore[arg-type]
-    asyncio.run(_notify_outcome(_Bot(channel), JobOutcome(_job(), False, "falhou")))  # type: ignore[arg-type]
-    asyncio.run(
-        _notify_outcome(_Bot(channel), JobOutcome(_job(), False, "aguarde", requeued=True))  # type: ignore[arg-type]
-    )
+    with Store(tmp_path) as store:
+        queue = JobQueue(store)
+        asyncio.run(
+            _notify_outcome(_Bot(channel), JobOutcome(_job("build_cohort"), True, "feito"), queue)
+        )
+        asyncio.run(_notify_outcome(_Bot(channel), JobOutcome(_job(), False, "falhou"), queue))
+        asyncio.run(
+            _notify_outcome(
+                _Bot(channel), JobOutcome(_job(), False, "aguarde", requeued=True), queue
+            )
+        )
     assert [message for message, _ in channel.sent] == ["<@123> ✅ feito", "<@123> ❌ falhou"]
 
 
@@ -208,7 +216,11 @@ def test_status_empty_queue(tmp_path: Path) -> None:
     async def invoke() -> None:
         ctx = _Context()
         await callback(ctx)
-        assert ctx.sent == [("📋 Fila vazia — nenhum job ativo.", None)]
+        message, attachment = ctx.sent[0]
+        assert "Fila vazia" in message
+        assert attachment is None
+        # RC.14: sem on_ready neste teste, o worker realmente nao esta rodando
+        assert "Worker" in message
 
     asyncio.run(invoke())
     deps.store.close()
@@ -319,15 +331,19 @@ def test_snapshot_write_failure_never_kills_the_worker(
     assert calls == 2
 
 
-def test_on_ready_starts_worker_only_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_on_ready_does_not_duplicate_a_live_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RC.7: reconexao do Discord com worker vivo nunca cria um segundo."""
     deps = _deps(tmp_path)
     starts = 0
 
-    async def worker_once(*_args: object) -> None:
+    async def long_lived_worker(*_args: object) -> None:
         nonlocal starts
         starts += 1
+        await asyncio.sleep(3600)
 
-    monkeypatch.setattr(discord_module, "_worker_loop", worker_once)
+    monkeypatch.setattr(discord_module, "_worker_loop", long_lived_worker)
     bot = discord_module.build_bot(deps)  # type: ignore[arg-type]
     on_ready: Any = bot.__getattribute__("on_ready")
 
@@ -340,4 +356,34 @@ def test_on_ready_starts_worker_only_once(tmp_path: Path, monkeypatch: pytest.Mo
 
     asyncio.run(reconnect_twice())
     assert starts == 1
+    deps.store.close()
+
+
+def test_on_ready_revives_a_dead_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RC.6: o incidente real deixou a task morta e o guard booleano da T1.8
+    impedia qualquer recuperacao — o sistema ficava sem consumidor ate
+    reiniciar o processo. Agora um on_ready posterior recria o worker.
+    """
+    deps = _deps(tmp_path)
+    starts = 0
+
+    async def worker_that_exits(*_args: object) -> None:
+        nonlocal starts
+        starts += 1
+
+    monkeypatch.setattr(discord_module, "_worker_loop", worker_that_exits)
+    bot = discord_module.build_bot(deps)  # type: ignore[arg-type]
+    on_ready: Any = bot.__getattribute__("on_ready")
+
+    async def reconnect_after_death() -> None:
+        bot.loop = asyncio.get_running_loop()
+        await on_ready()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)  # worker termina aqui
+        await on_ready()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(reconnect_after_death())
+    assert starts == 2
     deps.store.close()

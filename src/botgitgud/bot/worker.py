@@ -21,6 +21,7 @@ from botgitgud.analysis.cohort_builder import build_cohorts
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.job_models import Job
 from botgitgud.bot.jobs import JobQueue
+from botgitgud.bot.report_store import ReportPersistenceError, persist_report
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
 from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
@@ -35,6 +36,7 @@ class JobOutcome:
     message: str
     html_report: str | None = None
     requeued: bool = False
+    report_path: str | None = None
 
 
 def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
@@ -46,12 +48,22 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
     progress LogFetcher/Store already made kept (docs/desvios.md D-18) —
     never marked `failed`.
     """
+    report_path: str | None = None
     try:
         if job.job_type == "analyze":
             message, html_report = _run_analyze(job, deps)
+            # RC.1/RC.11: o artefato vira arquivo ANTES de qualquer tentativa de
+            # entrega. Se isto falhar, o job falha como erro de producao do
+            # artifact — nunca seguimos para o Discord com um anexo inexistente.
+            report_path = str(persist_report(deps.settings.data_dir, job.job_id, html_report))
+            log.info("worker.report_persisted", job_id=job.job_id, report_path=report_path)
         else:
             message = _run_build_cohort(job, deps)
             html_report = None
+    except ReportPersistenceError as e:
+        log.error("worker.report_persistence_failed", job_id=job.job_id, error=str(e))
+        queue.mark_failed(job.job_id, error=str(e))
+        return JobOutcome(job=job, ok=False, message=str(e))
     except RateLimitBudgetExceeded as e:
         log.info("worker.job_requeued_budget_exceeded", job_id=job.job_id, error=str(e))
         queue.requeue(job.job_id)
@@ -61,8 +73,15 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         queue.mark_failed(job.job_id, error=str(e))
         return JobOutcome(job=job, ok=False, message=str(e))
 
-    queue.mark_done(job.job_id)
-    return JobOutcome(job=job, ok=True, message=message, html_report=html_report)
+    queue.mark_done(job.job_id, report_path=report_path)
+    log.info("worker.analysis_completed", job_id=job.job_id, job_type=job.job_type)
+    return JobOutcome(
+        job=job,
+        ok=True,
+        message=message,
+        html_report=html_report,
+        report_path=report_path,
+    )
 
 
 def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
