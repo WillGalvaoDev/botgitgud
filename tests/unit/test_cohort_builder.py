@@ -5,6 +5,7 @@ fake-httpx-transport pattern as test_log_fetcher.py/test_pipeline.py).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, SupportsIndex, cast
 
@@ -13,9 +14,28 @@ from test_log_fetcher import _events_response, _meta_response, _percentile_respo
 from test_pipeline import _build_deps, _DispatchTransport, _zone_partitions_response
 
 from botgitgud.analysis.cohort_builder import build_cohorts
-from botgitgud.errors import RateLimitBudgetExceeded
+from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
 
 ENCOUNTER_ID = 3179
+
+
+def test_budget_defer_makes_zero_construction_queries(tmp_path: Path) -> None:
+    transport = _DispatchTransport(_responses_for({100.0: 8}))
+    deps = _build_deps(tmp_path, transport)
+    deps = replace(
+        deps,
+        settings=deps.settings.model_copy(update={"cold_build_safety_margin": 10000.0}),
+    )
+    with pytest.raises(CohortDeferredBudget):
+        build_cohorts(
+            deps,
+            encounter_id=ENCOUNTER_ID,
+            class_name="Warlock",
+            spec_name="Demonology",
+            difficulty=5,
+            duration_bucket_s=100.0,
+        )
+    assert transport.calls == []
 
 
 def _rankings_page(rankings: list[dict[str, Any]], *, has_more: bool = False) -> dict[str, Any]:

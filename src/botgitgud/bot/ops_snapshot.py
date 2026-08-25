@@ -37,6 +37,7 @@ STALE_AFTER_S = 30.0
 
 @dataclass(frozen=True, slots=True)
 class OpsSnapshot:
+    schema_version: int
     pid: int
     written_at: float
     queued: int
@@ -45,6 +46,13 @@ class OpsSnapshot:
     points_remaining: float | None
     points_limit: float | None
     budget_checked_at: float | None
+    worker_alive: bool
+    done: int
+    failed: int
+    active_job: dict[str, Any] | None
+    latest_completed_job: dict[str, Any] | None
+    ready_cohorts: list[dict[str, Any]]
+    cold_build: dict[str, Any] | None
     age_seconds: float = 0.0
 
     @property
@@ -57,6 +65,10 @@ def write_snapshot(
     *,
     pid: int | None = None,
     active: Sequence[Job],
+    recent: Sequence[Job] = (),
+    ready_cohorts: Sequence[dict[str, Any]] = (),
+    worker_alive: bool = True,
+    cold_build: dict[str, Any] | None = None,
     points_remaining: float | None = None,
     points_limit: float | None = None,
     now: float | None = None,
@@ -66,8 +78,25 @@ def write_snapshot(
     """
     moment = time.time() if now is None else now
     running = [j for j in active if j.status == "running"]
+    completed = [j for j in recent if j.status in {"done", "failed"}]
+    latest = max(completed, key=lambda j: j.finished_at or j.created_at, default=None)
+    active_job = running[0] if running else None
+
+    def job_summary(job: Job | None) -> dict[str, Any] | None:
+        if job is None:
+            return None
+        return {
+            "job_id": job.job_id,
+            "job_type": job.job_type,
+            "status": job.status,
+            "delivery_status": job.delivery_status,
+            "report_path_exists": bool(job.report_path and Path(job.report_path).is_file()),
+            "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        }
+
     oldest = min((j.started_at for j in running if j.started_at is not None), default=None)
     payload = {
+        "schema_version": 2,
         "pid": os.getpid() if pid is None else pid,
         "written_at": moment,
         "queued": sum(1 for j in active if j.status == "queued"),
@@ -76,6 +105,13 @@ def write_snapshot(
         "points_remaining": points_remaining,
         "points_limit": points_limit,
         "budget_checked_at": None if points_remaining is None else moment,
+        "worker_alive": worker_alive,
+        "done": sum(1 for j in recent if j.status == "done"),
+        "failed": sum(1 for j in recent if j.status == "failed"),
+        "active_job": job_summary(active_job),
+        "latest_completed_job": job_summary(latest),
+        "ready_cohorts": list(ready_cohorts),
+        "cold_build": cold_build,
     }
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / SNAPSHOT_FILENAME

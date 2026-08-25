@@ -18,7 +18,7 @@ import botgitgud.bot.worker as worker_module
 from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.worker import run_claimed_job
-from botgitgud.errors import RateLimitBudgetExceeded
+from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
 from botgitgud.ingest.store import Store
 from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
@@ -168,6 +168,45 @@ def test_run_claimed_build_cohort_job_returns_a_summary(tmp_path: Path) -> None:
 
     assert outcome.ok is True
     assert "1 coorte" in outcome.message
+    store.close()
+
+
+def test_budget_defer_is_honest_terminal_job_and_worker_can_continue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deps = _build_deps(tmp_path, _DispatchTransport(_responses_for({100.0: 8})))
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    enqueued = queue.enqueue(
+        job_type="build_cohort",
+        dedup_key="cohort:3179:Warlock:Demonology:5:100.0",
+        discord_user_id="user-1",
+        discord_channel_id="chan-1",
+    )
+    assert enqueued.job is not None
+    claimed = queue.claim_next(BudgetStatus(points_remaining=9000, limit_per_hour=10000))
+    assert claimed is not None
+    monkeypatch.setattr(
+        worker_module,
+        "build_cohorts",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            CohortDeferredBudget(
+                "orçamento temporariamente reservado",
+                cohort_id="abc",
+                estimated_api_points=3000,
+                available_api_points=3500,
+                protected_floor=1000,
+                safety_margin=250,
+            )
+        ),
+    )
+
+    outcome = run_claimed_job(queue, claimed, deps)
+
+    assert not outcome.ok and not outcome.requeued
+    assert "temporariamente reservado" in outcome.message
+    assert queue.get(claimed.job_id).status == "failed"  # type: ignore[union-attr]
+    assert queue.list_active() == []
     store.close()
 
 

@@ -57,7 +57,7 @@ from typing import Any
 import duckdb
 import polars as pl
 
-from botgitgud.domain.models import PlayerLog, RankingCandidate, RunManifest
+from botgitgud.domain.models import CohortCriteria, PlayerLog, RankingCandidate, RunManifest
 from botgitgud.ingest.parquet_codec import read_parquet_log, write_parquet_log
 
 _CREATE_LOGS_TABLE = """
@@ -84,6 +84,14 @@ _CREATE_CANDIDATES_TABLE = """
 CREATE TABLE IF NOT EXISTS cohort_candidates (
     cohort_id VARCHAR, report_code VARCHAR, fight_id INTEGER,
     player_name VARCHAR, duration_s DOUBLE
+)
+"""
+_CREATE_COHORT_REGISTRY_TABLE = """
+CREATE TABLE IF NOT EXISTS cohort_registry (
+    cohort_id VARCHAR PRIMARY KEY, encounter_id INTEGER, difficulty INTEGER,
+    partition INTEGER, class_name VARCHAR, spec_name VARCHAR,
+    duration_min_s DOUBLE, duration_max_s DOUBLE, n_members INTEGER,
+    updated_at TIMESTAMP
 )
 """
 # D-25: replaces T1.7's `cohorts` table. A cohort_id's candidate pool is
@@ -122,6 +130,7 @@ class Store:
         self._conn = duckdb.connect(str(self._db_path))
         self._conn.execute(_CREATE_LOGS_TABLE)
         self._conn.execute(_CREATE_CANDIDATES_TABLE)
+        self._conn.execute(_CREATE_COHORT_REGISTRY_TABLE)
         self._conn.execute(_CREATE_SPELLS_TABLE)
         self._conn.execute(_CREATE_RUNS_TABLE)
 
@@ -239,7 +248,13 @@ class Store:
             for r in rows
         ]
 
-    def write_candidate_pool(self, cohort_id: str, candidates: list[RankingCandidate]) -> None:
+    def write_candidate_pool(
+        self,
+        cohort_id: str,
+        candidates: list[RankingCandidate],
+        *,
+        criteria: CohortCriteria | None = None,
+    ) -> None:
         rows = [
             (cohort_id, c.report_code, c.fight_id, c.player_name, c.duration_s) for c in candidates
         ]
@@ -251,6 +266,44 @@ class Store:
                 "VALUES (?, ?, ?, ?, ?)",
                 rows,
             )
+            if criteria is not None:
+                self._conn.execute(
+                    """INSERT OR REPLACE INTO cohort_registry
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    [
+                        cohort_id,
+                        criteria.encounter_id,
+                        criteria.difficulty,
+                        criteria.partition,
+                        criteria.class_name,
+                        criteria.spec_name,
+                        criteria.duration_min_s,
+                        criteria.duration_max_s,
+                        len(candidates),
+                        datetime.now(UTC).replace(tzinfo=None),
+                    ],
+                )
+
+    def list_ready_cohorts(self) -> list[dict[str, object]]:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT cohort_id, encounter_id, difficulty, partition, class_name,
+                          spec_name, duration_min_s, duration_max_s, n_members, updated_at
+                   FROM cohort_registry ORDER BY updated_at DESC"""
+            ).fetchall()
+        keys = (
+            "cohort_id",
+            "encounter_id",
+            "difficulty",
+            "partition",
+            "class_name",
+            "spec_name",
+            "duration_min_s",
+            "duration_max_s",
+            "n_members",
+            "updated_at",
+        )
+        return [dict(zip(keys, row, strict=True)) for row in rows]
 
     # -- run manifests --------------------------------------------------------------
 

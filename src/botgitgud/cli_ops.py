@@ -49,9 +49,22 @@ def _snapshot_lines(data_dir: Path) -> list[str] | None:
         f"bot_pid={snapshot.pid}",
         f"snapshot_age_s={snapshot.age_seconds:.1f}",
         f"snapshot_stale={str(snapshot.is_stale).lower()}",
+        f"schema_version={snapshot.schema_version}",
+        f"worker_alive={str(snapshot.worker_alive).lower()}",
         f"jobs queued={snapshot.queued} running={snapshot.running}",
+        f"jobs done={snapshot.done} failed={snapshot.failed}",
         f"oldest_running_started_at={snapshot.oldest_running_started_at}",
     ]
+    if snapshot.active_job is not None:
+        lines.append("active_job=" + str(snapshot.active_job))
+    if snapshot.latest_completed_job is not None:
+        lines.append("latest_completed_job=" + str(snapshot.latest_completed_job))
+    lines.append(f"cohorts ready={len(snapshot.ready_cohorts)} known={len(snapshot.ready_cohorts)}")
+    for cohort in snapshot.ready_cohorts:
+        lines.append("cohort=" + str(cohort))
+    lines.append(
+        "cold_build=" + ("none" if snapshot.cold_build is None else str(snapshot.cold_build))
+    )
     if snapshot.points_remaining is None:
         lines.append("points_remaining=not_queried_yet limit=not_queried_yet")
     else:
@@ -85,6 +98,16 @@ def _local_lines(db_path: Path, data_dir: Path) -> list[str]:
                     for status in ("queued", "running", "failed", "done")
                 )
             )
+        if "cohort_registry" in tables:
+            cohorts = conn.execute(
+                """SELECT cohort_id, class_name, spec_name, encounter_id, difficulty,
+                          partition, n_members, updated_at
+                   FROM cohort_registry ORDER BY updated_at DESC"""
+            ).fetchall()
+            lines.append(f"cohorts ready={len(cohorts)} known={len(cohorts)}")
+            lines.extend(f"cohort={row}" for row in cohorts)
+        else:
+            lines.append("cohorts ready=0 known=0")
         lines.append("tables=" + ",".join(sorted(tables)))
         return lines
     finally:
@@ -97,6 +120,9 @@ def warehouse_status(data_dir: Path) -> list[str] | None:
     Devolve None quando o warehouse está travado e não há snapshot legível —
     o chamador transforma isso em erro controlado.
     """
+    snapshot = read_snapshot(data_dir)
+    if snapshot is not None and not snapshot.is_stale:
+        return _snapshot_lines(data_dir)
     db_path = data_dir / "warehouse.duckdb"
     if not db_path.is_file():
         return [f"warehouse=missing path={db_path}"]

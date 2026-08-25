@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     wcl_backoff_factor: float = 2.0
     wcl_rate_limit_cache_ttl_s: float = 60.0
     api_points_floor: float = 1000.0
+    hot_path_reserve: float = 1000.0
+    cold_build_safety_margin: float = 250.0
+    cold_build_points_per_query: float = 2.0
+    cold_build_queries_per_reference: int = 15
+    cold_build_fixed_queries: int = 6
 
     # -- T0.4: BlizzardClient -------------------------------------------------
     blizzard_connect_timeout_s: float = 5.0

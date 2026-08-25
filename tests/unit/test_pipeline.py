@@ -50,7 +50,7 @@ def _rate_limit_response() -> httpx.Response:
         json={
             "data": {
                 "rateLimitData": {
-                    "limitPerHour": 3600,
+                    "limitPerHour": 10000,
                     "pointsSpentThisHour": 0,
                     "pointsResetIn": 3600,
                 }
@@ -264,6 +264,22 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.header.player_dps == pytest.approx(10000.0)  # 1_000_000 / 100s
     assert len(result.comparisons) >= 1
     assert result.phase4_resolution.status is ResolutionStatus.UNAVAILABLE
+
+
+def test_reference_logs_reuse_criteria_partition_without_report_rankings(tmp_path: Path) -> None:
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.manifest.wcl_partition == 3
+    # Only the analyzed log resolves its report partition. References inherit
+    # the already-known canonical cohort partition and keep their difficulty.
+    assert transport.calls.count("report_rankings") == 1
+    reference_rows = deps.store.query(
+        "SELECT DISTINCT partition, difficulty FROM logs WHERE player_name LIKE 'Ref%'"
+    ).rows()
+    assert reference_rows == [(3, 5)]
 
 
 def test_run_analysis_exposes_ready_capability_without_running_inference(tmp_path: Path) -> None:

@@ -31,7 +31,7 @@ query GetPlayerEvents(
     report(code: $code) {
       events(
         fightIDs: $fightIDs, dataType: Casts, startTime: $startTime,
-        endTime: $endTime, limit: 5000, translate: true
+        endTime: $endTime, limit: 10000, translate: true
       ) {
         data
         nextPageTimestamp

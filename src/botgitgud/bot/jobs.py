@@ -228,6 +228,12 @@ class JobQueue:
         )
         return [row_to_job(r) for r in rows]
 
+    def list_recent(self, limit: int = 100) -> list[Job]:
+        rows = self._store.execute_returning(
+            f"SELECT {JOB_COLUMNS} FROM jobs ORDER BY created_at DESC LIMIT ?", [limit]
+        )
+        return [row_to_job(r) for r in rows]
+
     # -- internal (already lock-held by callers where it matters) ----------------
 
     def _find_active_by_dedup_key(self, dedup_key: str) -> Job | None:

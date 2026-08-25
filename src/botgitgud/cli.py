@@ -31,7 +31,7 @@ from botgitgud.cli_experiment_evaluate import add_experiment_evaluate_parser
 from botgitgud.cli_ops import add_ops_parsers
 from botgitgud.config import Settings
 from botgitgud.domain.spells import CATALOG_FILENAME, open_runtime_catalog
-from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
+from botgitgud.errors import BotGitGudError, CohortDeferredBudget, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
 from botgitgud.logging_setup import configure_logging
@@ -131,6 +131,9 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
             difficulty=args.difficulty,
             duration_bucket_s=args.duration_bucket,
         )
+    except CohortDeferredBudget as e:
+        sys.stderr.write(f"coorte adiada por orçamento: {e}\n")
+        return EX_TEMPFAIL
     except RateLimitBudgetExceeded as e:
         sys.stderr.write(f"orçamento de API esgotado — progresso parcial salvo. {e}\n")
         return EX_TEMPFAIL

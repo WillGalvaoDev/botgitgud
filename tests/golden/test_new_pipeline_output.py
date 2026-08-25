@@ -51,6 +51,10 @@ def _build_deps(tmp_path: Path) -> Deps:
         wcl_client_secret="test-secret",
         blizzard_client_id="test-id",
         blizzard_client_secret="test-secret",
+        # Historical cassette budget is not production state. Keep this
+        # analytical golden focused on output equivalence; budget policy has
+        # dedicated deterministic tests in test_cold_build.py.
+        cold_build_points_per_query=0.5,
     )
     client = WclClient(
         WclClientConfig(client_id="test-id", client_secret="test-secret"),

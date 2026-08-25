@@ -103,7 +103,13 @@ class LogFetcher:
         self._store.write_log(player_log)
         return player_log
 
-    def fetch_many(self, refs: Sequence[LogRequest], *, max_workers: int) -> list[PlayerLog]:
+    def fetch_many(
+        self,
+        refs: Sequence[LogRequest],
+        *,
+        max_workers: int,
+        expected_partition: int | None = None,
+    ) -> list[PlayerLog]:
         """Best-effort: a ref that fails (PlayerNotFound/FightNotFound/
         ApiError) is skipped rather than aborting the batch (some ranked
         logs are expected to 404). RateLimitBudgetExceeded is different —
@@ -133,8 +139,18 @@ class LogFetcher:
         if to_fetch:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
-                    executor.submit(
-                        self._fetch_from_api, ref.report_code, ref.fight_id, ref.player
+                    (
+                        executor.submit(
+                            self._fetch_from_api, ref.report_code, ref.fight_id, ref.player
+                        )
+                        if expected_partition is None
+                        else executor.submit(
+                            self._fetch_from_api,
+                            ref.report_code,
+                            ref.fight_id,
+                            ref.player,
+                            expected_partition=expected_partition,
+                        )
                     ): i
                     for i, ref in to_fetch
                 }
@@ -193,6 +209,7 @@ class LogFetcher:
         *,
         experimental_label: float | None = None,
         fight_query_cache: dict[tuple[str, str], dict[str, Any]] | None = None,
+        expected_partition: int | None = None,
     ) -> PlayerLog:
         def query_fn(query: str, variables: dict[str, object], *, op_name: str) -> dict:
             fight_wide = {
@@ -278,7 +295,9 @@ class LogFetcher:
 
         # T-DG.0: report.rankings is the strong partition source — never
         # fabricated when unavailable, stays None as before (D-12(a)).
-        partition = fetch_partition(query_fn, report_code=report_code, fight_id=fight_id)
+        partition = expected_partition
+        if partition is None:
+            partition = fetch_partition(query_fn, report_code=report_code, fight_id=fight_id)
 
         # T3.1 — features beyond casts.
         damage_entry = find_damage_table_entry(

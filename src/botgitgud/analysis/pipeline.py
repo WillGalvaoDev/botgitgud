@@ -39,6 +39,11 @@ from botgitgud.analysis.cohort import (
     duration_bucket_id,
 )
 from botgitgud.analysis.cohort_match import match_cohort
+from botgitgud.analysis.cold_build import (
+    cohort_single_flight,
+    preflight_cold_build,
+    record_cold_lifecycle,
+)
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.dps_gap import DpsGapReport, analyze_dps_gap
 from botgitgud.analysis.findings import Finding, build_findings, select_top_actions
@@ -154,22 +159,44 @@ def run_analysis(
             )
             raise CohortNotReady(msg)
 
-        candidates = fetch_ranking_candidates(
-            deps.client,
-            encounter_id=player_log.fight.encounter_id,
-            class_name=player_log.build.class_name,
-            spec_name=player_log.build.spec_name,
-            partition=partition,
-            target_duration_s=player_log.fight.duration_s,
-        )
-        # Persisted so the next request for this same bucket — interactive
-        # or another build-cohort run — reuses it instead of re-querying
-        # characterRankings. The per-player matching below always runs
-        # fresh, warm or cold (docs/desvios.md D-25).
-        deps.store.write_candidate_pool(cohort_id, candidates)
+        with cohort_single_flight.acquire(cohort_id) as leader:
+            candidates = deps.store.read_candidate_pool(cohort_id)
+            if candidates is None and leader:
+                cost = preflight_cold_build(deps.client, deps.settings, cohort_id)
+                log.info(
+                    "cold_build.allowed",
+                    cohort_id=cohort_id,
+                    estimated_cost=cost.estimated_api_points,
+                    budget_before=cost.available_api_points,
+                    protected_floor=cost.protected_floor,
+                )
+                record_cold_lifecycle("build_started", cohort_id)
+                try:
+                    candidates = fetch_ranking_candidates(
+                        deps.client,
+                        encounter_id=player_log.fight.encounter_id,
+                        class_name=player_log.build.class_name,
+                        spec_name=player_log.build.spec_name,
+                        partition=partition,
+                        target_duration_s=player_log.fight.duration_s,
+                    )
+                    deps.store.write_candidate_pool(cohort_id, candidates, criteria=criteria)
+                except Exception as exc:
+                    record_cold_lifecycle("build_failed", cohort_id, reason=type(exc).__name__)
+                    raise
+                record_cold_lifecycle("build_completed", cohort_id, n_members=len(candidates))
+            elif candidates is None:
+                # Preserve the real reason for a leader that deferred. This
+                # second preflight is still construction-free and cannot
+                # create a concurrent build.
+                preflight_cold_build(deps.client, deps.settings, cohort_id)
+                raise CohortNotReady(f"construção da coorte {cohort_id} não foi concluída")
 
     reference_logs = fetch_cohort_logs(
-        deps.fetcher, candidates, max_workers=deps.settings.max_workers
+        deps.fetcher,
+        candidates,
+        max_workers=deps.settings.max_workers,
+        expected_partition=partition,
     )
     matched_logs, match_report = match_cohort(player_log, reference_logs, min_n=COHORT_MIN_HARD)
     if len(matched_logs) < COHORT_MIN_HARD:

@@ -11,7 +11,7 @@ import pytest
 
 from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
-from botgitgud.bot.ops_snapshot import write_snapshot
+from botgitgud.bot.ops_snapshot import read_snapshot, write_snapshot
 from botgitgud.cli import EX_TEMPFAIL, build_parser
 from botgitgud.cli_ops import _cmd_ops_status, _cmd_recover_jobs, warehouse_status
 from botgitgud.ingest.store import Store
@@ -78,6 +78,26 @@ def test_ops_status_exit_code_and_output(
     output = capsys.readouterr().out
     assert "warehouse=missing" in output
     assert "live_budget=not_queried" in output
+
+
+def test_ops_snapshot_schema_atomicity_freshness_and_cohort_observability(tmp_path: Path) -> None:
+    ready = [{"cohort_id": "abc", "class_name": "Warlock", "spec_name": "Demonology"}]
+    write_snapshot(
+        tmp_path,
+        pid=42,
+        active=[_running_job()],
+        ready_cohorts=ready,
+        cold_build={"stage": "build_started", "cohort_id": "abc"},
+        now=100.0,
+    )
+    snapshot = read_snapshot(tmp_path, now=105.0)
+    assert snapshot is not None
+    assert snapshot.schema_version == 2
+    assert snapshot.worker_alive
+    assert snapshot.age_seconds == 5.0 and not snapshot.is_stale
+    assert snapshot.ready_cohorts == ready
+    assert snapshot.cold_build == {"stage": "build_started", "cohort_id": "abc"}
+    assert not (tmp_path / "ops-snapshot.json.tmp").exists()
 
 
 # -- R3-01 reaberta: warehouse travado por um `serve` em execução (D-34) ---------

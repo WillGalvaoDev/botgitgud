@@ -23,10 +23,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import cast
 
 import structlog
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, duration_bucket_bounds, duration_bucket_id
+from botgitgud.analysis.cold_build import preflight_cold_build, record_cold_lifecycle
 from botgitgud.analysis.pipeline import Deps
 from botgitgud.domain.models import CohortCriteria, RankingCandidate
 from botgitgud.ingest.rankings import (
@@ -61,6 +63,36 @@ def build_cohorts(
     just the one containing `duration_bucket_s` when given. Raises
     RateLimitBudgetExceeded if the budget runs out mid-batch.
     """
+    # An explicit READY bucket is a pure cache hit: do not spend even a
+    # budget refresh merely to discover that no rebuild is needed.
+    if duration_bucket_s is not None:
+        requested_bucket = duration_bucket_id(duration_bucket_s)
+        for ready in deps.store.list_ready_cohorts():
+            if (
+                ready["encounter_id"] == encounter_id
+                and ready["difficulty"] == difficulty
+                and ready["class_name"] == class_name
+                and ready["spec_name"] == spec_name
+                and duration_bucket_id(cast(float, ready["duration_min_s"])) == requested_bucket
+            ):
+                return [
+                    BucketBuildResult(
+                        bucket_id=requested_bucket,
+                        duration_min_s=cast(float, ready["duration_min_s"]),
+                        duration_max_s=cast(float, ready["duration_max_s"]),
+                        n_members=cast(int, ready["n_members"]),
+                        cohort_id=str(ready["cohort_id"]),
+                    )
+                ]
+
+    # The batch identity is refined to canonical cohort_ids after partition
+    # and duration buckets are known. This gate intentionally precedes even
+    # those discovery calls: a deferred batch makes zero construction calls.
+    preflight_cold_build(
+        deps.client,
+        deps.settings,
+        f"prewarm:{encounter_id}:{difficulty}:{class_name}:{spec_name}:{duration_bucket_s}",
+    )
     partition = get_current_partition(deps.client, encounter_id)
     candidates = fetch_ranking_candidates(
         deps.client,
@@ -89,12 +121,6 @@ def build_cohorts(
             )
             continue
 
-        # Warms the T1.4 per-log Store cache for every candidate in this
-        # bucket — the value of a batch build. The result is discarded:
-        # aggregation happens per-player, in analysis/pipeline.py, since
-        # T2.1 (docs/desvios.md D-25).
-        fetch_cohort_logs(deps.fetcher, bucket_candidates, max_workers=deps.settings.max_workers)
-
         bucket_lo, bucket_hi = duration_bucket_bounds(bucket_id)
         criteria = CohortCriteria(
             encounter_id=encounter_id,
@@ -107,7 +133,34 @@ def build_cohorts(
             duration_max_s=bucket_hi,
         )
         cohort_id = criteria.cohort_id()
-        deps.store.write_candidate_pool(cohort_id, bucket_candidates)
+        existing = deps.store.read_candidate_pool(cohort_id)
+        if existing is not None:
+            log.info("cohort_builder.bucket_already_ready", cohort_id=cohort_id)
+            results.append(
+                BucketBuildResult(
+                    bucket_id=bucket_id,
+                    duration_min_s=bucket_lo,
+                    duration_max_s=bucket_hi,
+                    n_members=len(existing),
+                    cohort_id=cohort_id,
+                )
+            )
+            continue
+        # Reference logs inherit the criteria partition. This avoids the
+        # redundant per-report rankings query without changing analyzed logs.
+        record_cold_lifecycle("build_started", cohort_id)
+        try:
+            fetch_cohort_logs(
+                deps.fetcher,
+                bucket_candidates,
+                max_workers=deps.settings.max_workers,
+                expected_partition=partition,
+            )
+            deps.store.write_candidate_pool(cohort_id, bucket_candidates, criteria=criteria)
+        except Exception as exc:
+            record_cold_lifecycle("build_failed", cohort_id, reason=type(exc).__name__)
+            raise
+        record_cold_lifecycle("build_completed", cohort_id, n_members=len(bucket_candidates))
         log.info(
             "cohort_builder.bucket_built",
             bucket_id=bucket_id,

@@ -101,3 +101,24 @@ class CohortNotReady(AnalysisError):
     CohortProfile exists yet for the request's criteria — the interactive
     (Discord) path must never build a 100-log cohort synchronously.
     """
+
+
+class CohortDeferredBudget(AnalysisError):
+    """A feasible cold build was deferred to preserve the WCL budget."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        cohort_id: str,
+        estimated_api_points: float,
+        available_api_points: float,
+        protected_floor: float,
+        safety_margin: float,
+    ) -> None:
+        super().__init__(message)
+        self.cohort_id = cohort_id
+        self.estimated_api_points = estimated_api_points
+        self.available_api_points = available_api_points
+        self.protected_floor = protected_floor
+        self.safety_margin = safety_margin

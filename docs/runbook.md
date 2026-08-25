@@ -1,5 +1,10 @@
 # Runbook operacional — botgitgud v1.0
 
+Para cold cohort builds, orçamento, prewarm e interpretação do lifecycle,
+consulte também `docs/production-readiness-cold-build.md`. O `ops-status`
+prefere o snapshot do processo dono e lista as coortes READY; não abra DuckDB
+externamente enquanto `serve` estiver em execução.
+
 Todos os comandos partem da raiz e usam `.venv\Scripts\python.exe`. Nenhum comando deste runbook
 consulta a WCL ou consome pontos.
 

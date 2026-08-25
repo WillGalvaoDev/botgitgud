@@ -141,7 +141,13 @@ def fetch_ranking_candidates(
 
 
 def fetch_cohort_logs(
-    fetcher: LogFetcher, candidates: list[RankingCandidate], *, max_workers: int
+    fetcher: LogFetcher,
+    candidates: list[RankingCandidate],
+    *,
+    max_workers: int,
+    expected_partition: int | None = None,
 ) -> list[PlayerLog]:
     refs = [LogRequest(c.report_code, c.fight_id, c.player_name) for c in candidates]
-    return fetcher.fetch_many(refs, max_workers=max_workers)
+    if expected_partition is None:
+        return fetcher.fetch_many(refs, max_workers=max_workers)
+    return fetcher.fetch_many(refs, max_workers=max_workers, expected_partition=expected_partition)

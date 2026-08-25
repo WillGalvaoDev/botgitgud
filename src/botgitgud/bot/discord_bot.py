@@ -24,6 +24,7 @@ import discord
 import structlog
 from discord.ext import commands
 
+from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.delivery import (
     ChannelResolver,
@@ -147,7 +148,7 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         # D-34: enquanto este processo vive, ele segura o arquivo do DuckDB e
         # nenhum outro consegue abri-lo. Publicar o resumo a cada tick é o que
         # permite ao `ops-status` responder com o bot no ar.
-        _publish_snapshot(deps, active, last_points, last_limit)
+        _publish_snapshot(deps, queue, active, last_points, last_limit)
         if not any(j.status == "queued" for j in active):
             continue  # never spend a rate-limit check when there's nothing to run
 
@@ -190,6 +191,7 @@ def _fail_job_quietly(queue: JobQueue, job: Job) -> None:
 
 def _publish_snapshot(
     deps: Deps,
+    queue: JobQueue,
     active: Sequence[Job],
     points_remaining: float | None,
     points_limit: float | None,
@@ -198,9 +200,15 @@ def _publish_snapshot(
     falhar ao escrever um arquivo de diagnóstico nunca pode derrubar o worker.
     """
     try:
+        list_recent = getattr(queue, "list_recent", lambda: active)
+        store = getattr(deps, "store", None)
+        ready_cohorts = [] if store is None else store.list_ready_cohorts()
         write_snapshot(
             deps.settings.data_dir,
             active=active,
+            recent=list_recent(),
+            ready_cohorts=ready_cohorts,
+            cold_build=cold_lifecycle_snapshot(),
             points_remaining=points_remaining,
             points_limit=points_limit,
         )
@@ -276,7 +284,7 @@ def build_bot(deps: Deps) -> commands.Bot:
         if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue)):
             # D-34: publica já no boot, para que `ops-status` responda desde o
             # primeiro segundo em vez de esperar o primeiro tick do worker.
-            _publish_snapshot(deps, queue.list_active(), None, None)
+            _publish_snapshot(deps, queue, queue.list_active(), None, None)
         log.info("discord_bot.ready", user=str(bot.user))
 
     @bot.command(name="analisar")
