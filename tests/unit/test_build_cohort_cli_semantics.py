@@ -26,6 +26,14 @@ from botgitgud.cli_ops import warehouse_status
 from botgitgud.errors import CohortDeferredBudget
 
 
+@pytest.fixture(autouse=True)
+def _reset_lifecycle() -> None:
+    """O lifecycle e um global do processo; cada teste parte do zero."""
+    import botgitgud.analysis.cold_build as cold_build_module
+
+    cold_build_module._cold_lifecycle = None
+
+
 def _result(state: CohortState, *, planned: int = 100, completed: int = 100) -> BucketBuildResult:
     return BucketBuildResult(
         bucket_id=7,
@@ -124,8 +132,9 @@ def test_publisher_writes_a_snapshot_on_enter(tmp_path: Path) -> None:
 
 def test_snapshot_carries_progress_and_budget(tmp_path: Path) -> None:
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(
-            stage="building",
+        pub.record(
+            "building",
+            "380ec0ee516f8f8a",
             buckets=[
                 {
                     "cohort_id": "380ec0ee516f8f8a",
@@ -150,7 +159,7 @@ def test_snapshot_carries_progress_and_budget(tmp_path: Path) -> None:
 
 def test_final_snapshot_survives_the_process_and_explains_the_outcome(tmp_path: Path) -> None:
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(stage="deferred_budget", outcome="deferred_budget")
+        pub.record("deferred_budget", outcome="deferred_budget")
     snapshot = read_snapshot(tmp_path)  # depois do __exit__
     assert snapshot is not None
     assert snapshot.cold_build is not None
@@ -160,7 +169,7 @@ def test_final_snapshot_survives_the_process_and_explains_the_outcome(tmp_path: 
 @pytest.mark.parametrize("outcome", ["ready", "deferred_budget", "failed"])
 def test_every_terminal_outcome_is_readable_afterwards(tmp_path: Path, outcome: str) -> None:
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(stage=outcome, outcome=outcome)
+        pub.record(outcome, outcome=outcome)
     snapshot = read_snapshot(tmp_path)
     assert snapshot is not None and snapshot.cold_build is not None
     assert snapshot.cold_build["outcome"] == outcome
@@ -169,7 +178,7 @@ def test_every_terminal_outcome_is_readable_afterwards(tmp_path: Path, outcome: 
 def test_snapshot_write_is_atomic_and_leaves_no_partial_file(tmp_path: Path) -> None:
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
         for i in range(5):
-            pub.update(stage="building", tick=i)
+            pub.record("building", tick=i)
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == [SNAPSHOT_FILENAME]
     json.loads((tmp_path / SNAPSHOT_FILENAME).read_text(encoding="utf-8"))
@@ -177,7 +186,7 @@ def test_snapshot_write_is_atomic_and_leaves_no_partial_file(tmp_path: Path) -> 
 
 def test_snapshot_is_fresh_while_the_build_runs(tmp_path: Path) -> None:
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(stage="building")
+        pub.record("building")
         snapshot = read_snapshot(tmp_path)
         assert snapshot is not None
         assert snapshot.is_stale is False
@@ -188,8 +197,9 @@ def test_ops_status_reads_prewarm_progress_without_touching_duckdb(tmp_path: Pat
     externa ao DuckDB, que nem existe neste tmp_path.
     """
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(
-            stage="building",
+        pub.record(
+            "building",
+            "380ec0ee516f8f8a",
             buckets=[{"cohort_id": "380ec0ee516f8f8a", "planned": 100, "completed": 43}],
         )
     assert not (tmp_path / "warehouse.duckdb").exists()
@@ -211,7 +221,7 @@ def test_publisher_never_kills_the_build_when_the_disk_fails(
         lambda *_a, **_k: (_ for _ in ()).throw(OSError("disco cheio")),
     )
     with ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0) as pub:
-        pub.update(stage="building")  # nao levanta
+        pub.record("building")  # nao levanta
 
 
 # -- partial nunca vira READY ----------------------------------------------------------

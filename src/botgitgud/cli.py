@@ -165,7 +165,9 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
     publisher = ColdBuildPublisher(settings.data_dir, budget=deps.client)
     try:
         with publisher:
-            publisher.update(stage="preflight", requested_bucket=args.duration_bucket)
+            # Contexto estatico: nunca define stage. O lifecycle real (preflight ->
+            # building -> desfecho) vem do proprio build_cohorts.
+            publisher.set_context(requested_bucket=args.duration_bucket)
             try:
                 results = build_cohorts(
                     deps,
@@ -176,7 +178,7 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
                     duration_bucket_s=args.duration_bucket,
                 )
             except CohortDeferredBudget as e:
-                publisher.update(stage="deferred_budget", outcome="deferred_budget")
+                publisher.record("deferred_budget", outcome="deferred_budget")
                 sys.stderr.write(
                     "Cohort prewarm deferred by WCL budget "
                     "(nenhuma referência coube no orçamento atual).\n"
@@ -185,7 +187,7 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
                 )
                 return EX_TEMPFAIL
             except RateLimitBudgetExceeded as e:
-                publisher.update(stage="deferred_budget", outcome="rate_limit")
+                publisher.record("deferred_budget", outcome="rate_limit")
                 sys.stderr.write(
                     "Cohort prewarm deferred by WCL budget — progresso parcial preservado.\n"
                     f"  {e}\n"
@@ -193,13 +195,13 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
                 )
                 return EX_TEMPFAIL
             except BotGitGudError as e:
-                publisher.update(stage="failed", outcome="failed")
+                publisher.record("failed", outcome="failed")
                 sys.stderr.write(f"erro: {e}\n")
                 return 1
 
             exit_code = build_cohort_exit_code(results)
-            publisher.update(
-                stage="completed" if exit_code == 0 else "deferred_budget",
+            publisher.record(
+                "completed" if exit_code == 0 else "deferred_budget",
                 outcome={0: "ready", EX_TEMPFAIL: "deferred_budget"}.get(exit_code, "failed"),
                 buckets=[
                     {

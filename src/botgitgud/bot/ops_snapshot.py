@@ -36,6 +36,23 @@ SNAPSHOT_FILENAME = "ops-snapshot.json"
 # escreve a cada _WORKER_POLL_INTERVAL_S (2s), então 30s são ~15 ticks perdidos.
 STALE_AFTER_S = 30.0
 
+# Campos cujo dono e o lifecycle da operacao. Contexto estatico do chamador
+# nunca pode defini-los — ver ColdBuildPublisher.set_context.
+LIFECYCLE_OWNED_FIELDS = frozenset(
+    {
+        "stage",
+        "outcome",
+        "cohort_id",
+        "planned",
+        "completed",
+        "remaining",
+        "n_members",
+        "buckets",
+        "reason",
+        "timestamp",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class OpsSnapshot:
@@ -168,23 +185,46 @@ class ColdBuildPublisher:
         self._interval_s = interval_s
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self._extra: dict[str, Any] = {}
+        self._context: dict[str, Any] = {}
 
-    def update(self, **fields: Any) -> None:
-        """Campos que o CLI conhece e o lifecycle global nao (planned agregado,
-        decisao por bucket, resultado final).
+    def set_context(self, **fields: Any) -> None:
+        """Contexto ESTATICO da execucao: o que o comando sabe de antemao e nao
+        muda (modo, bucket solicitado, parametros).
+
+        Recusa campos de lifecycle por construcao. No prewarm real, um
+        `stage="preflight"` estatico mascarou o `stage="building"` vivo durante
+        toda a construcao — o observador via `preflight` do inicio ao fim. A
+        regra estrutural agora e: **contexto estatico nunca define estado
+        dinamico**.
         """
-        self._extra.update(fields)
+        invalid = LIFECYCLE_OWNED_FIELDS & set(fields)
+        if invalid:
+            raise ValueError(
+                f"campos de lifecycle nao podem vir do contexto estatico: {sorted(invalid)}. "
+                "Use record() para estado dinamico."
+            )
+        self._context.update(fields)
+        self.publish()
+
+    def record(self, stage: str, cohort_id: str = "", **details: Any) -> None:
+        """Estado DINAMICO, pelo mesmo canal que o construtor usa. Assim a
+        ordem e cronologica por natureza e nao ha duas fontes competindo.
+        """
+        from botgitgud.analysis.cold_build import record_cold_lifecycle
+
+        record_cold_lifecycle(stage, cohort_id, **details)
         self.publish()
 
     def publish(self) -> None:
         from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
 
+        # Ordem de precedencia: modo -> contexto estatico -> lifecycle vivo.
+        # O lifecycle e SEMPRE o ultimo, logo sempre autoritativo.
         cold: dict[str, Any] = {"mode": "prewarm"}
+        cold.update(self._context)
         lifecycle = cold_lifecycle_snapshot()
         if lifecycle is not None:
             cold.update(lifecycle)
-        cold.update(self._extra)
         points_remaining = getattr(self._budget, "points_remaining", None)
         points_limit = getattr(self._budget, "points_limit", None)
         # Publicar diagnostico nunca pode derrubar o prewarm.

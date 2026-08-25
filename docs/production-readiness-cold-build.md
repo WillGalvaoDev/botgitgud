@@ -335,3 +335,73 @@ num diretório onde o `warehouse.duckdb` sequer existe e ainda assim lê `mode=p
 
 `completed < planned` → NOT READY · `completed == planned` → READY. O pool só é escrito quando tudo
 está em cache.
+
+---
+
+# PREWARM REAL VALIDATION: PASS — e o bug de observabilidade que ele revelou
+
+Primeiro prewarm real executado em 2026-08-25.
+
+## Resultado
+
+| | |
+|---|---|
+| Target | Warlock/Demonology · encounter 3183 · difficulty 5 · bucket solicitado 493,312 |
+| Resolvido | `cohort_id=f91dffaf13ddc899` · partition 3 · bucket interno 127 · faixa 491–516 s |
+| Progresso | planned **37** · completed **37** · remaining **0** |
+| Estado | **READY** · exit **0** |
+| Budget | 3599 → 2520,44 (limit 3600) |
+| Consumo | **864 queries** · **1.078,56 pontos** · **1,248 pts/query** |
+| Piso | nunca ameaçado (menor observado: 2520,44 contra piso 1000) |
+| Logs | 940 → 977 (+37) |
+| `fetch_report_rankings` nas referências | **0** — otimização confirmada em produção |
+
+## O bug: `stage=preflight` durante toda a construção
+
+Durante os ~3,5 minutos de construção real, `ops-status` mostrou **`stage=preflight`**. O snapshot
+final ficou correto (`completed`) apenas porque o CLI sobrescrevia o valor no fim — ou seja, o
+estado certo aparecia por acidente, não por desenho.
+
+**Causa:** em `ColdBuildPublisher.publish()` a ordem era `cold.update(lifecycle)` seguido de
+`cold.update(self._extra)`. O contexto **estático** do chamador era aplicado **depois** do lifecycle
+vivo e o mascarava. Como o CLI havia posto `stage="preflight"` nesse contexto estático no início, o
+`stage="building"` publicado pelo construtor real nunca chegava ao observador.
+
+**Correção — estrutural, não um `if`:** os campos passaram a ter dono explícito.
+
+- **Contexto estático** (`set_context`): modo, bucket solicitado, parâmetros do comando. Aplicado
+  **antes** e **proibido** de conter campos de lifecycle — `set_context(stage=...)` levanta
+  `ValueError`, com teste parametrizado sobre cada campo de `LIFECYCLE_OWNED_FIELDS`.
+- **Lifecycle dinâmico** (`record`): `stage`, `outcome`, `cohort_id`, `planned`, `completed`,
+  `remaining`, `buckets`. Passa pelo **mesmo canal** que o construtor usa
+  (`record_cold_lifecycle`), então a ordem é cronológica por natureza e não há duas fontes
+  competindo. Aplicado **por último**, logo sempre autoritativo.
+
+O invariante agora tem regressão: `preflight → building → completed` (e as variantes `deferred_budget`
+e `failed`) são observados em snapshots sucessivos, e o estado terminal sobrevive ao encerramento
+do processo.
+
+## Achado 1 — `cohort_id` depende da identidade canônica resolvida
+
+O `cohort_id` esperado a priori (`380ec0ee516f8f8a`) diferiu do real (`f91dffaf13ddc899`). **Não é
+bug.** A identidade inclui a partition e o bucket de duração resolvidos ao vivo — a partition muda
+com o tempo (já documentado desde a T1.7), e o bucket interno 127 (491–516 s) é o que contém 493,312.
+
+A identidade **não foi alterada** nesta correção. Há teste confirmando que a mesma identidade
+canônica produz sempre o mesmo `cohort_id`, e que mudar qualquer dimensão relevante (class, spec,
+encounter, difficulty, partition, faixa de duração) produz outro.
+
+## Achado 2 — cost model mantido, apesar da divergência medida
+
+Medição real: **862 queries / 37 refs ≈ 23,3 queries/ref**, contra os **15** do modelo. A diferença
+vem de `damage_events`: 567 queries ≈ 15,3 páginas/ref, contra ~7 no build anterior — fights mais
+longos (491–516 s vs ~300 s) e Demonology é pet-heavy.
+
+Na direção oposta, `pts/query` real (**1,248**) ficou **abaixo** do esperado (1,413) e bem abaixo do
+upper (1,6956). Os dois erros se compensaram: estimativa de ~2.128 pontos contra **1.079 reais** —
+o preflight seguiu **conservador em pontos**, que é a dimensão que protege o piso.
+
+**Nada foi recalibrado.** Não mudamos `15 queries/ref`, nem `1,413 pts/query`, nem o upper, e não
+introduzimos modelo por spec ou por duração. Duas medições (uma de 100 refs, uma de 37) não bastam
+para recalibrar sem risco de trocar um viés por outro. **Precisamos de mais prewarms reais antes de
+mexer.**
