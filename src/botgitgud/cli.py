@@ -30,7 +30,7 @@ from botgitgud.cli_experiment_decide import add_experiment_decide_parser
 from botgitgud.cli_experiment_evaluate import add_experiment_evaluate_parser
 from botgitgud.cli_ops import add_ops_parsers
 from botgitgud.config import Settings
-from botgitgud.domain.spells import SpellCatalog
+from botgitgud.domain.spells import CATALOG_FILENAME, open_runtime_catalog
 from botgitgud.errors import BotGitGudError, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
@@ -69,7 +69,11 @@ def _build_deps(settings: Settings) -> Deps:
             backoff_factor=settings.blizzard_backoff_factor,
         )
     )
-    catalog = SpellCatalog(Path("spells.json"), blizzard=blizzard)
+    # D-35: producao le o seed versionado no maximo uma vez (primeiro boot) e
+    # so escreve no cache de runtime sob data_dir, fora do Git.
+    catalog = open_runtime_catalog(
+        settings.data_dir, blizzard=blizzard, seed_path=Path(CATALOG_FILENAME)
+    )
     store = Store(settings.data_dir)
     fetcher = LogFetcher(client, store, catalog)
     phase4_resolver = Phase4ModelResolver(Phase4ModelRegistry(store))

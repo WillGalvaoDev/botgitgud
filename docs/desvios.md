@@ -805,3 +805,25 @@ de um projeto pessoal/comunidade pequena).
   preciso parar o bot. O runbook diz isso explicitamente.
 - **Orçamento:** o snapshot nunca dispara consulta à WCL; ele só carrega o que o bot já havia
   observado por conta própria, e diz `not_queried_yet` quando não observou nada.
+
+## D-35 — Produção reescrevia o `spells.json` versionado
+
+- **Classificação:** defeito de reprodutibilidade descoberto após o smoke real de R1-01;
+  `RESOLVIDO` em 2026-08-25.
+- **Sintoma medido:** working tree suja (`M spells.json`) depois de executar o bot. O arquivo
+  rastreado foi de 100 para 362 entradas e perdeu o campo `category`, quebrando 2 golden tests
+  legados com `KeyError: 'category'` em `legacy/bot.py:532`.
+- **Atribuição provada por isolamento:** com o arquivo mutado, 980 passed / 2 failed; revertendo
+  **apenas** ele, 982 passed / 0 failed.
+- **Causa:** `cli.py:_build_deps` construía `SpellCatalog(Path("spells.json"))` — caminho relativo
+  ao arquivo versionado. `_build_deps` alimenta todos os comandos de produção, então qualquer
+  execução real chamava `flush()` sobre o arquivo do repositório. A D-4 já protegia testes e
+  gravação de fixtures; o caminho de produção nunca recebeu a mesma proteção.
+- **Decisão:** as 262 entradas aprendidas **não** foram preservadas no repositório — catálogo é
+  cache regenerável, e reprodutibilidade vale mais.
+- **Correção:** `domain/spells.py` ganhou `runtime_catalog_path()` e `open_runtime_catalog()`. O
+  seed versionado passa a ser somente leitura (copiado uma única vez no primeiro boot, se o cache
+  não existir); toda escrita vai para `settings.data_dir / "spells.json"`, sob `data/`, já ignorado
+  pelo Git. Detalhes em `docs/spell-cache-runtime-separation.md`.
+- **T0.4 preservada:** o catálogo moderno continua descartando `category`; o seed mantém o campo
+  apenas para o `legacy/bot.py` congelado.

@@ -14,6 +14,7 @@ Corrects three achados from docs/relario.md:
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import time
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ import structlog
 from botgitgud.blizzard.client import BlizzardClient
 
 log = structlog.get_logger(__name__)
+
+CATALOG_FILENAME = "spells.json"
 
 SpellSource = Literal["wcl", "blizzard", "unknown"]
 _VALID_SOURCES: tuple[str, ...] = get_args(SpellSource)
@@ -152,3 +155,42 @@ class SpellCatalog:
             quarantined_to=str(corrupt_path) if quarantined else None,
             error=str(exc),
         )
+
+
+# -- seed versionado vs cache de runtime (D-4 / D-35) ---------------------------
+#
+# O `spells.json` da raiz e um SEED versionado: entra no Git, e lido pelo
+# legacy/bot.py (que ainda espera o campo `category` do formato antigo) e serve
+# de ponto de partida no primeiro boot. Producao NUNCA escreve nele.
+#
+# O cache mutavel de runtime vive em `settings.data_dir` — diretorio ja ignorado
+# pelo Git —, e e o unico destino de learn()/flush(). Sem essa separacao, rodar
+# o bot de verdade sujava um arquivo rastreado e quebrava os golden tests
+# legados (incidente registrado em docs/spell-cache-runtime-separation.md).
+
+
+def runtime_catalog_path(data_dir: Path) -> Path:
+    """Onde o catalogo mutavel vive em producao."""
+    return data_dir / CATALOG_FILENAME
+
+
+def open_runtime_catalog(
+    data_dir: Path,
+    *,
+    blizzard: BlizzardClient | None,
+    seed_path: Path | None = None,
+) -> SpellCatalog:
+    """Abre o catalogo de producao apontando para o cache de runtime.
+
+    Primeiro boot sem cache: copia o seed versionado, se existir, para nao
+    perder os nomes ja conhecidos. O seed e aberto somente para leitura — a
+    copia e o unico contato com ele, e toda escrita posterior cai no cache.
+    Um seed ausente (instalacao empacotada, por exemplo) apenas inicia o
+    catalogo vazio; nunca e erro.
+    """
+    runtime = runtime_catalog_path(data_dir)
+    if not runtime.exists() and seed_path is not None and seed_path.is_file():
+        runtime.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(seed_path, runtime)
+        log.info("spell_catalog.seeded_runtime_cache", seed=str(seed_path), runtime=str(runtime))
+    return SpellCatalog(runtime, blizzard=blizzard)
