@@ -192,6 +192,9 @@ def _build_deps(
     store = Store(tmp_path / "data")
     catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
     fetcher = LogFetcher(client, store, catalog)
+    # C.3: sem isto, Settings cai no default de producao (Path("data")) e todo
+    # teste que persiste relatorio escreve no data/reports REAL do projeto.
+    settings_overrides.setdefault("data_dir", tmp_path / "data")
     settings = _settings(**settings_overrides)
     return Deps(client=client, fetcher=fetcher, store=store, catalog=catalog, settings=settings)
 

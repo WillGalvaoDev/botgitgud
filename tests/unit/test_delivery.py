@@ -14,7 +14,9 @@ import discord
 import pytest
 
 from botgitgud.bot.delivery import (
-    FALLBACK_NOTICE,
+    NOT_PRESERVED_NOTICE,
+    PRESERVED_NOTICE,
+    DeliveryContext,
     deliver_existing_report,
     send_report,
     send_text,
@@ -36,6 +38,21 @@ def _job(report_path: str | None = None) -> Job:
         finished_at=now_utc_naive(),
         error=None,
         report_path=report_path,
+    )
+
+
+def _ctx() -> DeliveryContext:
+    return DeliveryContext(channel_id="456", guild_id="789", job_id="job-1")
+
+
+def _report(channel: Any, *, summary: str = "r", preserved: bool = True) -> Any:
+    return send_report(
+        channel,
+        summary=summary,
+        html="<html/>",
+        mention="<@123>",
+        context=_ctx(),
+        preserved=preserved,
     )
 
 
@@ -69,9 +86,7 @@ class _Channel:
 
 def test_normal_delivery_sends_summary_and_attachment() -> None:
     channel = _Channel()
-    out = asyncio.run(
-        send_report(channel, job=_job(), summary="resumo", html="<html/>", mention="<@123>")
-    )
+    out = asyncio.run(_report(channel, summary="resumo"))
     assert out.delivered
     assert len(channel.sent) == 1
     content, file = channel.sent[0]
@@ -81,9 +96,7 @@ def test_normal_delivery_sends_summary_and_attachment() -> None:
 
 def test_forbidden_50013_is_reported_as_failed_delivery_not_raised() -> None:
     channel = _Channel(fail_with_file=_forbidden())
-    out = asyncio.run(
-        send_report(channel, job=_job(), summary="r", html="<html/>", mention="<@123>")
-    )
+    out = asyncio.run(_report(channel))
     assert out.status == "failed"
     assert out.http_status == 403
     assert out.discord_code == 50013
@@ -91,39 +104,38 @@ def test_forbidden_50013_is_reported_as_failed_delivery_not_raised() -> None:
 
 def test_forbidden_triggers_the_short_text_fallback() -> None:
     channel = _Channel(fail_with_file=_forbidden())
-    out = asyncio.run(
-        send_report(channel, job=_job(), summary="r", html="<html/>", mention="<@123>")
-    )
+    out = asyncio.run(_report(channel))
     assert out.used_fallback is True
     assert len(channel.sent) == 1
-    assert FALLBACK_NOTICE in channel.sent[0][0]
+    assert PRESERVED_NOTICE in channel.sent[0][0]
     assert channel.sent[0][1] is None
 
 
 def test_fallback_never_leaks_a_local_server_path(tmp_path: Path) -> None:
     path = persist_report(tmp_path, "job-1", "<html/>")
     channel = _Channel(fail_with_file=_forbidden())
-    asyncio.run(
-        send_report(channel, job=_job(str(path)), summary="r", html="<html/>", mention="<@123>")
-    )
+    asyncio.run(_report(channel))
+    assert str(path) not in channel.sent[0][0]
     assert str(tmp_path) not in channel.sent[0][0]
     assert "reports" not in channel.sent[0][0]
 
 
+def test_fallback_text_matches_whether_the_artifact_was_preserved() -> None:
+    lost = _Channel(fail_with_file=_forbidden())
+    asyncio.run(_report(lost, preserved=False))
+    assert NOT_PRESERVED_NOTICE in lost.sent[0][0]
+
+
 def test_a_failing_fallback_is_also_contained() -> None:
     channel = _Channel(fail_always=_forbidden())
-    out = asyncio.run(
-        send_report(channel, job=_job(), summary="r", html="<html/>", mention="<@123>")
-    )
+    out = asyncio.run(_report(channel))
     assert out.status == "failed"
     assert channel.sent == []
 
 
 def test_http_exception_on_attachment_is_contained_without_fallback() -> None:
     channel = _Channel(fail_with_file=_http_error(500))
-    out = asyncio.run(
-        send_report(channel, job=_job(), summary="r", html="<html/>", mention="<@123>")
-    )
+    out = asyncio.run(_report(channel))
     assert out.status == "failed"
     assert out.http_status == 500
     assert out.used_fallback is False
@@ -131,7 +143,7 @@ def test_http_exception_on_attachment_is_contained_without_fallback() -> None:
 
 def test_send_text_contains_http_errors_too() -> None:
     channel = _Channel(fail_always=_http_error(503))
-    out = asyncio.run(send_text(channel, job=_job(), content="oi"))
+    out = asyncio.run(send_text(channel, content="oi", context=_ctx()))
     assert out.status == "failed"
     assert out.http_status == 503
 

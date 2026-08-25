@@ -137,3 +137,76 @@ textual e o relatório ficará aguardando reenvio.
 O relatório do Zilbag **não foi recuperado** — ele nunca chegou a existir em disco. Nenhum dado
 histórico foi fabricado: o job `done` sem `report_path` permanece no warehouse como registro
 honesto do incidente. A regeneração do caso real é decisão separada, e custaria WCL.
+
+---
+
+# Segundo smoke — o caminho interativo tinha a mesma falha
+
+O RC acima corrigiu o **caminho assíncrono** (fila/worker). O smoke seguinte, com o fix já em
+produção, revelou que o **caminho interativo** era uma implementação separada e menos resiliente.
+
+## O que aconteceu
+
+A coorte estava quente (cache da execução anterior), então `!analisar` resolveu de forma síncrona:
+nenhum job foi criado, e o código do worker — onde a persistência vivia — nunca rodou. O Discord
+recusou o anexo de novo:
+
+```
+delivery.interactive_forbidden   http_status=403  discord_code=50013
+```
+
+Resultado: **o relatório foi perdido outra vez**, e o fallback disse ao usuário
+*"O resultado foi preservado para reenvio"* — afirmação falsa naquele caminho.
+
+## Os três achados
+
+### A — lacuna de durabilidade no caminho interativo (crítico)
+
+**Causa:** RC.1 implementou a persistência dentro de `worker.run_claimed_job`. O caminho
+interativo renderizava o HTML em memória e ia direto para a rede. A propriedade *"persistir antes
+de entregar"* existia só em metade do sistema.
+
+**Correção:** `cmd_analisar` agora persiste **antes** de qualquer envio, reutilizando o mesmo
+`bot/report_store.py` (temp + replace, path seguro) — sem mecanismo paralelo. `send_interactive_report`
+foi **removida**: os dois caminhos passam pelo mesmo `send_report`.
+
+**Identidade do artefato (A.2):** o caminho interativo não tem `job_id`, então usa
+`interactive_artifact_id(report_code, fight_id, player)` = `interactive-<sha256[:24]>`. É
+determinística (reanalisar sobrescreve o próprio artefato em vez de acumular lixo) e **path-safe
+por construção**: o nome final só tem hexadecimais, então nome de jogador com barra, acento ou
+`..` nunca alcança o filesystem.
+
+### B — `channel_id` ausente na observabilidade
+
+**Causa:** `send_interactive_report` logava apenas `http_status` e `discord_code`. Ao receber
+403/50013 era impossível saber **qual canal** estava sem permissão.
+
+**Correção:** `DeliveryContext` (channel_id, guild_id, job_id, correlation_id) acompanha toda
+tentativa, nos dois caminhos. `context_from_discord` extrai os ids do objeto do Discord sem exigir
+tipo concreto. Todo evento `delivery.*` carrega o contexto, mais `report_preserved` na falha.
+
+### C — testes escreviam no `data/reports` real
+
+**Causa:** `_settings()` em `tests/unit/test_pipeline.py` nunca definia `data_dir`, caindo no
+default de **produção** (`Path("data")`). Enquanto nada persistia relatório isso era inócuo; depois
+do RC.1, todo teste que rodava um job passou a escrever no `data/reports/` do projeto.
+
+**Correção:** `_build_deps` define `data_dir=tmp_path / "data"`, alinhado ao `Store` que já usava
+`tmp_path`. O default de produção **não** foi alterado. Regressão dedicada afirma que o
+`data/reports` real não muda quando a suíte roda.
+
+## A propriedade agora é idêntica nos dois caminhos
+
+```
+análise concluída → artefato durável em disco → tentativa de entrega
+```
+
+Nunca `análise → Discord → talvez persistir`. E a mensagem de fallback deixou de ser única:
+`PRESERVED_NOTICE` só é usada quando o artefato existe de fato; se a persistência falhar, o
+usuário recebe texto distinto e honesto, e **nenhum anexo é tentado**.
+
+## Requisito operacional (inalterado)
+
+Continua sendo necessário conceder **View Channel**, **Send Messages** e **Attach Files** ao bot no
+canal. A correção garante que uma permissão faltante não destrói mais o produto da análise — não
+que o anexo passe a chegar.

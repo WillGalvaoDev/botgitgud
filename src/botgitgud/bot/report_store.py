@@ -14,10 +14,12 @@ para um arquivo escrito pela metade.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import re
 from pathlib import Path
 
 REPORTS_DIRNAME = "reports"
+INTERACTIVE_PREFIX = "interactive-"
 
 # job_id vem de uuid4().hex, mas nunca confie nisso para montar caminho: um
 # valor inesperado não pode escapar do diretório de relatórios.
@@ -70,3 +72,17 @@ def load_report(path: str | Path) -> str:
         return target.read_text(encoding="utf-8")
     except OSError as e:
         raise ReportPersistenceError(f"relatorio nao pode ser lido em {target}: {e}") from e
+
+
+def interactive_artifact_id(report_code: str, fight_id: int, player_name: str) -> str:
+    """A.2 — identidade estavel para o relatorio do caminho interativo, que nao
+    tem job_id.
+
+    Deriva de `(report, fight, jogador)` por hash, entao: e deterministica (a
+    mesma analise sobrescreve o proprio artefato em vez de acumular lixo), nao
+    colide na pratica, e e path-safe **por construcao** — o nome final so tem
+    hexadecimais, de modo que nome de jogador com barra, acento ou `..` nunca
+    alcanca o filesystem.
+    """
+    raw = f"{report_code}:{fight_id}:{player_name}".encode()
+    return INTERACTIVE_PREFIX + hashlib.sha256(raw).hexdigest()[:24]

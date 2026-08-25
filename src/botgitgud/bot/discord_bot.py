@@ -27,13 +27,19 @@ from discord.ext import commands
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.delivery import (
     ChannelResolver,
-    send_interactive_report,
+    DeliveryContext,
+    context_from_discord,
     send_report,
     send_text,
 )
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import write_snapshot
+from botgitgud.bot.report_store import (
+    ReportPersistenceError,
+    interactive_artifact_id,
+    persist_report,
+)
 from botgitgud.bot.worker import JobOutcome, run_claimed_job
 from botgitgud.errors import (
     ApiError,
@@ -90,27 +96,40 @@ async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQ
     job = outcome.job
     channel = bot.get_channel(int(job.discord_channel_id))
     if channel is None:
-        log.warning("discord_bot.notify_channel_missing", job_id=job.job_id)
+        log.warning(
+            "discord_bot.notify_channel_missing",
+            job_id=job.job_id,
+            channel_id=job.discord_channel_id,
+        )
         queue.mark_delivery_failed(job.job_id, error="canal indisponivel")
         return
 
+    context = context_from_discord(channel, job_id=job.job_id)
+    if context.channel_id is None:
+        context = DeliveryContext.from_job(job)
     mention = f"<@{job.discord_user_id}>"
     if not outcome.ok:
-        result = await send_text(channel, job=job, content=f"{mention} ❌ {outcome.message}")
+        result = await send_text(
+            channel, content=f"{mention} ❌ {outcome.message}", context=context
+        )
     elif job.job_type != "analyze":
-        result = await send_text(channel, job=job, content=f"{mention} ✅ {outcome.message}")
+        result = await send_text(
+            channel, content=f"{mention} ✅ {outcome.message}", context=context
+        )
     elif outcome.html_report is None:
         log.error("discord_bot.analyze_outcome_missing_html", job_id=job.job_id)
         result = await send_text(
-            channel, job=job, content=f"{mention} ❌ relatório HTML indisponível."
+            channel, content=f"{mention} ❌ relatório HTML indisponível.", context=context
         )
     else:
         result = await send_report(
             channel,
-            job=job,
             summary=outcome.message,
             html=outcome.html_report,
             mention=mention,
+            context=context,
+            # A fila persiste antes de entregar: o artefato existe.
+            preserved=outcome.report_path is not None,
         )
 
     if result.delivered:
@@ -309,9 +328,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
             return
 
-        # T3.4: cabeçalho + Top 3 em texto, HTML como anexo. RC.3: o envio
-        # passa pela mesma fronteira de entrega da fila — um 403 aqui responde
-        # ao usuário com o aviso curto em vez de estourar no handler.
+        # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
         summary_text = render_header_and_top3(result.header, result.top_actions)
         html_report = render_html_report(
             result.header,
@@ -323,9 +340,41 @@ def build_bot(deps: Deps) -> commands.Bot:
             top_actions=result.top_actions,
             duration_s=result.header.duration_max_s,
         )
-        # ctx satisfaz Sendable em runtime; as sobrecargas de Context.send do
-        # discord.py nao casam nominalmente com o Protocol.
-        await send_interactive_report(ctx, summary=summary_text, html=html_report)  # type: ignore[arg-type]
+        # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
+        # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
+        # relatorio num 403 e ainda dizendo ao usuario que o preservara.
+        artifact_id = interactive_artifact_id(code, fight_id, char_name)
+        # ctx satisfaz Sendable/o extrator de contexto em runtime; as sobrecargas
+        # de Context.send do discord.py nao casam nominalmente com o Protocol.
+        context = context_from_discord(ctx, job_id=artifact_id)
+        try:
+            persist_report(deps.settings.data_dir, artifact_id, html_report)
+        except ReportPersistenceError as e:
+            # A.5: sem artefato, nao se tenta anexar nada e nao se afirma
+            # preservacao. O processo segue saudavel.
+            log.error(
+                "discord_bot.interactive_report_persistence_failed",
+                error=str(e),
+                **context.fields(),
+            )
+            await send_text(
+                ctx,  # type: ignore[arg-type]
+                content=(
+                    "⚠️ A análise foi concluída, mas não consegui guardar o relatório "
+                    "neste servidor. Refaça a análise para obtê-lo."
+                ),
+                context=context,
+            )
+            return
+        log.info("discord_bot.interactive_report_persisted", **context.fields())
+
+        await send_report(
+            ctx,  # type: ignore[arg-type]
+            summary=summary_text,
+            html=html_report,
+            context=context,
+            preserved=True,
+        )
 
     @bot.command(name="status")
     async def cmd_status(ctx: commands.Context) -> None:
