@@ -38,8 +38,9 @@ class AnalysisRecorder:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._by_op: Counter[str] = Counter()
-        self._by_role: Counter[str] = Counter()
+        # Fonte autoritativa unica. Totais por operacao e por papel sao
+        # projecoes deste contador, nunca contadores independentes.
+        self._queries: Counter[tuple[str, str]] = Counter()
         self._retries = 0
         self.reference_members_expected: int | None = None
         self.reference_members_cache_hit: int | None = None
@@ -47,8 +48,7 @@ class AnalysisRecorder:
 
     def record_query(self, op_name: str, *, role: QueryRole, attempt: int) -> None:
         with self._lock:
-            self._by_op[op_name] += 1
-            self._by_role[str(role)] += 1
+            self._queries[(str(role), op_name)] += 1
             if attempt > 1:
                 self._retries += 1
 
@@ -61,12 +61,23 @@ class AnalysisRecorder:
     @property
     def queries_by_op_name(self) -> dict[str, int]:
         with self._lock:
-            return dict(sorted(self._by_op.items()))
+            by_op: Counter[str] = Counter()
+            for (_role, op_name), count in self._queries.items():
+                by_op[op_name] += count
+            return dict(sorted(by_op.items()))
+
+    @property
+    def queries_by_role(self) -> dict[str, dict[str, int]]:
+        with self._lock:
+            result: dict[str, dict[str, int]] = {str(role): {} for role in QueryRole}
+            for (role, op_name), count in sorted(self._queries.items()):
+                result[role][op_name] = count
+            return result
 
     @property
     def queries_total(self) -> int:
         with self._lock:
-            return sum(self._by_op.values())
+            return sum(self._queries.values())
 
     @property
     def retries(self) -> int:
@@ -75,7 +86,11 @@ class AnalysisRecorder:
 
     def queries_for(self, role: QueryRole) -> int:
         with self._lock:
-            return self._by_role.get(str(role), 0)
+            return sum(
+                count
+                for (recorded_role, _op_name), count in self._queries.items()
+                if recorded_role == str(role)
+            )
 
 
 _active: ContextVar[AnalysisRecorder | None] = ContextVar("analysis_recorder", default=None)

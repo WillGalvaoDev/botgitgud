@@ -7,6 +7,8 @@ ingest/wcl_parsing.py (T1.6 split).
 
 from __future__ import annotations
 
+import contextvars
+import functools
 import threading
 import time
 from collections.abc import Sequence
@@ -139,22 +141,30 @@ class LogFetcher:
         budget_exceeded: RateLimitBudgetExceeded | None = None
         if to_fetch:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    (
-                        executor.submit(
-                            self._fetch_from_api, ref.report_code, ref.fight_id, ref.player
+                futures = {}
+                for i, ref in to_fetch:
+                    # Cada worker precisa de sua propria copia: Context nao
+                    # pode ser entrado concorrentemente e ThreadPoolExecutor
+                    # nao propaga ContextVars automaticamente.
+                    context = contextvars.copy_context()
+                    if expected_partition is None:
+                        future = executor.submit(
+                            context.run,
+                            self._fetch_from_api,
+                            ref.report_code,
+                            ref.fight_id,
+                            ref.player,
                         )
-                        if expected_partition is None
-                        else executor.submit(
+                    else:
+                        fetch = functools.partial(
                             self._fetch_from_api,
                             ref.report_code,
                             ref.fight_id,
                             ref.player,
                             expected_partition=expected_partition,
                         )
-                    ): i
-                    for i, ref in to_fetch
-                }
+                        future = executor.submit(context.run, fetch)
+                    futures[future] = i
                 for future in as_completed(futures):
                     i = futures[future]
                     try:

@@ -15,6 +15,7 @@ run_claimed_job) is fully unit-tested elsewhere.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import functools
 import re
 from collections.abc import Callable, Coroutine, Sequence
@@ -55,6 +56,38 @@ from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
 
 log = structlog.get_logger(__name__)
+
+
+def record_analysis_result(run: Any, result: Any) -> None:
+    """Copia somente fatos autoritativos do resultado para a telemetria.
+
+    Mantido separado do handler para tornar auditavel a distincao entre o
+    pool resolvido antes do matching e a amostra que efetivamente o venceu.
+    """
+    header = result.header
+    run.class_name = header.class_name
+    run.spec_name = header.spec
+    run.duration_s = header.duration_max_s
+    run.cohort_members = header.reference_n  # contrato legado: pos-matching
+    # Fakes/implementacoes antigas podem nao expor os campos novos. Ausencia
+    # permanece None (desconhecido), jamais e preenchida por inferencia.
+    run.reference_pool_members = getattr(result, "reference_pool_members", None)
+    run.matched_cohort_members = getattr(result, "matched_cohort_members", None)
+    run.encounter_id = getattr(result, "encounter_id", None)
+    run.difficulty = getattr(result, "difficulty", None)
+    if result.manifest is not None:
+        run.cohort_id = result.manifest.cohort_id
+        run.partition = result.manifest.wcl_partition
+        run.cohort_state = "ready"
+
+
+async def run_in_executor_with_context(
+    loop: asyncio.AbstractEventLoop, call: Callable[[], Any]
+) -> Any:
+    """Executa trabalho bloqueante preservando o recorder da analise."""
+    analysis_context = contextvars.copy_context()
+    return await loop.run_in_executor(None, analysis_context.run, call)
+
 
 _WORKER_POLL_INTERVAL_S = 2.0
 
@@ -320,8 +353,11 @@ def build_bot(deps: Deps) -> commands.Bot:
             # 100-log cohort synchronously; a cache miss falls back to the job
             # queue (§8 "nunca baixa 100 logs de forma síncrona").
             call = functools.partial(run_analysis, req, deps, allow_cold_build=False)
+            # asyncio.run_in_executor nao copia ContextVars. Sem esta ponte o
+            # recorder ativo desaparece justamente na thread que resolve cache
+            # e executa WCL, tornando o hot path impossivel de auditar.
             try:
-                result = await loop.run_in_executor(None, call)
+                result = await run_in_executor_with_context(loop, call)
             except (PlayerNotFound, FightNotFound):
                 run.final_status = "target_not_found"
                 await ctx.send(
@@ -363,15 +399,7 @@ def build_bot(deps: Deps) -> commands.Bot:
 
             # Hot path confirmado: chegamos aqui sem CohortNotReady.
             run.hot_path = True
-            header = result.header
-            run.class_name = header.class_name
-            run.spec_name = header.spec
-            run.duration_s = header.duration_max_s
-            run.cohort_members = header.reference_n
-            if result.manifest is not None:
-                run.cohort_id = result.manifest.cohort_id
-                run.partition = result.manifest.wcl_partition
-                run.cohort_state = "ready"
+            record_analysis_result(run, result)
 
             # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
             summary_text = render_header_and_top3(result.header, result.top_actions)

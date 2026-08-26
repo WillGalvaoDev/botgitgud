@@ -12,6 +12,7 @@ from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
 from botgitgud.ingest.store import Store
+from botgitgud.telemetry import AnalysisRecorder, QueryRole, recording, role_scope
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
 
@@ -788,3 +789,50 @@ def test_fetch_many_all_cache_hits_makes_zero_new_requests(tmp_path: Path) -> No
     assert len(results) == 5
     assert all(r == results[0] for r in results)
     assert len(transport.calls) == calls_before  # no new API traffic at all
+
+
+def test_reference_resolution_observes_37_cache_hits_without_network(tmp_path: Path) -> None:
+    fetcher, transport, _store = _make_fetcher(tmp_path, _default_responses())
+    fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+    calls_before = len(transport.calls)
+    recorder = AnalysisRecorder()
+    refs = [LogRequest("ABCDEFGHIJKLMNOP", 1, "Zarad")] * 37
+
+    with recording(recorder), role_scope(QueryRole.REFERENCE):
+        results = fetcher.fetch_many(refs, max_workers=4)
+
+    assert len(results) == 37
+    assert recorder.reference_members_expected == 37
+    assert recorder.reference_members_cache_hit == 37
+    assert recorder.reference_members_refetched == 0
+    assert recorder.queries_for(QueryRole.REFERENCE) == 0
+    assert len(transport.calls) == calls_before
+
+
+def test_reference_resolution_observes_partial_cache_and_refetches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fetcher, _transport, store = _make_fetcher(tmp_path, _default_responses())
+    refs = [LogRequest(f"CODE{i:04d}", 1, f"Ref{i}") for i in range(37)]
+    for ref in refs[:35]:
+        store.write_log(_player_log_for(ref.player, ref.report_code))
+
+    def fake_fetch(report_code: str, _fight_id: int, player: str) -> PlayerLog:
+        # A query marker proves that reference traffic is attributed to the
+        # role; no HTTP/WCL is involved in this deterministic fake.
+        from botgitgud.telemetry import record_query
+
+        record_query("fetch_player_meta")
+        return _player_log_for(player, report_code)
+
+    monkeypatch.setattr(fetcher, "_fetch_from_api", fake_fetch)
+    recorder = AnalysisRecorder()
+    with recording(recorder), role_scope(QueryRole.REFERENCE):
+        results = fetcher.fetch_many(refs, max_workers=1)
+
+    assert len(results) == 37
+    assert recorder.reference_members_expected == 37
+    assert recorder.reference_members_cache_hit == 35
+    assert recorder.reference_members_refetched == 2
+    assert recorder.queries_for(QueryRole.REFERENCE) == 2
+    assert recorder.queries_by_role["reference"] == {"fetch_player_meta": 2}

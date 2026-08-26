@@ -11,9 +11,11 @@ sem depender do terminal da execucao original. Zero rede.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -30,6 +32,7 @@ from botgitgud.bot.analysis_runs import (
     track_analysis,
     write_analysis_run,
 )
+from botgitgud.bot.discord_bot import record_analysis_result, run_in_executor_with_context
 from botgitgud.telemetry import (
     AnalysisRecorder,
     QueryRole,
@@ -145,6 +148,38 @@ def test_a_refetch_is_visible_in_the_artifact(tmp_path: Path) -> None:
     assert payload["reference_members_refetched"] == 7
 
 
+def test_partial_cache_records_37_35_2_including_non_falsy_zero_rules(tmp_path: Path) -> None:
+    with track_analysis(tmp_path) as run:
+        record_reference_batch(expected=37, cache_hits=35, fetched=2)
+        analysis_id = run.analysis_id
+    payload = read_analysis_run(tmp_path, analysis_id)
+    assert payload is not None
+    assert (
+        payload["reference_members_expected"],
+        payload["reference_members_cache_hit"],
+        payload["reference_members_refetched"],
+    ) == (37, 35, 2)
+
+
+def test_ready_pool_and_matched_sample_are_distinct_without_changing_legacy_field() -> None:
+    run = AnalysisRun(analysis_id="fiskowl", started_at="2026-08-26T00:00:00+00:00")
+    result = SimpleNamespace(
+        header=SimpleNamespace(
+            class_name="Warlock", spec="Demonology", duration_max_s=515.0, reference_n=8
+        ),
+        reference_pool_members=37,
+        matched_cohort_members=8,
+        encounter_id=3183,
+        difficulty=5,
+        manifest=SimpleNamespace(cohort_id=COHORT_ID, wcl_partition=3),
+    )
+    record_analysis_result(run, result)
+    assert run.reference_pool_members == 37
+    assert run.matched_cohort_members == 8
+    assert run.cohort_members == 8
+    assert (run.encounter_id, run.difficulty) == (3183, 5)
+
+
 # -- contabilidade de queries ---------------------------------------------------------
 
 
@@ -191,6 +226,42 @@ def test_query_breakdown_by_op_name(tmp_path: Path) -> None:
     }
 
 
+def test_query_breakdown_by_role_and_operation_has_one_authoritative_total(tmp_path: Path) -> None:
+    with track_analysis(tmp_path) as run:
+        with role_scope(QueryRole.PLAYER_ANALYZED):
+            record_query("fetch_player_meta")
+            record_query("fetch_player_damage_events")
+        with role_scope(QueryRole.REFERENCE):
+            record_query("fetch_player_damage_events")
+            record_query("fetch_player_damage_events")
+        analysis_id = run.analysis_id
+    payload = read_analysis_run(tmp_path, analysis_id)
+    assert payload is not None
+    assert payload["queries_by_role"]["player_analyzed"] == {
+        "fetch_player_damage_events": 1,
+        "fetch_player_meta": 1,
+    }
+    assert payload["queries_by_role"]["reference"] == {"fetch_player_damage_events": 2}
+    assert payload["queries_by_role"]["reference"].get("fetch_report_rankings", 0) == 0
+    assert payload["player_query_count"] == 2
+    assert payload["reference_query_count"] == 2
+    assert payload["wcl_queries_total"] == 4
+
+
+def test_zero_query_hot_path_persists_all_query_zeros_not_null(tmp_path: Path) -> None:
+    with track_analysis(tmp_path) as run:
+        record_reference_batch(expected=37, cache_hits=37, fetched=0)
+        analysis_id = run.analysis_id
+    payload = read_analysis_run(tmp_path, analysis_id)
+    assert payload is not None
+    assert payload["wcl_queries_total"] == 0
+    assert payload["player_query_count"] == 0
+    assert payload["reference_query_count"] == 0
+    assert payload["wcl_retries"] == 0
+    assert payload["queries_by_role"]["reference"] == {}
+    assert payload["reference_members_refetched"] == 0
+
+
 def test_retries_are_counted_from_the_attempt_number(tmp_path: Path) -> None:
     with track_analysis(tmp_path) as run:
         record_query("fetch_report_rankings", attempt=1)
@@ -213,6 +284,23 @@ def test_role_is_not_inferred_from_op_name() -> None:
             record_query("fetch_player_meta")
     assert recorder.queries_for(QueryRole.PLAYER_ANALYZED) == 1
     assert recorder.queries_for(QueryRole.REFERENCE) == 1
+
+
+def test_analysis_recorder_crosses_the_interactive_executor_boundary() -> None:
+    recorder = AnalysisRecorder()
+
+    async def exercise() -> None:
+        loop = asyncio.get_running_loop()
+
+        def pipeline_thread() -> None:
+            with role_scope(QueryRole.PLAYER_ANALYZED):
+                record_query("fetch_player_meta")
+
+        with recording(recorder):
+            await run_in_executor_with_context(loop, pipeline_thread)
+
+    asyncio.run(exercise())
+    assert recorder.queries_by_role["player_analyzed"] == {"fetch_player_meta": 1}
 
 
 def test_recording_outside_an_analysis_is_a_noop() -> None:

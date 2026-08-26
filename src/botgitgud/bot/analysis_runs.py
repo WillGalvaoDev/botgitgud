@@ -71,7 +71,11 @@ class AnalysisRun:
     # coorte
     cohort_id: str | None = None
     cohort_state: str | None = None
+    # Compatibilidade: cohort_members conserva o significado historico de
+    # membros pos-matching. Os nomes explicitos removem a ambiguidade.
     cohort_members: int | None = None
+    reference_pool_members: int | None = None
+    matched_cohort_members: int | None = None
 
     # caminho
     hot_path: bool | None = None
@@ -85,6 +89,7 @@ class AnalysisRun:
     # contabilidade WCL
     wcl_queries_total: int | None = None
     wcl_queries_by_op_name: dict[str, int] = field(default_factory=dict)
+    queries_by_role: dict[str, dict[str, int]] = field(default_factory=dict)
     wcl_retries: int | None = None
     reference_query_count: int | None = None
     player_query_count: int | None = None
@@ -202,6 +207,7 @@ def track_analysis(
         run.finished_at = datetime.now(UTC).isoformat()
         run.wcl_queries_total = recorder.queries_total
         run.wcl_queries_by_op_name = recorder.queries_by_op_name
+        run.queries_by_role = recorder.queries_by_role
         run.wcl_retries = recorder.retries
         run.reference_query_count = recorder.queries_for(QueryRole.REFERENCE)
         run.player_query_count = recorder.queries_for(QueryRole.PLAYER_ANALYZED)

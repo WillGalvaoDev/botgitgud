@@ -101,6 +101,10 @@ class AnalysisResult:
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
+    reference_pool_members: int | None = None
+    matched_cohort_members: int | None = None
+    encounter_id: int | None = None
+    difficulty: int | None = None
     phase4_resolution: ModelResolution = field(
         default_factory=lambda: ModelResolution(ResolutionStatus.UNAVAILABLE)
     )
@@ -303,5 +307,9 @@ def run_analysis(
         performance=performance,
         dps_gap=dps_gap,
         top_actions=tuple(top_actions),
+        reference_pool_members=len(candidates),
+        matched_cohort_members=len(matched_logs),
+        encounter_id=player_log.fight.encounter_id,
+        difficulty=player_log.fight.difficulty,
         phase4_resolution=phase4_resolution,
     )
