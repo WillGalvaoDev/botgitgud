@@ -13,6 +13,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+import structlog
+
 from botgitgud.analysis.cohort_builder import BucketBuildResult, CohortState, build_cohorts
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
@@ -36,11 +38,18 @@ from botgitgud.domain.spells import CATALOG_FILENAME, open_runtime_catalog
 from botgitgud.errors import BotGitGudError, CohortDeferredBudget, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
-from botgitgud.logging_setup import configure_logging
+from botgitgud.logging_setup import (
+    LOG_FILENAME,
+    configure_logging,
+    enable_file_logging,
+    log_dir_for,
+)
 from botgitgud.phase4.registry import Phase4ModelRegistry
 from botgitgud.phase4.resolver import Phase4ModelResolver
 from botgitgud.report.text import render_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
+
+log = structlog.get_logger(__name__)
 
 EX_TEMPFAIL = 75  # BSD sysexits.h — T1.7's build-cohort uses this on budget exhaustion
 
@@ -166,6 +175,7 @@ def build_cohort_exit_code(results: Sequence[BucketBuildResult]) -> int:
 
 def _cmd_build_cohort(args: argparse.Namespace) -> int:
     settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
+    _start_operational_log(settings, command="build-cohort")
     deps = _build_deps(settings)
     # D-34: durante o prewarm este processo é o dono do DuckDB, então é ele quem
     # publica o ops-snapshot. Sem isso `ops-status` fica com o snapshot obsoleto
@@ -237,21 +247,54 @@ def _cmd_build_cohort(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def _start_operational_log(settings: Settings, *, command: str) -> str:
+    """Liga a trilha durável e registra o início do processo.
+
+    Só os comandos de longa duração a ligam: um `analyze` ou um `ops-status`
+    de dez segundos não é um soak, e criar `data/logs/` a cada invocação de
+    CLI só encheria o disco de ruído.
+    """
+    session_id = enable_file_logging(
+        settings.data_dir,
+        max_bytes=settings.log_max_bytes,
+        backup_count=settings.log_backup_count,
+    )
+    log.info(
+        "process.started",
+        command=command,
+        data_dir=str(settings.data_dir),
+        log_file=str(log_dir_for(settings.data_dir) / LOG_FILENAME),
+    )
+    return session_id
+
+
 def _cmd_serve(_args: argparse.Namespace) -> int:
     """T1.8 (docs/desvios.md D-23): no task in the plan ever wires
     bot/discord_bot.py's build_bot() into an actual entrypoint — this is
     the only place that starts the long-running Discord bot process.
     """
     settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
+    session_id = _start_operational_log(settings, command="serve")
+    # O operador precisa do id ANTES de o soak comecar, para saber o que filtrar
+    # depois; stdout pode ter sumido quando a auditoria acontecer.
+    sys.stdout.write(f"session_id={session_id}\n")
     deps = _build_deps(settings)
     from botgitgud.bot.discord_bot import build_bot
 
     bot = build_bot(deps)
     try:
         bot.run(settings.discord_token.get_secret_value())
+    except BaseException as e:
+        # Ultimo lugar em que uma queda do processo ainda pode deixar
+        # evidencia. Sem isto, um crash de 24h de soak vira um arquivo que
+        # simplesmente para de crescer, sem dizer por que.
+        log.error("process.unexpected_error", command="serve", exc_info=e)
+        raise
     finally:
+        log.info("process.stopping", command="serve")
         deps.store.close()
         deps.client.close()
+        log.info("process.stopped", command="serve")
     return 0
 
 

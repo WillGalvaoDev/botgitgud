@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     log_level: str = "INFO"
     log_json: bool = False
+    # B5: trilha operacional duravel em JSON Lines sob `data_dir/logs`. Rotacao
+    # por TAMANHO porque o volume depende da carga, nao do relogio — um dia
+    # ocioso gera quase nada e um dia de prewarm gera muito. Teto de disco =
+    # log_max_bytes * (log_backup_count + 1), ~60 MB nos defaults.
+    log_max_bytes: int = 10_000_000
+    log_backup_count: int = 5
     max_workers: int = 4
 
     # -- T0.3: WclClient ------------------------------------------------------

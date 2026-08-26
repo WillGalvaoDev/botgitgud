@@ -653,3 +653,25 @@ na WCL com as credenciais reais do `.env` em **toda** execução da suíte. Cons
 consumidos pelo portão de release (as afirmações "WCL real: 0" sobre a suíte completa em relatórios
 anteriores estavam erradas), e contagem variável entre execuções (passa online, é pulado offline).
 Corrigido com `-m 'not network'`; o guard de schema drift roda de propósito com `pytest -m network`.
+
+## B5 — trilha operacional durável (2026-08-26)
+
+stdout era efêmero: um soak de 24h não deixava evidência para reconstruir startup, worker, jobs,
+defer/resume, WCL, entrega ou exceções. Detalhes em `docs/v1-operational-logging.md`.
+
+- **Sink novo:** JSON Lines em `data_dir/logs/botgitgud.jsonl`, um evento por linha, rotacionado por
+  tamanho (`LOG_MAX_BYTES` × `LOG_BACKUP_COUNT + 1` ≈ 60 MB no default). Console preservado; os dois
+  coexistem, e reconfigurar o console não desliga o arquivo.
+- **Session id** por processo em todas as linhas, impresso no boot do `serve` — é o que isola um
+  soak dos anteriores no mesmo arquivo.
+- **Eventos novos:** `process.started/stopping/stopped/unexpected_error`,
+  `discord_bot.gateway_connected`, `job.queued/started/resumed`,
+  `wcl.rate_limit_budget_exceeded`, e o lifecycle de cold build passou a emitir log além de
+  atualizar o snapshot. Os demais já existiam com a convenção `modulo.evento`.
+- **Exceções** viram `exception_type` + `exception_message` + `traceback`, com as quebras de linha
+  escapadas: um stack inteiro continua sendo UMA linha do JSONL.
+- **Redação por nome de chave** na fronteira de escrita (console e arquivo): `token`, `secret`,
+  `password`, `authorization`, `api_key`, `credential` viram `***redacted***`.
+- **Não substitui nada:** analysis-runs continua a fonte por análise, ops-snapshot o estado atual,
+  `jobs` o estado dos pedidos. O log é a história.
+- **33 testes novos**, todos em `tmp_path`, zero rede. Suíte: 1218 passed, 1 deselected.

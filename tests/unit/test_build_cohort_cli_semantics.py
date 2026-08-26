@@ -237,6 +237,14 @@ def test_partial_progress_is_never_reported_as_ready() -> None:
 # -- integracao do comando (sem rede) ---------------------------------------------------
 
 
+def _fake_settings(tmp_path: Path) -> Any:
+    """`data_dir` em tmp_path mantem a trilha operacional (B5) fora de
+    `data/logs` real; os limites de rotacao vem junto porque `_cmd_build_cohort`
+    liga o sink durável antes de qualquer outra coisa.
+    """
+    return SimpleNamespace(data_dir=tmp_path, log_max_bytes=1_000_000, log_backup_count=2)
+
+
 def _args(tmp_path: Path) -> Any:
     return SimpleNamespace(
         encounter=3183, klass="Warlock", spec="Demonology", difficulty=5, duration_bucket=493.312
@@ -251,7 +259,7 @@ def test_command_returns_75_and_publishes_when_the_build_defers(
         client=SimpleNamespace(close=lambda: None, points_remaining=1500.0, points_limit=3600.0),
         settings=SimpleNamespace(data_dir=tmp_path),
     )
-    monkeypatch.setattr(cli_module, "Settings", lambda: SimpleNamespace(data_dir=tmp_path))
+    monkeypatch.setattr(cli_module, "Settings", lambda: _fake_settings(tmp_path))
     monkeypatch.setattr(cli_module, "_build_deps", lambda _s: deps)
     monkeypatch.setattr(
         cli_module,
@@ -288,7 +296,7 @@ def test_command_returns_zero_and_publishes_ready(
         client=SimpleNamespace(close=lambda: None, points_remaining=3000.0, points_limit=3600.0),
         settings=SimpleNamespace(data_dir=tmp_path),
     )
-    monkeypatch.setattr(cli_module, "Settings", lambda: SimpleNamespace(data_dir=tmp_path))
+    monkeypatch.setattr(cli_module, "Settings", lambda: _fake_settings(tmp_path))
     monkeypatch.setattr(cli_module, "_build_deps", lambda _s: deps)
     monkeypatch.setattr(cli_module, "build_cohorts", lambda *_a, **_k: [_result(CohortState.READY)])
 
@@ -311,7 +319,7 @@ def test_command_returns_75_for_a_partially_completed_bucket(
         client=SimpleNamespace(close=lambda: None, points_remaining=1500.0, points_limit=3600.0),
         settings=SimpleNamespace(data_dir=tmp_path),
     )
-    monkeypatch.setattr(cli_module, "Settings", lambda: SimpleNamespace(data_dir=tmp_path))
+    monkeypatch.setattr(cli_module, "Settings", lambda: _fake_settings(tmp_path))
     monkeypatch.setattr(cli_module, "_build_deps", lambda _s: deps)
     monkeypatch.setattr(
         cli_module,

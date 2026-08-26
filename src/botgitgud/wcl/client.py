@@ -235,6 +235,14 @@ class WclClient:
             self._points_remaining is not None
             and self._points_remaining < self._config.api_points_floor
         ):
+            # Este e o momento em que o orcamento para o sistema. Sem uma linha
+            # aqui, o soak mostra jobs parando sem causa visivel no log.
+            log.warning(
+                "wcl.rate_limit_budget_exceeded",
+                points_remaining=self._points_remaining,
+                floor=self._config.api_points_floor,
+                reset_in_seconds=self._points_reset_in,
+            )
             msg = (
                 f"orçamento de API abaixo do piso: {self._points_remaining:.0f} pontos "
                 f"restantes (piso {self._config.api_points_floor:.0f})"

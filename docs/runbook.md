@@ -1,5 +1,7 @@
 # Runbook operacional — botgitgud v1.0
 
+Para a trilha operacional durável (JSON Lines em `data/logs/`, session id,
+rotação e como auditar um soak), consulte `docs/v1-operational-logging.md`.
 Para determinismo do relatório e ordenação canônica, consulte
 `docs/v1-readiness-determinism.md`. Para cold cohort builds, orçamento,
 prewarm e interpretação do lifecycle,

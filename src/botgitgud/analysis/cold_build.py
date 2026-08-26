@@ -10,14 +10,25 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+import structlog
+
 from botgitgud.config import Settings
 from botgitgud.errors import CohortDeferredBudget
+
+log = structlog.get_logger(__name__)
 
 _lifecycle_lock = threading.Lock()
 _cold_lifecycle: dict[str, object] | None = None
 
 
 def record_cold_lifecycle(stage: str, cohort_id: str, **details: object) -> None:
+    """Publica o estágio no snapshot **e** na trilha cronológica.
+
+    O snapshot guarda só o agora: quem lê depois do processo morrer não
+    consegue dizer se um build passou por `building` antes de adiar, nem
+    quantas janelas levou. São perguntas de história, e história é o que o
+    arquivo de log responde — sem duplicar o payload do artefato de análise.
+    """
     global _cold_lifecycle
     with _lifecycle_lock:
         _cold_lifecycle = {
@@ -26,6 +37,7 @@ def record_cold_lifecycle(stage: str, cohort_id: str, **details: object) -> None
             "timestamp": time.time(),
             **details,
         }
+    log.info(f"cold_build.{stage}", cohort_id=cohort_id, **details)
 
 
 def cold_lifecycle_snapshot() -> dict[str, object] | None:

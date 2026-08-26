@@ -182,6 +182,15 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         if job is None:
             continue
 
+        # `defer_count > 0` distingue retomada de primeira execucao. E o unico
+        # ponto do sistema que sabe disso: depois daqui o job e so `running`.
+        log.info(
+            "job.resumed" if job.defer_count else "job.started",
+            job_id=job.job_id,
+            job_type=job.job_type,
+            defer_count=job.defer_count,
+            points_remaining=budget.points_remaining,
+        )
         await _run_one_job(bot, deps, queue, job)
 
 
@@ -302,6 +311,12 @@ def build_bot(deps: Deps) -> commands.Bot:
     supervisor = WorkerSupervisor()
 
     @bot.event
+    async def on_connect() -> None:
+        # Anterior ao `on_ready`: separa "o socket subiu" de "o bot esta
+        # utilizavel". Numa reconexao noturna de soak os dois nao coincidem.
+        log.info("discord_bot.gateway_connected")
+
+    @bot.event
     async def on_ready() -> None:
         n_reverted = queue.recover_from_crash()
         if n_reverted:
@@ -365,6 +380,18 @@ def build_bot(deps: Deps) -> commands.Bot:
                     dedup_key=f"{code}:{fight_id}:{char_name}",
                     discord_user_id=str(ctx.author.id),
                     discord_channel_id=str(ctx.channel.id),
+                )
+                log.info(
+                    "job.queued",
+                    job_id=None if enqueue_result.job is None else enqueue_result.job.job_id,
+                    job_type="analyze",
+                    deduped=enqueue_result.deduped,
+                    rejected=enqueue_result.job is None,
+                    queue_position=enqueue_result.queue_position,
+                    report_code=code,
+                    fight_id=fight_id,
+                    player=char_name,
+                    channel_id=str(ctx.channel.id),
                 )
                 await ctx.send(_enqueue_message(enqueue_result))
                 return
