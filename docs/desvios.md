@@ -846,3 +846,21 @@ de um projeto pessoal/comunidade pequena).
   universal nem virou modelo por spec/duração; a banda de 1,3 é o reconhecimento explícito dessa
   incerteza. O objetivo declarado é nunca superestimar quantas referências cabem — throughput menor
   é o preço aceito.
+
+## D-37 — primeira e única edição do `legacy/bot.py` congelado
+
+- **Classificação:** desvio deliberado da regra de congelamento, aplicado em 2026-08-26 para
+  corrigir o BLOCKER B4.
+- **Regra desviada:** `tests/fixtures/legacy_runner.py` declara "legacy/bot.py is frozen (never
+  edited — it's the behavior reference for the golden test)".
+- **Motivo:** a referência era **não-determinística**. `discover_clean_major_cds` ordenava com um
+  sort estável cuja chave era só a presença, e a ordem de inserção que desempatava vinha do
+  `as_completed` de `fetch_top_logs_for_cds`. O golden havia congelado *uma amostra* de uma saída
+  variável, e o teste falhava ~1 vez a cada 8 execuções da suíte. Uma referência que muda sozinha
+  não referencia nada.
+- **Alcance da edição:** uma linha — `cds.sort(key=lambda x: (-x[1], x[0]))`, presença DESC com
+  spell_id ASC como desempate de identidade. Nenhum valor, grading, elegibilidade ou seleção muda.
+- **Prova de que o comportamento registrado foi preservado:** a ordem canônica coincide com a do
+  snapshot existente; os dois goldens continuam passando **sem regravação**. A edição converte "uma
+  das N saídas possíveis" na "saída que já estava congelada".
+- **Detalhes, reproducer e testes:** `docs/v1-readiness-determinism.md`.

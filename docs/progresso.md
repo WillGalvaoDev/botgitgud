@@ -622,3 +622,34 @@ era operacionalmente resumível. Detalhes em `docs/production-readiness-cold-bui
   adiamento registra progresso e nunca `final_status=completed`.
 - **Validação:** suíte completa verde, ruff/format/pyright verdes, 0 chamadas WCL, 0 envios Discord.
   25 testes novos (incremento, jobs, worker, pipeline, snapshot).
+
+## B4 — determinismo do relatório legado (2026-08-26)
+
+O `pytest` GREEN do portão de release não era reproduzível: o golden legado falhava ~1 vez a cada
+8 execuções da suíte e passava isolado. Detalhes em `docs/v1-readiness-determinism.md`.
+
+- **Causa raiz provada:** `fetch_top_logs_for_cds` acumula referências por `as_completed`, essa
+  ordem propaga até as chaves de `profile`, e `discover_clean_major_cds` ordenava com sort ESTÁVEL
+  só por presença. Duas spells empatadas em presença 1,0 (Call Dreadstalkers e Summon Demonic
+  Tyrant) trocavam de lugar conforme o escalonamento do ThreadPoolExecutor.
+- **Reproducer determinístico:** permutações com semente fixa das referências (a inversão simples
+  não reproduz — as duas spells empatadas aparecem na primeira referência qualquer que seja ela).
+  Antes da correção: 3 divergências em 60 permutações. Depois: 0 em 200.
+- **Correção:** desempate canônico por identidade — presença DESC + spell_id ASC. Uma linha em
+  `legacy/bot.py`, primeira edição do arquivo congelado, registrada como D-37. Nenhum valor,
+  grading, elegibilidade ou seleção muda, e **nenhum snapshot foi regravado**: a ordem canônica
+  coincide com a que já estava congelada.
+- **Segunda fonte, no caminho de produção:** `read_candidate_pool` não tinha `ORDER BY`. Corrigido
+  com `ORDER BY rowid`, que torna explícita a ordem de inserção sem reordenar nada.
+- **Testes novos:** 10, entre invariância sob permutação, ordem de conclusão de um ThreadPool real
+  com atrasos artificiais, canonicidade do desempate e round-trip ordenado do pool.
+
+### Achado separado no estresse de B4: a suíte fazia chamadas reais à WCL
+
+`test_probe_against_live_api_has_zero_missing` é marcado `@pytest.mark.network`, e o marcador está
+declarado no `pyproject.toml` como "desabilitado por padrão" — mas `addopts` nunca implementou a
+exclusão. O `conftest` substitui apenas `requests`, e o probe usa `httpx`, então o teste autenticava
+na WCL com as credenciais reais do `.env` em **toda** execução da suíte. Consequências: pontos reais
+consumidos pelo portão de release (as afirmações "WCL real: 0" sobre a suíte completa em relatórios
+anteriores estavam erradas), e contagem variável entre execuções (passa online, é pulado offline).
+Corrigido com `-m 'not network'`; o guard de schema drift roda de propósito com `pytest -m network`.

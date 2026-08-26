@@ -540,7 +540,15 @@ def discover_clean_major_cds(profile):
         except Exception as e:
             print(f"❌ [ERRO AO ATUALIZAR SPELLS NO JSON]: {e}")
 
-    cds.sort(key=lambda x: x[1], reverse=True)
+    # Ordem canonica: presenca DESC + spell_id ASC como desempate de identidade.
+    # `reference_players` chega na ordem de conclusao das threads (as_completed
+    # em fetch_top_logs_for_cds), e essa ordem se propaga ate as chaves de
+    # `profile`. Um sort ESTAVEL apenas por presenca herdava o escalonamento do
+    # ThreadPoolExecutor sempre que duas spells empatavam, produzindo dois
+    # relatorios distintos para a MESMA entrada. O desempate por spell_id nao
+    # muda nenhum valor, nota, elegibilidade ou selecao — so torna a ordem de
+    # apresentacao reproduzivel. Ver docs/v1-readiness-determinism.md.
+    cds.sort(key=lambda x: (-x[1], x[0]))
     return [item[0] for item in cds]
 
 def compare_major_cds_clean(user_data, profile, major_cd_ids):

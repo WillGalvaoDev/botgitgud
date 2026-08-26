@@ -1,6 +1,8 @@
 # Runbook operacional — botgitgud v1.0
 
-Para cold cohort builds, orçamento, prewarm e interpretação do lifecycle,
+Para determinismo do relatório e ordenação canônica, consulte
+`docs/v1-readiness-determinism.md`. Para cold cohort builds, orçamento,
+prewarm e interpretação do lifecycle,
 consulte também `docs/production-readiness-cold-build.md`. O `ops-status`
 prefere o snapshot do processo dono e lista as coortes READY; não abra DuckDB
 externamente enquanto `serve` estiver em execução.

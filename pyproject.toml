@@ -46,5 +46,11 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --strict-markers"
+# `-m "not network"` implementa o que o marcador abaixo sempre declarou. Sem
+# esta cláusula, `pytest` autenticava na WCL de verdade e emitia introspecções
+# contra a API ao vivo em TODA execução da suíte — o portão de release consumia
+# pontos reais, e o resultado dependia de haver rede (o teste passa online e é
+# pulado offline, então a contagem da suíte mudava entre execuções).
+# Para rodar o guard de schema drift de propósito: `pytest -m network`.
+addopts = "-q --strict-markers -m 'not network'"
 markers = ["network: requer acesso real à API (desabilitado por padrão)"]

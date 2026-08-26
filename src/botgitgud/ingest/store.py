@@ -235,10 +235,18 @@ class Store:
         recorded outcome (a bucket whose only candidates all failed to
         parse) and callers must not treat the two the same way.
         """
+        # `ORDER BY rowid` NAO reordena nada: torna explicita a ordem de
+        # insercao que a leitura ja devolvia na pratica. Sem clausula alguma o
+        # SQL nao garante ordem — e o DuckDB varre em paralelo —, e esta lista
+        # decide a ordem dos logs de referencia, que por sua vez decide a ordem
+        # de apresentacao do relatorio. Um contrato de ordem implicito nessa
+        # posicao foi exatamente o que produziu o flake B4 no lado legado; aqui
+        # ele fica explicito antes de virar um. Ver docs/v1-readiness-
+        # determinism.md.
         with self._lock:
             rows = self._conn.execute(
                 "SELECT report_code, fight_id, player_name, duration_s "
-                "FROM cohort_candidates WHERE cohort_id = ?",
+                "FROM cohort_candidates WHERE cohort_id = ? ORDER BY rowid",
                 [cohort_id],
             ).fetchall()
         if not rows:
