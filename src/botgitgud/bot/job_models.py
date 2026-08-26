@@ -9,7 +9,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-JobStatus = Literal["queued", "running", "done", "failed", "cancelled"]
+# B2: `deferred_budget` e um estado PROPRIO, nao um sabor de `failed`. A
+# diferenca e operacional e visivel ao usuario:
+#   failed          -> nao ha expectativa de retentativa automatica;
+#   deferred_budget -> trabalho valido aguardando orcamento da WCL, com
+#                      progresso preservado e retomada automatica.
+# Antes desta correcao um adiamento por orcamento caia no ramo generico do
+# worker e virava `failed`, descartando o pedido do usuario logo depois de
+# prometer que ele continuaria.
+JobStatus = Literal["queued", "running", "deferred_budget", "done", "failed", "cancelled"]
+
+# Estados em que o job ainda tem trabalho pela frente: contam para dedup, para
+# a cota do usuario e para `!status`.
+ACTIVE_STATUSES: tuple[JobStatus, ...] = ("queued", "running", "deferred_budget")
 JobType = Literal["analyze", "build_cohort"]
 
 # RC.2 — o estado da ANALISE e o estado da ENTREGA sao fatos diferentes. Uma
@@ -34,7 +46,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     status VARCHAR,
     created_at TIMESTAMP, started_at TIMESTAMP, finished_at TIMESTAMP,
     error VARCHAR, report_path VARCHAR,
-    delivery_status VARCHAR, delivery_error VARCHAR
+    delivery_status VARCHAR, delivery_error VARCHAR,
+    deferred_until TIMESTAMP, defer_reason VARCHAR, defer_count INTEGER
 )
 """
 
@@ -43,6 +56,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 MIGRATE_JOBS_TABLE = (
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS delivery_status VARCHAR",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS delivery_error VARCHAR",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS deferred_until TIMESTAMP",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS defer_reason VARCHAR",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS defer_count INTEGER",
 )
 # Plain TIMESTAMP, not TIMESTAMPTZ: DuckDB's TIMESTAMPTZ support needs the
 # optional `pytz` package (not in this project's dependency list, §1.2 —
@@ -54,7 +70,7 @@ MIGRATE_JOBS_TABLE = (
 JOB_COLUMNS = (
     "job_id, job_type, dedup_key, discord_user_id, discord_channel_id, "
     "status, created_at, started_at, finished_at, error, report_path, "
-    "delivery_status, delivery_error"
+    "delivery_status, delivery_error, deferred_until, defer_reason, defer_count"
 )
 
 
@@ -80,11 +96,24 @@ class Job:
     report_path: str | None
     delivery_status: DeliveryStatus = "pending"
     delivery_error: str | None = None
+    deferred_until: datetime | None = None
+    defer_reason: str | None = None
+    defer_count: int = 0
 
     @property
     def analysis_completed(self) -> bool:
         """RC.2: verdadeiro mesmo quando a entrega falhou."""
         return self.status == "done"
+
+    @property
+    def is_deferred(self) -> bool:
+        return self.status == "deferred_budget"
+
+    def deferral_elapsed(self, now: datetime | None = None) -> bool:
+        """Ja passou a hora de reconsiderar este job adiado?"""
+        if self.deferred_until is None:
+            return True
+        return (now or now_utc_naive()) >= self.deferred_until
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,4 +168,7 @@ def row_to_job(row: tuple[object, ...]) -> Job:
         report_path=row[10],  # type: ignore[arg-type]
         delivery_status=row[11] or "pending",  # type: ignore[arg-type]
         delivery_error=row[12],  # type: ignore[arg-type]
+        deferred_until=row[13],  # type: ignore[arg-type]
+        defer_reason=row[14],  # type: ignore[arg-type]
+        defer_count=int(row[15]) if row[15] is not None else 0,  # type: ignore[arg-type]
     )

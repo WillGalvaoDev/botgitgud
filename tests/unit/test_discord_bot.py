@@ -197,7 +197,11 @@ def test_analisar_cohort_miss_enqueues_and_status_reports_job(
         monkeypatch.setattr(discord_module.asyncio, "get_running_loop", lambda: _ImmediateLoop())
         analyze_ctx = _Context()
         await analyze_callback(analyze_ctx, "Zarad", "ABCDEFGHIJKLMNOP?fight=1")
-        assert "job enfileirado" in analyze_ctx.sent[0][0]
+        # B2: o usuario precisa saber que a analise continua sozinha e que
+        # repetir o comando nao adianta nem acelera nada.
+        enqueue_message = analyze_ctx.sent[0][0]
+        assert "colocada na fila" in enqueue_message
+        assert "repetir o comando" in enqueue_message
         status_ctx = _Context()
         await status_callback(status_ctx)
         assert "queued" in status_ctx.sent[0][0]

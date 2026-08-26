@@ -7,6 +7,7 @@ import pytest
 
 from botgitgud.analysis.cold_build import (
     CohortSingleFlight,
+    ColdBuildExecution,
     estimate_cold_build,
     preflight_cold_build,
 )
@@ -41,18 +42,24 @@ class BudgetClient:
 
 
 def test_preflight_allows_only_when_projected_budget_preserves_floor_and_margin() -> None:
-    # incerteza 1.0: banda degenerada, que e o caso historico deste teste.
+    # Banda de PONTOS degenerada (1.0) de proposito: isola a banda de QUERIES,
+    # que e a variavel falsificada pelo prewarm real (23,4 q/ref medidas contra
+    # 15 modeladas). As duas bandas sao independentes por desenho.
     cfg = settings(cold_build_points_per_query=1.0, cold_build_cost_uncertainty=1.0)
-    estimate = estimate_cold_build(cfg, available=3000.0)
-    assert estimate.estimated_api_points == 1506.0
-    assert estimate.projected_remaining == 1494.0
+    estimate = estimate_cold_build(cfg, available=5000.0)
+    assert estimate.estimated_queries == pytest.approx(2346.0)  # 6 fixas + 100 * 23,4
+    assert estimate.estimated_queries_upper == pytest.approx(3049.8)  # * 1,3
+    assert estimate.estimated_api_points == pytest.approx(2346.0)
+    # Quem decide e sempre o limite SUPERIOR, nunca o esperado.
+    assert estimate.projected_remaining == pytest.approx(1950.2)
     assert estimate.allowed
-    assert preflight_cold_build(BudgetClient(3000), cfg, "cohort-a").allowed
+    assert preflight_cold_build(BudgetClient(5000, limit=6000.0), cfg, "cohort-a").allowed
 
 
 def test_preflight_defers_at_boundary_and_is_a_distinct_domain_state() -> None:
     cfg = settings(cold_build_points_per_query=1.0, cold_build_cost_uncertainty=1.0)
-    client = BudgetClient(2755.0)  # projected=1249, required floor+margin=1250
+    # projected = 4299 - 3049,8 = 1249,2; exigido = floor 1000 + margem 250.
+    client = BudgetClient(4299.0, limit=6000.0)
     with pytest.raises(CohortDeferredBudget) as caught:
         preflight_cold_build(client, cfg, "cohort-a")
     assert client.refreshes == 1
@@ -62,10 +69,19 @@ def test_preflight_defers_at_boundary_and_is_a_distinct_domain_state() -> None:
 
 
 def test_hot_job_remains_allowed_when_the_same_budget_defers_cold() -> None:
+    """A reserva quente vence a conveniencia de construir agora — mesmo no
+    menor incremento resumivel possivel.
+    """
     cfg = settings(cold_build_points_per_query=1.0)
     with pytest.raises(CohortDeferredBudget):
-        preflight_cold_build(BudgetClient(2000), cfg, "cold")
-    budget = BudgetStatus(points_remaining=2000, limit_per_hour=10000, floor=1000)
+        preflight_cold_build(
+            BudgetClient(1200, limit=3600.0),
+            cfg,
+            "cold",
+            references=1,
+            execution=ColdBuildExecution.RESUMABLE_INCREMENTAL,
+        )
+    budget = BudgetStatus(points_remaining=1200, limit_per_hour=10000, floor=1000)
     assert budget.allows("analyze")
 
 

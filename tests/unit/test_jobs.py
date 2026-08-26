@@ -300,3 +300,106 @@ def test_mark_done_and_mark_failed_update_status(tmp_path: Path) -> None:
     assert failed is not None
     assert failed.status == "failed"
     assert failed.error == "algo deu errado"
+
+
+# -- B2: `deferred_budget` e um estado proprio, com hora marcada -------------------
+
+
+def _enqueue(queue: JobQueue, *, dedup_key: str = "R:1:Zarad", user: str = "user-1") -> str:
+    result = queue.enqueue(
+        job_type="analyze",
+        dedup_key=dedup_key,
+        discord_user_id=user,
+        discord_channel_id="chan-1",
+    )
+    assert result.job is not None
+    return result.job.job_id
+
+
+def test_defer_is_not_a_terminal_failure(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+
+    queue.defer(job_id, retry_after_s=0.0, reason="orçamento reservado")
+
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.status == "deferred_budget"
+    assert job.finished_at is None
+    assert job.error is None
+    assert job.defer_reason == "orçamento reservado"
+    assert job.defer_count == 1
+    store.close()
+
+
+def test_a_deferred_job_is_not_claimable_before_its_scheduled_retry(tmp_path: Path) -> None:
+    """Sem `deferred_until` o worker giraria em loop apertado sobre um
+    orçamento que só melhora no reset da janela.
+    """
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=3600.0, reason="orçamento reservado")
+
+    assert queue.claim_next(_full_budget()) is None
+    store.close()
+
+
+def test_a_deferred_job_becomes_claimable_once_the_wait_has_elapsed(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=0.0, reason="orçamento reservado")
+
+    resumed = queue.claim_next(_full_budget())
+
+    assert resumed is not None
+    assert resumed.job_id == job_id
+    assert resumed.status == "running"
+    assert resumed.defer_count == 1  # nunca zerado por uma retomada
+    store.close()
+
+
+def test_repeating_the_request_while_deferred_reuses_the_same_job(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=3600.0, reason="orçamento reservado")
+
+    repeated = queue.enqueue(
+        job_type="analyze",
+        dedup_key="R:1:Zarad",
+        discord_user_id="user-2",
+        discord_channel_id="chan-2",
+    )
+
+    assert repeated.deduped is True
+    assert repeated.job is not None and repeated.job.job_id == job_id
+    store.close()
+
+
+def test_a_deferred_job_still_counts_as_active_work(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=3600.0, reason="orçamento reservado")
+
+    active = queue.list_active()
+
+    assert [j.job_id for j in active] == [job_id]
+    assert active[0].is_deferred is True
+    store.close()
+
+
+def test_repeated_deferrals_accumulate_instead_of_resetting(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    for _ in range(3):
+        assert queue.claim_next(_full_budget()) is not None
+        queue.defer(job_id, retry_after_s=0.0, reason="orçamento reservado")
+
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.defer_count == 3
+    store.close()

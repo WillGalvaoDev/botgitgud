@@ -73,8 +73,29 @@ class Settings(BaseSettings):
     # silencio. 1,2x cobre a variacao por tipo de query documentada em
     # docs/schema_confirmado.md sem fingir precisao que nao temos.
     cold_build_cost_uncertainty: float = 1.2
-    cold_build_queries_per_reference: int = 15
+    # MEDIDO no prewarm real de 2026-08-25: 864 queries para 37 referencias =
+    # 23,4 queries/referencia. O valor anterior (15) foi falsificado por essa
+    # medicao — subestimava o trabalho real em ~36%, e um modelo que subestima
+    # autoriza mais referencias do que o orcamento comporta.
+    cold_build_queries_per_reference: float = 23.4
+    # Banda de QUERIES, separada da banda de PONTOS: as duas variaveis erraram
+    # em direcoes opostas no smoke real (queries/ref acima do modelo, pts/query
+    # abaixo), entao misturar as duas esconde os dois erros. Uma unica medicao
+    # nao autoriza tratar 23,4 como verdade universal — a carga varia com
+    # duracao, spec, pets e paginacao de damage events — e o objetivo declarado
+    # do modelo e NUNCA superestimar quantas referencias cabem, nao acertar o
+    # consumo exato.
+    cold_build_queries_uncertainty: float = 1.3
     cold_build_fixed_queries: int = 6
+    # Tamanho do lote entre duas reavaliacoes do orcamento real. O preflight
+    # sozinho nao basta: se o custo por referencia superar o modelo, e este
+    # lote que limita o quanto se pode passar do previsto antes da proxima
+    # medicao. Mantenha o pior caso de um lote abaixo da margem de seguranca.
+    cold_build_chunk_references: int = 5
+    # Espera padrao antes de reconsiderar um job adiado por orcamento quando a
+    # WCL nao informou `pointsResetIn`. Nunca reenfileirar em loop apertado: o
+    # orcamento so melhora com o reset da janela.
+    cold_build_defer_retry_s: float = 600.0
 
     # -- T0.4: BlizzardClient -------------------------------------------------
     blizzard_connect_timeout_s: float = 5.0

@@ -104,7 +104,17 @@ class CohortNotReady(AnalysisError):
 
 
 class CohortDeferredBudget(AnalysisError):
-    """A feasible cold build was deferred to preserve the WCL budget."""
+    """Trabalho VALIDO aguardando orcamento — nunca uma falha de analise.
+
+    B2: por herdar de AnalysisError esta excecao caia no ramo generico do
+    worker e o job era marcado `failed`, contradizendo a propria mensagem
+    ("tente novamente mais tarde") e descartando o pedido do usuario. O
+    tratamento correto e um estado transitorio e retomavel; quem consome esta
+    excecao DEVE trata-la antes de qualquer `except BotGitGudError`.
+
+    `planned`/`completed` carregam o progresso ja persistido no cache de logs,
+    para que a telemetria prove quanto avancou antes do adiamento.
+    """
 
     def __init__(
         self,
@@ -115,6 +125,9 @@ class CohortDeferredBudget(AnalysisError):
         available_api_points: float,
         protected_floor: float,
         safety_margin: float,
+        planned: int | None = None,
+        completed: int | None = None,
+        retry_after_s: float | None = None,
     ) -> None:
         super().__init__(message)
         self.cohort_id = cohort_id
@@ -122,3 +135,12 @@ class CohortDeferredBudget(AnalysisError):
         self.available_api_points = available_api_points
         self.protected_floor = protected_floor
         self.safety_margin = safety_margin
+        self.planned = planned
+        self.completed = completed
+        self.retry_after_s = retry_after_s
+
+    @property
+    def remaining(self) -> int | None:
+        if self.planned is None or self.completed is None:
+            return None
+        return self.planned - self.completed

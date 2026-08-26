@@ -43,6 +43,18 @@ class BudgetClient(Protocol):
     def refresh_budget(self) -> None: ...
 
 
+def budget_reset_in(client: object) -> float | None:
+    """Segundos ate a janela horaria resetar, quando a WCL ja informou.
+
+    `pointsResetIn` vem junto do `rateLimitData` que o cliente ja consulta, entao
+    saber quando reconsiderar um job adiado NAO custa nenhuma chamada extra. Um
+    cliente que nao exponha o campo devolve None — e o chamador usa a espera
+    conservadora em vez de inventar precisao.
+    """
+    value = getattr(client, "points_reset_in", None)
+    return value if isinstance(value, int | float) else None
+
+
 class ColdBuildMode(StrEnum):
     """As duas politicas nao podem ser identicas por acidente.
 
@@ -59,14 +71,38 @@ class ColdBuildMode(StrEnum):
     PREWARM = "prewarm"
 
 
+class ColdBuildExecution(StrEnum):
+    """Como o build pretende gastar o orcamento — nao O QUE ele constroi.
+
+    ONE_SHOT exige que o trabalho inteiro caiba numa unica janela horaria.
+    RESUMABLE_INCREMENTAL processa o quanto couber, faz checkpoint no cache de
+    logs e continua na janela seguinte.
+
+    A distincao existe porque a mesma coorte de 100 referencias e impossivel
+    como one-shot numa conta de 3.600 pts/h e perfeitamente possivel como
+    incremental. Classificar as duas com a mesma regra foi o defeito B1: a
+    validacao so olhava o incremento minimo e deixava a politica one-shot
+    passar em silencio, virando um defer eterno em producao.
+    """
+
+    ONE_SHOT = "one_shot"
+    RESUMABLE_INCREMENTAL = "resumable_incremental"
+
+
 @dataclass(frozen=True, slots=True)
 class ColdBuildCost:
     """Custo estimado com banda explicita — o preflight nao finge precisao.
 
-    `estimated_api_points` e a estimativa esperada (constante medida);
-    `estimated_upper_bound` e a conservadora, usada para decidir.
+    Queries e pontos sao variaveis SEPARADAS, com bandas proprias: o smoke real
+    errou as duas em direcoes opostas (23,4 queries/ref contra 15 modeladas,
+    mas 1,413 pts/query contra 2,0 modelados). Uma banda unica sobre o produto
+    esconderia os dois erros. `estimated_queries*` serve a previsao e a
+    observabilidade; quem decide se o build cabe e sempre o orcamento em
+    PONTOS.
     """
 
+    estimated_queries: float
+    estimated_queries_upper: float
     estimated_api_points: float
     estimated_upper_bound: float
     available_api_points: float
@@ -104,9 +140,24 @@ def _upper_points_per_query(settings: Settings) -> float:
     return settings.cold_build_points_per_query * settings.cold_build_cost_uncertainty
 
 
-def queries_for(settings: Settings, references: int) -> int:
+def queries_for(settings: Settings, references: int) -> float:
+    """Queries ESPERADAS: constante medida, sem banda."""
     per_ref = references * settings.cold_build_queries_per_reference
     return settings.cold_build_fixed_queries + per_ref
+
+
+def queries_upper_for(settings: Settings, references: int) -> float:
+    """Queries no limite superior — a unica versao usada para decidir gasto."""
+    return queries_for(settings, references) * settings.cold_build_queries_uncertainty
+
+
+def points_per_reference_upper(settings: Settings) -> float:
+    """Custo conservador de UMA referencia, em pontos. Base do lote incremental."""
+    return (
+        settings.cold_build_queries_per_reference
+        * settings.cold_build_queries_uncertainty
+        * _upper_points_per_query(settings)
+    )
 
 
 def estimate_cold_build(
@@ -118,9 +169,12 @@ def estimate_cold_build(
 ) -> ColdBuildCost:
     refs = settings.cohort_max if references is None else references
     queries = queries_for(settings, refs)
+    queries_upper = queries_upper_for(settings, refs)
     return ColdBuildCost(
+        estimated_queries=queries,
+        estimated_queries_upper=queries_upper,
         estimated_api_points=queries * settings.cold_build_points_per_query,
-        estimated_upper_bound=queries * _upper_points_per_query(settings),
+        estimated_upper_bound=queries_upper * _upper_points_per_query(settings),
         available_api_points=available,
         protected_floor=_protected_floor(settings, mode),
         safety_margin=_safety_margin(settings, mode),
@@ -134,14 +188,19 @@ def affordable_references(
 ) -> int:
     """Quantas referencias cabem AGORA sem furar piso + margem.
 
-    E isto que torna o prewarm incremental possivel: em vez de exigir que 100
-    logs caibam numa unica janela horaria — o que excede o proprio teto da
-    conta —, processa-se o quanto couber, faz-se checkpoint, e o resto segue
-    na janela seguinte.
+    E isto que torna o build incremental possivel — no prewarm e, desde a
+    correcao de B1, tambem no caminho interativo: em vez de exigir que 100 logs
+    caibam numa unica janela horaria (o que excede o proprio teto da conta),
+    processa-se o quanto couber, faz-se checkpoint, e o resto segue na janela
+    seguinte.
     """
     budget = available - _protected_floor(settings, mode) - _safety_margin(settings, mode)
-    fixed = settings.cold_build_fixed_queries * _upper_points_per_query(settings)
-    per_ref = settings.cold_build_queries_per_reference * _upper_points_per_query(settings)
+    fixed = (
+        settings.cold_build_fixed_queries
+        * settings.cold_build_queries_uncertainty
+        * _upper_points_per_query(settings)
+    )
+    per_ref = points_per_reference_upper(settings)
     if budget <= fixed or per_ref <= 0:
         return 0
     return max(0, min(planned, int((budget - fixed) // per_ref)))
@@ -154,21 +213,38 @@ class ImpossibleColdBuildPolicy(RuntimeError):
     """
 
 
-def validate_cold_build_policy(settings: Settings, limit_per_hour: float) -> None:
+def validate_cold_build_policy(
+    settings: Settings,
+    limit_per_hour: float,
+    *,
+    mode: ColdBuildMode = ColdBuildMode.PREWARM,
+    execution: ColdBuildExecution = ColdBuildExecution.RESUMABLE_INCREMENTAL,
+    references: int | None = None,
+) -> None:
     """Detecta politica matematicamente impossivel na configuracao.
 
-    Avalia o modo PREWARM com UMA referencia: se nem o menor incremento
-    possivel cabe no teto da conta, nenhuma construcao jamais avanca e o
-    operador precisa saber disso como erro de configuracao.
+    A pergunta depende de COMO o build gasta:
+
+    - RESUMABLE_INCREMENTAL: basta que UMA referencia caiba no teto. Nao
+      classifique como impossivel um build resumivel so porque as 100
+      referencias nao cabem numa janela — cabem em varias, que e o desenho.
+    - ONE_SHOT: o trabalho inteiro precisa caber numa unica janela. Era isto
+      que passava em silencio (B1): a politica interativa exigia 3.804 pontos
+      num teto de 3.600 e o sintoma virava um defer eterno.
     """
-    minimal = estimate_cold_build(
-        settings, limit_per_hour, mode=ColdBuildMode.PREWARM, references=1
-    )
-    if minimal.required_to_start > limit_per_hour:
+    if execution is ColdBuildExecution.RESUMABLE_INCREMENTAL:
+        probe = 1
+        what = "o menor incremento resumivel (1 referencia)"
+    else:
+        probe = settings.cohort_max if references is None else references
+        what = f"um build one-shot de {probe} referencias"
+    cost = estimate_cold_build(settings, limit_per_hour, mode=mode, references=probe)
+    if cost.required_to_start > limit_per_hour:
         raise ImpossibleColdBuildPolicy(
-            f"politica de budget impossivel: iniciar o menor prewarm possivel exige "
-            f"{minimal.required_to_start:.0f} pontos, mas o teto da conta e "
-            f"{limit_per_hour:.0f}. Reduza api_points_floor/margem ou o custo por referencia."
+            f"politica de budget impossivel: iniciar {what} no modo {mode} exige "
+            f"{cost.required_to_start:.0f} pontos, mas o teto da conta e "
+            f"{limit_per_hour:.0f}. Reduza api_points_floor/margem, reduza o custo por "
+            "referencia, ou execute o build de forma resumivel/incremental."
         )
 
 
@@ -179,8 +255,9 @@ def preflight_cold_build(
     *,
     mode: ColdBuildMode = ColdBuildMode.INTERACTIVE,
     references: int | None = None,
+    execution: ColdBuildExecution = ColdBuildExecution.ONE_SHOT,
 ) -> ColdBuildCost:
-    record_cold_lifecycle("preflight", cohort_id, mode=str(mode))
+    record_cold_lifecycle("preflight", cohort_id, mode=str(mode), execution=str(execution))
     client.refresh_budget()
     available = client.points_remaining
     cost = estimate_cold_build(
@@ -190,7 +267,13 @@ def preflight_cold_build(
     # politica que nao cabe no teto da conta se disfarca de defer eterno. So e
     # verificavel depois do refresh, que e quem revela o teto.
     if client.points_limit is not None:
-        validate_cold_build_policy(settings, client.points_limit)
+        validate_cold_build_policy(
+            settings,
+            client.points_limit,
+            mode=mode,
+            execution=execution,
+            references=cost.references,
+        )
     if not cost.allowed:
         record_cold_lifecycle(
             "deferred",
@@ -204,12 +287,14 @@ def preflight_cold_build(
         )
         raise CohortDeferredBudget(
             "Essa análise precisa preparar uma nova coorte e o orçamento da Warcraft Logs "
-            "está temporariamente reservado. Tente novamente mais tarde.",
+            "está temporariamente reservado. Ela continuará automaticamente assim que "
+            "houver orçamento.",
             cohort_id=cohort_id,
             estimated_api_points=cost.estimated_api_points,
             available_api_points=cost.available_api_points,
             protected_floor=cost.protected_floor,
             safety_margin=cost.safety_margin,
+            retry_after_s=budget_reset_in(client),
         )
     record_cold_lifecycle(
         "allowed",

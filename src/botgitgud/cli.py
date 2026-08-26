@@ -95,6 +95,14 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
     req = AnalysisRequest(report_code=args.report, fight_id=args.fight, character_name=args.char)
     try:
         result = run_analysis(req, deps)
+    except CohortDeferredBudget as e:
+        # Trabalho valido aguardando orcamento, nao erro: o progresso ficou no
+        # cache e repetir o comando depois do reset continua de onde parou.
+        sys.stderr.write(
+            f"Coorte adiada pelo orçamento da WCL: {e}\n"
+            "  resume: execute o mesmo comando após o reset de orçamento\n"
+        )
+        return EX_TEMPFAIL
     except BotGitGudError as e:
         sys.stderr.write(f"erro: {e}\n")
         return 1

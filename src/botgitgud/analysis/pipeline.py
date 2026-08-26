@@ -39,11 +39,15 @@ from botgitgud.analysis.cohort import (
     duration_bucket_bounds,
     duration_bucket_id,
 )
+from botgitgud.analysis.cohort_increment import CohortState, advance_cohort_build
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.cold_build import (
+    ColdBuildExecution,
+    ColdBuildMode,
+    budget_reset_in,
     cohort_single_flight,
+    estimate_cold_build,
     preflight_cold_build,
-    record_cold_lifecycle,
 )
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.dps_gap import DpsGapReport, analyze_dps_gap
@@ -55,10 +59,15 @@ from botgitgud.analysis.performance_features import (
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
 from botgitgud.analysis.talent_cluster import BuildDivergence, analyze_build_divergence
 from botgitgud.config import Settings
-from botgitgud.domain.models import CohortCriteria, RunManifest
+from botgitgud.domain.models import CohortCriteria, RankingCandidate, RunManifest
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import CohortNotReady, InsufficientCohort, ScopeRejected
+from botgitgud.errors import (
+    CohortDeferredBudget,
+    CohortNotReady,
+    InsufficientCohort,
+    ScopeRejected,
+)
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.rankings import (
     fetch_cohort_logs,
@@ -105,13 +114,113 @@ class AnalysisResult:
     matched_cohort_members: int | None = None
     encounter_id: int | None = None
     difficulty: int | None = None
+    # Esta execucao construiu a coorte, ou encontrou-a pronta? A telemetria nao
+    # pode inferir isso pelo resultado: os dois caminhos produzem o mesmo
+    # relatorio, e so o custo difere.
+    cold_build_performed: bool = False
     phase4_resolution: ModelResolution = field(
         default_factory=lambda: ModelResolution(ResolutionStatus.UNAVAILABLE)
     )
 
 
+def _deferred(
+    deps: Deps,
+    cohort_id: str,
+    *,
+    message: str,
+    planned: int | None = None,
+    completed: int | None = None,
+) -> CohortDeferredBudget:
+    remaining = 0 if planned is None or completed is None else planned - completed
+    cost = estimate_cold_build(
+        deps.settings,
+        deps.client.points_remaining or 0.0,
+        mode=ColdBuildMode.INTERACTIVE,
+        references=remaining or 1,
+    )
+    return CohortDeferredBudget(
+        message,
+        cohort_id=cohort_id,
+        estimated_api_points=cost.estimated_api_points,
+        available_api_points=cost.available_api_points,
+        protected_floor=cost.protected_floor,
+        safety_margin=cost.safety_margin,
+        planned=planned,
+        completed=completed,
+        retry_after_s=budget_reset_in(deps.client),
+    )
+
+
+def _advance_cold_cohort(
+    deps: Deps,
+    *,
+    cohort_id: str,
+    criteria: CohortCriteria,
+    partition: int,
+    player_log: object,
+    job_id: str | None,
+) -> list[RankingCandidate]:
+    """Avança a coorte fria pelo MESMO motor incremental do prewarm.
+
+    B1: o preflight pergunta se cabe UMA referência, não se cabem as 100 — as
+    100 nunca cabem numa janela de 3.600 pontos, e tratar isso como "impossível"
+    era o defeito. Uma janela que não completa o pool devolve
+    `CohortDeferredBudget`, com o progresso já persistido no cache de logs.
+    """
+    fight = player_log.fight  # type: ignore[attr-defined]
+    build = player_log.build  # type: ignore[attr-defined]
+    preflight_cold_build(
+        deps.client,
+        deps.settings,
+        cohort_id,
+        mode=ColdBuildMode.INTERACTIVE,
+        references=1,
+        execution=ColdBuildExecution.RESUMABLE_INCREMENTAL,
+    )
+    pool = fetch_ranking_candidates(
+        deps.client,
+        encounter_id=fight.encounter_id,
+        class_name=build.class_name,
+        spec_name=build.spec_name,
+        partition=partition,
+        target_duration_s=fight.duration_s,
+    )
+    increment = advance_cohort_build(
+        client=deps.client,
+        fetcher=deps.fetcher,
+        store=deps.store,
+        settings=deps.settings,
+        cohort_id=cohort_id,
+        criteria=criteria,
+        candidates=pool,
+        partition=partition,
+        mode=ColdBuildMode.INTERACTIVE,
+        job_id=job_id,
+    )
+    if increment.state is not CohortState.READY:
+        raise _deferred(
+            deps,
+            cohort_id,
+            message=(
+                "Essa análise precisa preparar uma nova coorte e o orçamento da Warcraft Logs "
+                f"não cobre o restante agora ({increment.completed}/{increment.planned} logs "
+                "prontos). Ela continuará automaticamente assim que houver orçamento."
+            ),
+            planned=increment.planned,
+            completed=increment.completed,
+        )
+    ready = deps.store.read_candidate_pool(cohort_id)
+    if ready is None:  # pragma: no cover - READY implica pool escrito
+        raise CohortNotReady(f"construção da coorte {cohort_id} não foi concluída")
+    return ready
+
+
 def run_analysis(
-    req: AnalysisRequest, deps: Deps, *, allow_cold_build: bool = True
+    req: AnalysisRequest,
+    deps: Deps,
+    *,
+    allow_cold_build: bool = True,
+    job_id: str | None = None,
 ) -> AnalysisResult:
     """Raises PlayerNotFound/FightNotFound (LogFetcher.fetch), ScopeRejected
     (out-of-scope spec), CohortNotReady (no cached candidate pool and
@@ -158,6 +267,7 @@ def run_analysis(
     )
     cohort_id = criteria.cohort_id()
     candidates = deps.store.read_candidate_pool(cohort_id)
+    cold_build_performed = False
 
     if candidates is None:
         if not allow_cold_build:
@@ -170,35 +280,27 @@ def run_analysis(
         with cohort_single_flight.acquire(cohort_id) as leader:
             candidates = deps.store.read_candidate_pool(cohort_id)
             if candidates is None and leader:
-                cost = preflight_cold_build(deps.client, deps.settings, cohort_id)
-                log.info(
-                    "cold_build.allowed",
+                candidates = _advance_cold_cohort(
+                    deps,
                     cohort_id=cohort_id,
-                    estimated_cost=cost.estimated_api_points,
-                    budget_before=cost.available_api_points,
-                    protected_floor=cost.protected_floor,
+                    criteria=criteria,
+                    partition=partition,
+                    player_log=player_log,
+                    job_id=job_id,
                 )
-                record_cold_lifecycle("build_started", cohort_id)
-                try:
-                    candidates = fetch_ranking_candidates(
-                        deps.client,
-                        encounter_id=player_log.fight.encounter_id,
-                        class_name=player_log.build.class_name,
-                        spec_name=player_log.build.spec_name,
-                        partition=partition,
-                        target_duration_s=player_log.fight.duration_s,
-                    )
-                    deps.store.write_candidate_pool(cohort_id, candidates, criteria=criteria)
-                except Exception as exc:
-                    record_cold_lifecycle("build_failed", cohort_id, reason=type(exc).__name__)
-                    raise
-                record_cold_lifecycle("build_completed", cohort_id, n_members=len(candidates))
+                cold_build_performed = True
             elif candidates is None:
-                # Preserve the real reason for a leader that deferred. This
-                # second preflight is still construction-free and cannot
-                # create a concurrent build.
-                preflight_cold_build(deps.client, deps.settings, cohort_id)
-                raise CohortNotReady(f"construção da coorte {cohort_id} não foi concluída")
+                # O lider adiou. O seguidor tambem espera a MESMA construcao —
+                # nunca inicia uma segunda, e nunca vira falha: seu job precisa
+                # continuar elegivel exatamente como o do lider (B2).
+                raise _deferred(
+                    deps,
+                    cohort_id,
+                    message=(
+                        "Essa análise depende de uma coorte que ainda está sendo preparada. "
+                        "Ela continuará automaticamente assim que a preparação terminar."
+                    ),
+                )
 
     with telemetry.role_scope(telemetry.QueryRole.REFERENCE):
         reference_logs = fetch_cohort_logs(
@@ -311,5 +413,6 @@ def run_analysis(
         matched_cohort_members=len(matched_logs),
         encounter_id=player_log.fight.encounter_id,
         difficulty=player_log.fight.difficulty,
+        cold_build_performed=cold_build_performed,
         phase4_resolution=phase4_resolution,
     )

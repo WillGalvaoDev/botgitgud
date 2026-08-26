@@ -28,6 +28,15 @@ from botgitgud.telemetry import AnalysisRecorder, QueryRole, recording
 
 ANALYSIS_RUNS_DIRNAME = "ops/analysis-runs"
 
+# Desfechos transitorios: a analise nao terminou, mas tambem nao falhou. Nunca
+# viram `completed` — nada de relatorio foi produzido — e nunca viram
+# `analysis_failed`, porque ha retomada automatica prevista.
+_TRANSIENT_STATUS = {
+    "CohortDeferredBudget": "deferred_budget",
+    "RateLimitBudgetExceeded": "budget_exhausted",
+    "CohortNotReady": "enqueued_cold_build",
+}
+
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
@@ -56,6 +65,9 @@ class AnalysisRun:
     analysis_id: str
     started_at: str
     finished_at: str | None = None
+    # Correlaciona a telemetria com o job da fila que a produziu — um job
+    # adiado e retomado deixa um artefato por tentativa.
+    job_id: str | None = None
 
     # alvo
     player: str | None = None
@@ -80,6 +92,14 @@ class AnalysisRun:
     # caminho
     hot_path: bool | None = None
     cold_build_started: bool = False
+    # Progresso do build frio incremental. Um adiamento precisa provar QUANTO
+    # avancou antes de parar — sem isso "deferred" e indistinguivel de "nao
+    # comecou".
+    cold_build_state: str | None = None
+    cold_build_planned: int | None = None
+    cold_build_completed: int | None = None
+    cold_build_remaining: int | None = None
+    deferred_until: str | None = None
 
     # cache de referências
     reference_members_expected: int | None = None
@@ -116,6 +136,29 @@ class AnalysisRun:
 
     def as_payload(self) -> dict[str, Any]:
         return _json_safe(asdict(self))
+
+
+def record_analysis_result(run: AnalysisRun, result: Any) -> None:
+    """Copia somente fatos autoritativos do resultado para a telemetria.
+
+    Mantido separado do handler para tornar auditavel a distincao entre o
+    pool resolvido antes do matching e a amostra que efetivamente o venceu.
+    """
+    header = result.header
+    run.class_name = header.class_name
+    run.spec_name = header.spec
+    run.duration_s = header.duration_max_s
+    run.cohort_members = header.reference_n  # contrato legado: pos-matching
+    # Fakes/implementacoes antigas podem nao expor os campos novos. Ausencia
+    # permanece None (desconhecido), jamais e preenchida por inferencia.
+    run.reference_pool_members = getattr(result, "reference_pool_members", None)
+    run.matched_cohort_members = getattr(result, "matched_cohort_members", None)
+    run.encounter_id = getattr(result, "encounter_id", None)
+    run.difficulty = getattr(result, "difficulty", None)
+    if result.manifest is not None:
+        run.cohort_id = result.manifest.cohort_id
+        run.partition = result.manifest.wcl_partition
+        run.cohort_state = "ready"
 
 
 def compute_points_consumed(
@@ -178,6 +221,7 @@ def track_analysis(
     player: str | None = None,
     report_code: str | None = None,
     fight_id: int | None = None,
+    job_id: str | None = None,
 ) -> Iterator[AnalysisRun]:
     """Envolve uma análise: cria o recorder, publica o artefato ao sair.
 
@@ -191,6 +235,7 @@ def track_analysis(
         player=player,
         report_code=report_code,
         fight_id=fight_id,
+        job_id=job_id,
         wcl_points_before=getattr(budget, "points_remaining", None),
     )
     recorder = AnalysisRecorder()
@@ -199,7 +244,11 @@ def track_analysis(
             yield run
     except BaseException as e:  # reclassifica e repropaga logo abaixo
         if run.final_status == "running":
-            run.final_status = "analysis_failed"
+            # Um adiamento por orcamento NAO e falha de analise (B2): o
+            # trabalho continua valido e sera retomado. Registrar como
+            # `analysis_failed` mentiria na auditoria exatamente como
+            # `mark_failed` mentia na fila.
+            run.final_status = _TRANSIENT_STATUS.get(type(e).__name__, "analysis_failed")
             run.error_type = type(e).__name__
             run.error_message = str(e)
         raise

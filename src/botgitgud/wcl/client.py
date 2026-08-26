@@ -115,6 +115,15 @@ class WclClient:
     def points_limit(self) -> float | None:
         return self._points_limit
 
+    @property
+    def points_reset_in(self) -> float | None:
+        """Segundos ate a janela horaria resetar, conforme o ultimo
+        `rateLimitData` ja consultado — nunca dispara uma consulta por conta
+        propria. E o unico dado real disponivel para agendar quando reconsiderar
+        um job adiado por orcamento, e vem de graca junto do refresh.
+        """
+        return self._points_reset_in
+
     def refresh_budget(self) -> None:
         """T1.8: forces a rateLimitData check now, ignoring the cache TTL —
         never raises RateLimitBudgetExceeded (unlike _ensure_budget, called

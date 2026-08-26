@@ -6,6 +6,7 @@ session's test suite).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -171,9 +172,16 @@ def test_run_claimed_build_cohort_job_returns_a_summary(tmp_path: Path) -> None:
     store.close()
 
 
-def test_budget_defer_is_honest_terminal_job_and_worker_can_continue(
+def test_budget_defer_is_not_a_failure_and_keeps_the_job_eligible(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """B2 — a regressao central desta correcao.
+
+    Ate a v1.0-rc, `CohortDeferredBudget` caia no ramo generico
+    `except BotGitGudError` e o job era marcado `failed`: o pedido do usuario
+    era descartado logo depois de o bot prometer que ele continuaria, e o
+    progresso ja pago em pontos de API ia junto.
+    """
     deps = _build_deps(tmp_path, _DispatchTransport(_responses_for({100.0: 8})))
     store = Store(tmp_path / "queue_data")
     queue = JobQueue(store)
@@ -203,10 +211,19 @@ def test_budget_defer_is_honest_terminal_job_and_worker_can_continue(
 
     outcome = run_claimed_job(queue, claimed, deps)
 
-    assert not outcome.ok and not outcome.requeued
+    assert not outcome.ok
+    assert outcome.deferred is True
     assert "temporariamente reservado" in outcome.message
-    assert queue.get(claimed.job_id).status == "failed"  # type: ignore[union-attr]
-    assert queue.list_active() == []
+
+    deferred = queue.get(claimed.job_id)
+    assert deferred is not None
+    assert deferred.status == "deferred_budget"  # nao "failed"
+    assert deferred.finished_at is None  # o trabalho nao terminou
+    assert deferred.dedup_key == "cohort:3179:Warlock:Demonology:5:100.0"
+    assert deferred.defer_count == 1
+    assert deferred.deferred_until is not None
+    # Continua visivel como trabalho ativo — some da fila seria mentir.
+    assert [j.job_id for j in queue.list_active()] == [claimed.job_id]
     store.close()
 
 
@@ -279,4 +296,143 @@ def test_build_cohort_job_requeued_not_failed_on_rate_limit_budget_exceeded(
 
     assert outcome.requeued is True
     assert outcome.ok is False
+    store.close()
+
+
+# -- B2: adiamento e retomada do MESMO job -------------------------------------
+
+
+def _deferred_error(planned: int = 100, completed: int = 30) -> CohortDeferredBudget:
+    return CohortDeferredBudget(
+        "orçamento temporariamente reservado",
+        cohort_id="cohort-x",
+        estimated_api_points=3000,
+        available_api_points=1200,
+        protected_floor=1000,
+        safety_margin=250,
+        planned=planned,
+        completed=completed,
+    )
+
+
+def test_a_deferred_job_resumes_as_the_same_job_and_finally_delivers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O requisito de produto: o usuário NÃO precisa reenviar `!analisar`.
+
+    O mesmo job — mesma dedup_key, mesmo job_id — volta sozinho na janela
+    seguinte e entrega o relatório.
+    """
+    transport = _DispatchTransport(_happy_path_responses())
+    # retry 0: o teste não espera uma janela horária real para provar a
+    # retomada; a política de espera em si é testada em test_jobs.py.
+    deps = _build_deps(tmp_path, transport, cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    enqueued = queue.enqueue(
+        job_type="analyze",
+        dedup_key="ABCDEFGHIJKLMNOP:1:Zarad",
+        discord_user_id="user-1",
+        discord_channel_id="chan-1",
+    )
+    assert enqueued.job is not None
+    original_job_id = enqueued.job.job_id
+    budget = BudgetStatus(points_remaining=3600.0, limit_per_hour=3600.0)
+
+    calls = {"n": 0}
+    real_run_analysis = worker_module.run_analysis
+
+    def _flaky(*args: object, **kwargs: object) -> object:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _deferred_error()
+        return real_run_analysis(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(worker_module, "run_analysis", _flaky)
+
+    first = queue.claim_next(budget)
+    assert first is not None
+    deferred_outcome = run_claimed_job(queue, first, deps)
+    assert deferred_outcome.deferred is True
+
+    # Repetir o pedido enquanto adiado NAO cria um segundo job.
+    again = queue.enqueue(
+        job_type="analyze",
+        dedup_key="ABCDEFGHIJKLMNOP:1:Zarad",
+        discord_user_id="user-2",
+        discord_channel_id="chan-1",
+    )
+    assert again.deduped is True
+    assert again.job is not None
+    assert again.job.job_id == original_job_id
+
+    # Janela seguinte: o MESMO job e reclamado sozinho.
+    resumed = queue.claim_next(budget)
+    assert resumed is not None
+    assert resumed.job_id == original_job_id
+    assert resumed.dedup_key == "ABCDEFGHIJKLMNOP:1:Zarad"
+    assert resumed.defer_count == 1  # a contagem de adiamentos sobrevive
+
+    final_outcome = run_claimed_job(queue, resumed, deps)
+
+    assert final_outcome.ok is True
+    assert final_outcome.html_report is not None
+    assert final_outcome.deferred is False
+    done = queue.get(original_job_id)
+    assert done is not None
+    assert done.status == "done"
+    assert done.report_path is not None
+    store.close()
+
+
+def test_deferred_analysis_leaves_auditable_telemetry_without_claiming_completion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Um adiamento precisa provar QUANTO avançou — e não pode se registrar
+    como análise concluída nem como falha de análise.
+    """
+    deps = _build_deps(tmp_path, _DispatchTransport({}), cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    monkeypatch.setattr(
+        worker_module,
+        "run_analysis",
+        lambda *_a, **_k: (_ for _ in ()).throw(_deferred_error(planned=100, completed=30)),
+    )
+    job = _claimed_analyze_job()
+
+    run_claimed_job(queue, job, deps)
+
+    runs_dir = deps.settings.data_dir / "ops" / "analysis-runs"
+    payloads = [json.loads(p.read_text(encoding="utf-8")) for p in runs_dir.glob("*.json")]
+    assert len(payloads) == 1
+    run = payloads[0]
+    assert run["final_status"] == "deferred_budget"
+    assert run["cold_build_started"] is True
+    assert run["cold_build_state"] == "deferred_budget"
+    assert run["cold_build_planned"] == 100
+    assert run["cold_build_completed"] == 30
+    assert run["cold_build_remaining"] == 70
+    assert run["cohort_id"] == "cohort-x"
+    assert run["job_id"] == job.job_id
+    store.close()
+
+
+def test_a_successful_cold_build_is_not_reported_as_hot_path(tmp_path: Path) -> None:
+    """Os dois caminhos produzem o mesmo relatório; só o custo difere. A
+    telemetria não pode inferir qual foi — precisa do fato vindo do pipeline.
+    """
+    deps = _build_deps(tmp_path, _DispatchTransport(_happy_path_responses()))
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+
+    outcome = run_claimed_job(queue, _claimed_analyze_job(), deps)
+    assert outcome.ok is True
+
+    runs_dir = deps.settings.data_dir / "ops" / "analysis-runs"
+    run = json.loads(next(iter(runs_dir.glob("*.json"))).read_text(encoding="utf-8"))
+    assert run["cold_build_started"] is True
+    assert run["hot_path"] is False
+    assert run["cold_build_state"] == "ready"
+    assert run["final_status"] == "completed"
     store.close()

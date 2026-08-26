@@ -42,11 +42,17 @@ STALE_AFTER_S = 30.0
 LIFECYCLE_OWNED_FIELDS = frozenset(
     {
         "stage",
+        "state",
         "outcome",
         "cohort_id",
+        "job_id",
         "planned",
         "completed",
         "remaining",
+        "batch_size",
+        "current_budget",
+        "estimated_points_remaining",
+        "resumed_from",
         "n_members",
         "buckets",
         "reason",

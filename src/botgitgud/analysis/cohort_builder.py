@@ -23,37 +23,24 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import cast
 
 import structlog
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, duration_bucket_bounds, duration_bucket_id
+from botgitgud.analysis.cohort_increment import CohortState, advance_cohort_build
 from botgitgud.analysis.cold_build import (
+    ColdBuildExecution,
     ColdBuildMode,
-    affordable_references,
     preflight_cold_build,
-    record_cold_lifecycle,
 )
 from botgitgud.analysis.pipeline import Deps
 from botgitgud.domain.models import CohortCriteria, RankingCandidate
-from botgitgud.ingest.rankings import (
-    fetch_cohort_logs,
-    fetch_ranking_candidates,
-    get_current_partition,
-)
+from botgitgud.ingest.rankings import fetch_ranking_candidates, get_current_partition
 
 log = structlog.get_logger(__name__)
 
-
-class CohortState(StrEnum):
-    """Um pool parcial NUNCA e READY: a analise interativa nao pode usa-lo
-    como se estivesse completo.
-    """
-
-    READY = "ready"
-    DEFERRED_BUDGET = "deferred_budget"
-    FAILED = "failed"
+__all__ = ["BucketBuildResult", "CohortState", "build_cohorts"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +108,7 @@ def build_cohorts(
         f"prewarm:{encounter_id}:{difficulty}:{class_name}:{spec_name}:{duration_bucket_s}",
         mode=ColdBuildMode.PREWARM,
         references=1,
+        execution=ColdBuildExecution.RESUMABLE_INCREMENTAL,
     )
     partition = get_current_partition(deps.client, encounter_id)
     candidates = fetch_ranking_candidates(
@@ -177,93 +165,31 @@ def build_cohorts(
             continue
         # Reference logs inherit the criteria partition. This avoids the
         # redundant per-report rankings query without changing analyzed logs.
-        record_cold_lifecycle("build_started", cohort_id, planned=len(bucket_candidates))
-        # Resume sem refetch: `fetch_many` ja consulta o cache de logs antes de
-        # qualquer rede, entao as referencias concluidas numa janela anterior
-        # nao voltam a custar pontos.
-        pending = [
-            c
-            for c in bucket_candidates
-            if deps.store.read_log(c.report_code, c.fight_id, c.player_name) is None
-        ]
-        completed_before = len(bucket_candidates) - len(pending)
-        affordable = affordable_references(
-            deps.settings,
-            deps.client.points_remaining or 0.0,
-            mode=ColdBuildMode.PREWARM,
-            planned=len(pending),
-        )
-        try:
-            if affordable:
-                fetch_cohort_logs(
-                    deps.fetcher,
-                    pending[:affordable],
-                    max_workers=deps.settings.max_workers,
-                    expected_partition=partition,
-                )
-        except Exception as exc:
-            record_cold_lifecycle("build_failed", cohort_id, reason=type(exc).__name__)
-            raise
-
-        still_pending = [
-            c
-            for c in bucket_candidates
-            if deps.store.read_log(c.report_code, c.fight_id, c.player_name) is None
-        ]
-        completed = len(bucket_candidates) - len(still_pending)
-        if still_pending:
-            # Progresso preservado nos logs individuais; o POOL so e escrito
-            # quando tudo esta pronto, entao a coorte nao vira READY parcial.
-            record_cold_lifecycle(
-                "deferred_budget",
-                cohort_id,
-                planned=len(bucket_candidates),
-                completed=completed,
-                remaining=len(still_pending),
-            )
-            log.warning(
-                "cohort_builder.bucket_deferred_budget",
-                cohort_id=cohort_id,
-                completed=completed,
-                planned=len(bucket_candidates),
-            )
-            results.append(
-                BucketBuildResult(
-                    bucket_id=bucket_id,
-                    duration_min_s=bucket_lo,
-                    duration_max_s=bucket_hi,
-                    n_members=completed,
-                    cohort_id=cohort_id,
-                    state=CohortState.DEFERRED_BUDGET,
-                    planned=len(bucket_candidates),
-                    completed=completed,
-                )
-            )
-            continue
-
-        deps.store.write_candidate_pool(cohort_id, bucket_candidates, criteria=criteria)
-        record_cold_lifecycle(
-            "build_completed",
-            cohort_id,
-            n_members=len(bucket_candidates),
-            resumed_from=completed_before,
-        )
-        log.info(
-            "cohort_builder.bucket_built",
-            bucket_id=bucket_id,
+        # O algoritmo incremental (cache-as-checkpoint, lote guardado pelo
+        # orcamento real, parcial nunca READY) vive em cohort_increment.py e e
+        # o MESMO usado pelo caminho interativo — ver docs/production-
+        # readiness-cold-build.md.
+        increment = advance_cohort_build(
+            client=deps.client,
+            fetcher=deps.fetcher,
+            store=deps.store,
+            settings=deps.settings,
             cohort_id=cohort_id,
-            n_candidates=len(bucket_candidates),
+            criteria=criteria,
+            candidates=bucket_candidates,
+            partition=partition,
+            mode=ColdBuildMode.PREWARM,
         )
         results.append(
             BucketBuildResult(
                 bucket_id=bucket_id,
                 duration_min_s=bucket_lo,
                 duration_max_s=bucket_hi,
-                n_members=len(bucket_candidates),
+                n_members=increment.completed,
                 cohort_id=cohort_id,
-                state=CohortState.READY,
-                planned=len(bucket_candidates),
-                completed=len(bucket_candidates),
+                state=increment.state,
+                planned=increment.planned,
+                completed=increment.completed,
             )
         )
 

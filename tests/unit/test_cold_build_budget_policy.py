@@ -76,8 +76,13 @@ def test_cost_model_uses_the_measured_points_per_query_not_a_flat_two() -> None:
 
 
 def test_band_scales_with_the_base_constant() -> None:
+    """Duas bandas derivadas, nunca constantes soltas: sobrescrever o custo
+    esperado escala o limite superior junto, e queries/pontos escalam por
+    fatores proprios (1,3 e 1,2) em vez de um unico fator sobre o produto.
+    """
     cheap = estimate_cold_build(_settings(cold_build_points_per_query=0.5), 3600.0)
-    assert cheap.estimated_upper_bound == pytest.approx(cheap.estimated_api_points * 1.2)
+    assert cheap.estimated_upper_bound == pytest.approx(cheap.estimated_api_points * 1.2 * 1.3)
+    assert cheap.estimated_queries_upper == pytest.approx(cheap.estimated_queries * 1.3)
 
 
 def test_estimate_exposes_an_explicit_band() -> None:
@@ -87,12 +92,38 @@ def test_estimate_exposes_an_explicit_band() -> None:
     assert cost.projected_remaining == cost.available_api_points - cost.estimated_upper_bound
 
 
-def test_measured_smoke_cost_falls_inside_the_band() -> None:
-    """1.504 queries custaram ~2.126 pontos no smoke real (1,413 pts/query)."""
+def test_query_model_is_calibrated_against_the_measured_prewarm() -> None:
+    """B3 — o prewarm real gastou 864 queries para 37 referencias.
+
+    O modelo antigo (15 q/ref) previa 561: subestimava em 35% e por isso
+    autorizava mais referencias do que o orcamento comportava. O objetivo
+    declarado do modelo e NUNCA subestimar, nao acertar o consumo exato.
+    """
+    settings = _settings()
+    measured_refs, measured_queries = 37, 864
+    cost = estimate_cold_build(settings, 3600.0, references=measured_refs)
+    assert cost.estimated_queries >= measured_queries
+    assert cost.estimated_queries_upper >= cost.estimated_queries
+    # E continua ancorado na medicao, nao inflado sem limite.
+    assert cost.estimated_queries <= measured_queries * 1.15
+
+
+def test_points_and_queries_are_modelled_as_separate_variables() -> None:
+    """Os dois erros do smoke apontaram para lados opostos — queries/ref acima
+    do modelo, pts/query abaixo. Uma banda unica sobre o produto esconderia
+    ambos.
+    """
     settings = _settings()
     cost = estimate_cold_build(settings, 3600.0, references=100)
-    assert cost.estimated_api_points <= 2200
-    assert cost.estimated_upper_bound >= 2500  # banda conservadora
+    assert cost.estimated_queries != cost.estimated_api_points
+    assert cost.estimated_api_points == pytest.approx(
+        cost.estimated_queries * settings.cold_build_points_per_query
+    )
+    assert cost.estimated_upper_bound == pytest.approx(
+        cost.estimated_queries_upper
+        * settings.cold_build_points_per_query
+        * settings.cold_build_cost_uncertainty
+    )
 
 
 # -- 1/2/3: modos distintos ---------------------------------------------------------

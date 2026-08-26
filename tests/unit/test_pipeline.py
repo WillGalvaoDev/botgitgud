@@ -30,7 +30,13 @@ from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.config import Settings
 from botgitgud.domain.specs import SpecId
 from botgitgud.domain.spells import SpellCatalog
-from botgitgud.errors import CohortNotReady, InsufficientCohort, PlayerNotFound, ScopeRejected
+from botgitgud.errors import (
+    CohortDeferredBudget,
+    CohortNotReady,
+    InsufficientCohort,
+    PlayerNotFound,
+    ScopeRejected,
+)
 from botgitgud.ingest.log_fetcher import LogFetcher
 from botgitgud.ingest.store import Store
 from botgitgud.phase4.registry import ModelStatus, Phase4ModelRecord, Phase4ModelRegistry
@@ -44,14 +50,14 @@ PRIMARY_FIGHT = 1
 N_REFS = 8  # COHORT_MIN_HARD
 
 
-def _rate_limit_response() -> httpx.Response:
+def _rate_limit_response(points_spent: float = 0.0) -> httpx.Response:
     return httpx.Response(
         200,
         json={
             "data": {
                 "rateLimitData": {
                     "limitPerHour": 10000,
-                    "pointsSpentThisHour": 0,
+                    "pointsSpentThisHour": points_spent,
                     "pointsResetIn": 3600,
                 }
             }
@@ -108,8 +114,17 @@ def _zone_partitions_response(*, default_partition: int = 3) -> dict[str, Any]:
 
 
 class _DispatchTransport(httpx.BaseTransport):
-    def __init__(self, responses: dict[str, list[dict[str, Any]] | dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        responses: dict[str, list[dict[str, Any]] | dict[str, Any]],
+        *,
+        points_spent: float = 0.0,
+    ) -> None:
         self._responses = responses
+        # Sem isto o fixture reporta sempre `available == limitPerHour`, regime
+        # em que "adiado agora" e "impossivel por configuracao" coincidem
+        # matematicamente e nao da para testar um adiamento de verdade.
+        self._points_spent = points_spent
         self.calls: list[str] = []
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
@@ -119,7 +134,7 @@ class _DispatchTransport(httpx.BaseTransport):
         body = json.loads(request.content)
         query = body.get("query", "")
         if "rateLimitData" in query:
-            return _rate_limit_response()
+            return _rate_limit_response(self._points_spent)
         if "GetPlayerMeta" in query:
             op = "meta"
         elif "GetPlayerDamageEvents" in query:
@@ -738,3 +753,72 @@ def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
 
     with pytest.raises(InsufficientCohort):
         run_analysis(req, deps)
+
+
+# -- B1/B2: build frio interativo e incremental e resumivel ------------------------
+
+
+def test_interactive_cold_build_defers_without_spending_a_single_construction_query(
+    tmp_path: Path,
+) -> None:
+    """B2 — o caminho da fila precisa devolver um ADIAMENTO, não uma falha.
+
+    `CohortNotReady`/`BotGitGudError` genérico levariam o worker a
+    `mark_failed`, descartando o pedido do usuário. E um build adiado não pode
+    gastar nem uma query de construção.
+    """
+    # available = 10000 - 8800 = 1200: cabe menos de uma referência, mas o teto
+    # da conta comporta a política, então isto é um defer real, não uma
+    # configuração impossível.
+    transport = _DispatchTransport(_happy_path_responses(), points_spent=8800.0)
+    deps = _build_deps(tmp_path, transport)
+
+    with pytest.raises(CohortDeferredBudget) as caught:
+        run_analysis(_req(), deps, allow_cold_build=True)
+
+    assert caught.value.cohort_id
+    assert "rankings" not in transport.calls
+    assert deps.store.read_candidate_pool(caught.value.cohort_id) is None
+    deps.store.close()
+
+
+def test_interactive_cold_build_only_publishes_the_pool_once_every_log_is_cached(
+    tmp_path: Path,
+) -> None:
+    """Parcial nunca é READY: o pool é o sinal de "coorte pronta", então
+    escrevê-lo antes dos logs (como o caminho interativo fazia) publicava uma
+    coorte cujos membros ainda custariam pontos.
+    """
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps, allow_cold_build=True)
+
+    cohort_id = result.manifest.cohort_id
+    pool = deps.store.read_candidate_pool(cohort_id)
+    assert pool is not None
+    # Todo membro publicado ja esta em cache — nenhuma pendencia paga depois.
+    for candidate in pool:
+        assert (
+            deps.store.read_log(candidate.report_code, candidate.fight_id, candidate.player_name)
+            is not None
+        )
+    deps.store.close()
+
+
+def test_a_second_analysis_of_a_ready_cohort_spends_no_reference_queries(
+    tmp_path: Path,
+) -> None:
+    """Cache como checkpoint: a coorte pronta torna a próxima análise quente."""
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+    run_analysis(_req(), deps, allow_cold_build=True)
+    calls_after_cold = len(transport.calls)
+
+    run_analysis(_req(), deps, allow_cold_build=True)
+
+    # A segunda passagem re-resolve partition e o log do proprio jogador, mas
+    # nao volta aos rankings nem aos logs de referencia.
+    assert transport.calls.count("rankings") == 1
+    assert len(transport.calls) < calls_after_cold * 2
+    deps.store.close()

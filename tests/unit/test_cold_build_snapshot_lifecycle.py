@@ -193,3 +193,52 @@ def test_ops_status_sees_building_without_opening_the_warehouse(tmp_path: Path) 
         assert "'stage': 'building'" in text
         assert COHORT_ID in text
         assert "prewarm" in text
+
+
+# -- B1: o build frio INTERATIVO tambem precisa ser observavel ----------------------
+
+
+def test_interactive_cold_build_lifecycle_is_visible_without_reading_duckdb(
+    tmp_path: Path,
+) -> None:
+    """D-34 vale para o caminho interativo também: enquanto o `serve` roda,
+    ninguém consegue abrir o warehouse de fora. Se o adiamento e o progresso do
+    build só existissem no banco, o operador não teria como ver por que uma
+    análise não anda.
+    """
+    record_cold_lifecycle(
+        "deferred_budget",
+        COHORT_ID,
+        mode="interactive",
+        state="deferred_budget",
+        job_id="job-42",
+        planned=100,
+        completed=30,
+        remaining=70,
+        reason="budget",
+        current_budget=1200.0,
+        estimated_points_remaining=3608.5,
+    )
+    publisher = ColdBuildPublisher(tmp_path, budget=_Budget(), interval_s=60.0)
+    publisher.publish()
+
+    snapshot = read_snapshot(tmp_path)
+    assert snapshot is not None
+    cold = snapshot.cold_build
+    assert cold is not None
+    assert cold["mode"] == "interactive"
+    assert cold["state"] == "deferred_budget"
+    assert cold["cohort_id"] == COHORT_ID
+    assert cold["job_id"] == "job-42"
+    assert (cold["planned"], cold["completed"], cold["remaining"]) == (100, 30, 70)
+    assert cold["estimated_points_remaining"] == pytest.approx(3608.5)
+    assert cold["current_budget"] == pytest.approx(1200.0)
+    assert json.loads((tmp_path / SNAPSHOT_FILENAME).read_text(encoding="utf-8"))
+
+
+def test_every_new_lifecycle_field_is_owned_by_the_lifecycle_not_the_caller() -> None:
+    """Campos dinâmicos novos herdam a mesma regra estrutural do bug do
+    prewarm: contexto estático nunca define estado dinâmico.
+    """
+    for field in ("state", "job_id", "batch_size", "current_budget"):
+        assert field in LIFECYCLE_OWNED_FIELDS

@@ -27,7 +27,7 @@ from discord.ext import commands
 
 from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
-from botgitgud.bot.analysis_runs import now_iso, track_analysis
+from botgitgud.bot.analysis_runs import now_iso, record_analysis_result, track_analysis
 from botgitgud.bot.delivery import (
     ChannelResolver,
     DeliveryContext,
@@ -56,29 +56,6 @@ from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
 
 log = structlog.get_logger(__name__)
-
-
-def record_analysis_result(run: Any, result: Any) -> None:
-    """Copia somente fatos autoritativos do resultado para a telemetria.
-
-    Mantido separado do handler para tornar auditavel a distincao entre o
-    pool resolvido antes do matching e a amostra que efetivamente o venceu.
-    """
-    header = result.header
-    run.class_name = header.class_name
-    run.spec_name = header.spec
-    run.duration_s = header.duration_max_s
-    run.cohort_members = header.reference_n  # contrato legado: pos-matching
-    # Fakes/implementacoes antigas podem nao expor os campos novos. Ausencia
-    # permanece None (desconhecido), jamais e preenchida por inferencia.
-    run.reference_pool_members = getattr(result, "reference_pool_members", None)
-    run.matched_cohort_members = getattr(result, "matched_cohort_members", None)
-    run.encounter_id = getattr(result, "encounter_id", None)
-    run.difficulty = getattr(result, "difficulty", None)
-    if result.manifest is not None:
-        run.cohort_id = result.manifest.cohort_id
-        run.partition = result.manifest.wcl_partition
-        run.cohort_state = "ready"
 
 
 async def run_in_executor_with_context(
@@ -123,10 +100,18 @@ async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQ
     camada bot/delivery.py classifica cada falha e devolve um DeliveryOutcome,
     que este nivel persiste sem jamais tocar no estado da analise (RC.2).
     """
-    if outcome.requeued:
-        # T1.8 §3: budget ran out mid-job — silently back to `queued` for
-        # after pointsResetIn, no user-facing noise (it isn't done, and
-        # it isn't an error the user needs to react to).
+    if outcome.requeued or outcome.deferred:
+        # T1.8 §3 / B2: o orcamento acabou no meio do job. Nos dois casos o job
+        # continua elegivel e retoma sozinho, entao nao ha nada que o usuario
+        # precise fazer — e repetir "ainda esperando" a cada janela viraria
+        # spam. Ele ja foi avisado no enfileiramento de que a analise continua
+        # sozinha, e recebera o relatorio quando ela terminar.
+        if outcome.deferred:
+            log.info(
+                "discord_bot.job_deferred_no_notice",
+                job_id=outcome.job.job_id,
+                deferred_until=outcome.deferred_until,
+            )
         return
     job = outcome.job
     channel = bot.get_channel(int(job.discord_channel_id))
@@ -301,8 +286,11 @@ def _enqueue_message(result: EnqueueResult) -> str:
     if result.deduped:
         return "⏳ Essa análise já está na fila/em andamento — você será avisado quando terminar."
     return (
-        f"🔧 Coorte de referência ainda não pronta — job enfileirado "
-        f"(posição {result.queue_position} na fila). Você será avisado quando terminar."
+        f"🔧 Sua análise precisa preparar uma nova coorte de referência. "
+        f"Ela foi colocada na fila (posição {result.queue_position}) e continuará "
+        "automaticamente quando houver orçamento na Warcraft Logs — pode levar "
+        "algumas horas. Você receberá o relatório aqui quando terminar; "
+        "**não é preciso repetir o comando**."
     )
 
 
@@ -478,9 +466,15 @@ def build_bot(deps: Deps) -> commands.Bot:
 
         lines = ["📋 **Fila de análises**"]
         for i, job in enumerate(active, start=1):
-            status_icon = "🏃" if job.status == "running" else "⏳"
+            # Um job adiado por orcamento nao esta parado nem quebrado: mostrar
+            # o mesmo icone de "na fila" esconderia por que ele nao anda.
+            status_icon = {"running": "🏃", "deferred_budget": "💤"}.get(job.status, "⏳")
+            suffix = ""
+            if job.is_deferred:
+                suffix = " — aguardando orçamento WCL, retoma sozinho"
             lines.append(
-                f"{i}. {status_icon} `{job.job_type}` — <@{job.discord_user_id}> ({job.status})"
+                f"{i}. {status_icon} `{job.job_type}` — <@{job.discord_user_id}> "
+                f"({job.status}){suffix}"
             )
         lines.append(worker_line)
         await ctx.send("\n".join(lines))

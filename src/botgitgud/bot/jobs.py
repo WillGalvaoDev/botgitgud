@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from botgitgud.bot.job_models import (
+    ACTIVE_STATUSES,
     CREATE_JOBS_TABLE,
     JOB_COLUMNS,
     MIGRATE_JOBS_TABLE,
@@ -25,6 +26,8 @@ from botgitgud.bot.job_models import (
     row_to_job,
 )
 from botgitgud.ingest.store import Store
+
+_ACTIVE_SQL = ", ".join(f"'{status}'" for status in ACTIVE_STATUSES)
 
 MAX_ACTIVE_JOBS_PER_USER = 1
 MAX_QUEUED_JOBS_PER_USER = 3
@@ -97,8 +100,9 @@ class JobQueue:
                 error=None,
                 report_path=None,
             )
+            placeholders = ", ".join("?" * len(JOB_COLUMNS.split(", ")))
             self._store.execute(
-                f"INSERT INTO jobs ({JOB_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"INSERT INTO jobs ({JOB_COLUMNS}) VALUES ({placeholders})",
                 [
                     job.job_id,
                     job.job_type,
@@ -113,6 +117,9 @@ class JobQueue:
                     job.report_path,
                     job.delivery_status,
                     job.delivery_error,
+                    job.deferred_until,
+                    job.defer_reason,
+                    job.defer_count,
                 ],
             )
             position = self._count_by_status("queued")  # this job included: it's last-in-line
@@ -135,14 +142,23 @@ class JobQueue:
                 return None
 
             placeholders = ", ".join("?" for _ in allowed_types)
+            # Um job adiado por orcamento volta a ser elegivel sozinho, sem job
+            # novo e sem perder a dedup_key — mas so depois de `deferred_until`.
+            # Sem essa clausula o worker giraria em loop apertado sobre um
+            # orcamento que so melhora no reset da janela.
             rows = self._store.execute_returning(
                 f"""
                 SELECT {JOB_COLUMNS} FROM jobs
-                WHERE status = 'queued' AND job_type IN ({placeholders})
+                WHERE job_type IN ({placeholders})
+                  AND (
+                        status = 'queued'
+                     OR (status = 'deferred_budget'
+                         AND (deferred_until IS NULL OR deferred_until <= ?))
+                  )
                 ORDER BY CASE job_type WHEN 'analyze' THEN 0 ELSE 1 END, created_at ASC
                 LIMIT 1
                 """,
-                list(allowed_types),
+                [*allowed_types, now_utc_naive()],
             )
             if not rows:
                 return None
@@ -153,6 +169,8 @@ class JobQueue:
                 "UPDATE jobs SET status = 'running', started_at = ? WHERE job_id = ?",
                 [started_at, job.job_id],
             )
+            # `dedup_key` e `defer_count` sobrevivem a retomada: e o MESMO job,
+            # nao um novo com o mesmo pedido.
             return Job(
                 job_id=job.job_id,
                 job_type=job.job_type,
@@ -165,6 +183,9 @@ class JobQueue:
                 finished_at=None,
                 error=None,
                 report_path=None,
+                deferred_until=None,
+                defer_reason=job.defer_reason,
+                defer_count=job.defer_count,
             )
 
     def mark_done(self, job_id: str, *, report_path: str | None = None) -> None:
@@ -195,6 +216,23 @@ class JobQueue:
             [now_utc_naive(), error, job_id],
         )
 
+    def defer(self, job_id: str, *, retry_after_s: float, reason: str) -> datetime:
+        """B2 — adiamento por orcamento: trabalho VALIDO aguardando budget.
+
+        Nao e `mark_failed`: `finished_at` continua vazio, a `dedup_key` fica
+        intacta, o progresso da coorte permanece no cache de logs e o job volta
+        a ser elegivel sozinho depois de `deferred_until`. Devolve o instante
+        agendado para que o chamador possa registra-lo na telemetria.
+        """
+        until = now_utc_naive() + timedelta(seconds=max(retry_after_s, 0.0))
+        self._store.execute(
+            "UPDATE jobs SET status = 'deferred_budget', started_at = NULL, "
+            "deferred_until = ?, defer_reason = ?, "
+            "defer_count = coalesce(defer_count, 0) + 1 WHERE job_id = ?",
+            [until, reason, job_id],
+        )
+        return until
+
     def requeue(self, job_id: str) -> None:
         """Budget ran out mid-job (T1.8 §3: re-enqueue for after
         pointsResetIn) — back to `queued`, `started_at` cleared.
@@ -223,8 +261,9 @@ class JobQueue:
 
     def list_active(self) -> list[Job]:
         rows = self._store.execute_returning(
-            f"SELECT {JOB_COLUMNS} FROM jobs WHERE status IN ('queued', 'running') "
-            "ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, created_at ASC"
+            f"SELECT {JOB_COLUMNS} FROM jobs WHERE status IN ({_ACTIVE_SQL}) "
+            "ORDER BY CASE status WHEN 'running' THEN 0 "
+            "WHEN 'queued' THEN 1 ELSE 2 END, created_at ASC"
         )
         return [row_to_job(r) for r in rows]
 
@@ -239,7 +278,7 @@ class JobQueue:
     def _find_active_by_dedup_key(self, dedup_key: str) -> Job | None:
         rows = self._store.execute_returning(
             f"SELECT {JOB_COLUMNS} FROM jobs WHERE dedup_key = ? "
-            "AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1",
+            f"AND status IN ({_ACTIVE_SQL}) ORDER BY created_at DESC LIMIT 1",
             [dedup_key],
         )
         return row_to_job(rows[0]) if rows else None
@@ -254,8 +293,7 @@ class JobQueue:
 
     def _count_active_for_user(self, discord_user_id: str) -> int:
         rows = self._store.execute_returning(
-            "SELECT count(*) FROM jobs WHERE discord_user_id = ? "
-            "AND status IN ('queued', 'running')",
+            f"SELECT count(*) FROM jobs WHERE discord_user_id = ? AND status IN ({_ACTIVE_SQL})",
             [discord_user_id],
         )
         return int(rows[0][0])
