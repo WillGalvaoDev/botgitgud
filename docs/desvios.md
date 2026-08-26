@@ -827,3 +827,22 @@ de um projeto pessoal/comunidade pequena).
   pelo Git. Detalhes em `docs/spell-cache-runtime-separation.md`.
 - **T0.4 preservada:** o catálogo moderno continua descartando `category`; o seed mantém o campo
   apenas para o `legacy/bot.py` congelado.
+
+## D-36 — cost model recalibrado, revertendo a decisão registrada no prewarm real
+
+- **Classificação:** reversão explícita e datada de uma decisão anterior deste mesmo documento;
+  aplicada em 2026-08-26 junto da correção B1/B2/B3.
+- **Decisão anterior:** após o primeiro prewarm real, `docs/production-readiness-cold-build.md`
+  registrou "**nada foi recalibrado**", com a justificativa de que duas medições (uma de 100 refs,
+  uma de 37) não bastavam para trocar um viés por outro.
+- **O que mudou:** não a evidência, e sim o **uso**. Enquanto o build era one-shot, subestimar
+  queries/ref só distorcia a previsão. Com o build incremental, o modelo passa a decidir **quantas
+  referências entram em cada janela** — e um modelo que subestima autoriza mais trabalho do que o
+  orçamento comporta, que é exatamente a falha que o incremental existe para evitar.
+- **Mudança:** `cold_build_queries_per_reference` 15 → 23,4 (medido: 864 queries / 37 refs) e nova
+  banda `cold_build_queries_uncertainty` = 1,3, separada da banda de pontos (1,2).
+- **Limite reconhecido:** 23,4 continua sendo **uma** medição, de uma carga específica (fight de
+  ~500 s, Demonology pet-heavy, `damage_events` muito paginado). Não foi promovida a verdade
+  universal nem virou modelo por spec/duração; a banda de 1,3 é o reconhecimento explícito dessa
+  incerteza. O objetivo declarado é nunca superestimar quantas referências cabem — throughput menor
+  é o preço aceito.

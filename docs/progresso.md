@@ -598,3 +598,27 @@ execuções reais do bot — 100 → 362 entradas e a chave `category` removida 
 `legacy/bot.py:532` exige `category`, então os 2 golden tests legados falham. Verificado por
 isolamento: revertendo **apenas** `spells.json`, a suíte fica 982/982 verde. Nenhum snapshot foi
 alterado. Decisão pendente do usuário (ver relatório).
+
+## B1/B2/B3 — cold build interativo resumível (2026-08-26)
+
+Os três bloqueadores do readiness gate eram um problema só: o build frio no caminho interativo não
+era operacionalmente resumível. Detalhes em `docs/production-readiness-cold-build.md`.
+
+- **B1:** `validate_cold_build_policy` só avaliava o incremento mínimo do prewarm, então a política
+  interativa one-shot (3.804 pontos exigidos num teto de 3.600) passava em silêncio e virava defer
+  eterno. `ColdBuildExecution` separa ONE_SHOT de RESUMABLE_INCREMENTAL; os dois caminhos de
+  produção declaram o segundo e preflightam 1 referência.
+- **Algoritmo compartilhado:** `analysis/cohort_increment.py` extrai o incremental que o prewarm já
+  usava. Prewarm e interativo chamam o MESMO `advance_cohort_build` — não há segunda implementação.
+  Cache como checkpoint (zero refetch), parcial nunca READY, e remedição do orçamento a cada lote de
+  5 referências como guarda em tempo de execução.
+- **B2:** `CohortDeferredBudget` caía em `except BotGitGudError` e virava `mark_failed`. Agora
+  `deferred_budget` é estado de job próprio, com `deferred_until` (derivado do `pointsResetIn` real,
+  sem chamada extra), `defer_reason` e `defer_count`. O mesmo job retoma sozinho, com a mesma
+  dedup_key; o usuário não repete `!analisar`.
+- **B3:** `cold_build_queries_per_reference` 15 → 23,4 (medido) com banda própria de queries (1,3),
+  separada da banda de pontos (1,2). Reverte a decisão de "nada foi recalibrado" — ver D-36.
+- **Telemetria:** o caminho da fila passou a gravar artefato por tentativa, com `job_id`; um
+  adiamento registra progresso e nunca `final_status=completed`.
+- **Validação:** suíte completa verde, ruff/format/pyright verdes, 0 chamadas WCL, 0 envios Discord.
+  25 testes novos (incremento, jobs, worker, pipeline, snapshot).

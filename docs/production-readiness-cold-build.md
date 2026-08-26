@@ -477,3 +477,174 @@ seguinte volta a publicar normalmente.
 
 As duas propriedades têm testes separados, como devem: serializar corretamente e sobreviver a uma
 falha futura de observabilidade são garantias distintas.
+
+---
+
+# B1/B2/B3 — o cold build interativo passa a ser resumível
+
+Os três bloqueadores do readiness gate da v1.0 eram **um problema só**: o build frio no caminho
+interativo não era operacionalmente resumível. Foram corrigidos juntos porque nenhum deles é
+utilizável isolado — uma política possível sem retomada continua descartando o pedido, e uma
+retomada sobre um modelo que subestima custo continua ameaçando o orçamento.
+
+## B1 — a política interativa era matematicamente impossível
+
+`validate_cold_build_policy` existia justamente para diagnosticar política impossível, mas avaliava
+**apenas o incremento mínimo do prewarm** (uma referência). Com isso a política interativa passava
+em silêncio:
+
+| Item | Valor |
+|---|---|
+| Queries para 100 refs (modelo antigo) | 1.506 |
+| Limite superior em pontos | 2.554 |
+| Exigido para iniciar | 2.554 + piso 1.000 + margem 250 = **3.804** |
+| Teto absoluto da conta | **3.600 pts/h** |
+
+`allowed = False` com o orçamento **cheio**. Toda coorte fria era adiada para sempre, e o sintoma
+chegava ao usuário como "tente novamente mais tarde" — indefinidamente.
+
+**Causa real:** a pergunta estava errada. "As 100 referências cabem nesta janela?" não é
+respondível com sim numa conta de 3.600 pontos, e nunca precisou ser: o prewarm já provou em
+produção que 100 referências cabem em **várias** janelas.
+
+**Correção.** `ColdBuildExecution` separa as duas perguntas:
+
+- `RESUMABLE_INCREMENTAL` — basta que **uma** referência caiba no teto;
+- `ONE_SHOT` — o trabalho **inteiro** precisa caber numa janela.
+
+`validate_cold_build_policy` passou a receber modo, execução e número de referências, e
+`preflight_cold_build` repassa os três. O default de `preflight_cold_build` é `ONE_SHOT`: um
+chamador que não declara como pretende gastar recebe a verificação estrita, que falha alto em vez de
+virar defer eterno. Os dois caminhos de produção declaram `RESUMABLE_INCREMENTAL` e preflightam
+`references=1`.
+
+## O algoritmo incremental, agora compartilhado
+
+`analysis/cohort_increment.py` extrai o algoritmo que o prewarm já usava; **não** há uma segunda
+implementação. `build_cohorts` (prewarm) e `run_analysis` (interativo/worker) chamam o mesmo
+`advance_cohort_build`, diferindo apenas no `ColdBuildMode` — e portanto apenas no piso protegido e
+na margem.
+
+    pendentes = candidatos sem log em cache
+    enquanto houver pendentes:
+        orçamento  = client.refresh_budget()          # medição REAL, a cada lote
+        affordable = affordable_references(orçamento, modo)
+        se affordable == 0: adia
+        lote = pendentes[: min(affordable, chunk, len(pendentes))]
+        fetch_cohort_logs(lote)                       # escreve cada log no cache
+        se o lote inteiro voltou sem nada novo: para  # não é orçamento: log inservível
+    sobrou pendente? -> DEFERRED_BUDGET, pool NÃO escrito
+    nada pendente?   -> write_candidate_pool -> READY
+
+Três propriedades sustentam o desenho:
+
+- **cache como checkpoint** — `fetch_many` consulta o Store antes de qualquer rede, então uma
+  referência concluída numa janela anterior nunca volta a custar um ponto. Não há tabela de
+  progresso: o progresso *é* o cache;
+- **parcial nunca é READY** — o pool é o sinal de "coorte pronta", e só é escrito quando **todas** as
+  referências planejadas estão em cache. O caminho interativo violava isto: escrevia o pool logo
+  após a query de rankings, publicando uma coorte cujos membros ainda custariam ~1.500 queries;
+- **guarda em tempo de execução** — o preflight autoriza, mas não protege. Se o custo real por
+  referência superar o modelo, é a remedição a cada lote que encolhe o passo seguinte. O lote
+  (`cold_build_chunk_references`, 5) é o intervalo entre duas medições, e é ele que limita o quanto
+  o consumo pode passar do previsto antes da próxima decisão.
+
+### Exemplo: 100 referências em três janelas
+
+| Janela | Orçamento | Processadas | Acumulado | Estado | Refetch |
+|---|---|---|---|---|---|
+| 1 | ~2.810 pts | 30 | 30/100 | `deferred_budget` | — |
+| 2 | ~3.325 pts | 40 | 70/100 | `deferred_budget` | **0** |
+| 3 | ~2.810 pts | 30 | 100/100 | `ready` | **0** |
+
+O pool só existe ao fim da janela 3. Coberto por
+`test_cohort_increment.py::test_hundred_references_complete_across_three_windows_with_zero_refetch`.
+
+### Limitação conhecida
+
+Um lote cujas referências não podem ser buscadas (log removido da WCL, por exemplo) encerra a janela
+com `defer_reason=no_progress` em vez de girar em laço. A coorte continua não-READY e será
+retentada; se a referência for permanentemente inservível, o alvo não fecha sozinho. É o mesmo
+comportamento de antes desta correção — não uma regressão — e segue registrado como pendência.
+
+## B2 — um adiamento virava falha permanente
+
+`CohortDeferredBudget` herda de `AnalysisError`, logo de `BotGitGudError`, e o worker tratava esse
+ramo com `mark_failed`. O resultado contradizia a própria mensagem entregue ao usuário: o bot
+prometia continuidade e descartava o pedido no mesmo instante — junto com o progresso já pago em
+pontos de API. Só `RateLimitBudgetExceeded` chegava ao `requeue`.
+
+**Correção.** `deferred_budget` é agora um estado de job com significado próprio:
+
+| Estado | Significado |
+|---|---|
+| `failed` | não há expectativa de retentativa automática |
+| `deferred_budget` | trabalho **válido** aguardando orçamento, com progresso preservado |
+
+- `JobQueue.defer()` grava `status='deferred_budget'`, `deferred_until`, `defer_reason` e incrementa
+  `defer_count`. `finished_at` continua vazio: o trabalho não terminou;
+- `claim_next` reconsidera jobs adiados cujo `deferred_until` já passou — **o mesmo job**, com a
+  mesma `dedup_key` e o mesmo `job_id`, sem criar nenhum job novo;
+- `deferred_budget` conta como trabalho ativo: dedup, cota do usuário e `!status` o enxergam. Um
+  pedido repetido enquanto adiado é deduplicado no job existente;
+- a cláusula `except CohortDeferredBudget` **precede** `except BotGitGudError` no worker. A ordem é
+  o próprio contrato;
+- o seguidor do single-flight também adia. Antes levantava `CohortNotReady`, que caía no mesmo ramo
+  genérico e falhava o job do segundo usuário.
+
+Migração idempotente (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`), como a de `delivery_status`.
+
+### Quando o job volta
+
+`pointsResetIn` já vem junto do `rateLimitData` que o cliente consulta, então saber a hora certa
+**não custa nenhuma chamada extra**: `deferred_until = agora + pointsResetIn`. Sem esse dado, cai em
+`cold_build_defer_retry_s` (600 s). Nunca há reenfileiramento imediato — o orçamento só melhora com
+o reset da janela, e `claim_next` filtra por `deferred_until`, então não existe polling agressivo
+nem laço de retentativa.
+
+### O que o usuário vê
+
+Na primeira tentativa fria, o enfileiramento avisa que a análise **continuará sozinha** e que **não
+é preciso repetir o comando**. Adiamentos seguintes são silenciosos: repetir "ainda esperando" a
+cada janela seria ruído. Quando a coorte fica pronta, o mesmo job termina a análise e entrega o
+relatório normalmente, sem nenhuma ação do usuário.
+
+## B3 — o modelo de custo subestimava o trabalho real
+
+O prewarm real gastou **864 queries para 37 referências ≈ 23,4 q/ref**, contra as **15** modeladas.
+Essa medição foi registrada e deliberadamente **não** recalibrada na época, porque duas medições não
+bastavam. O que mudou a decisão foi o uso: um modelo que subestima **autoriza mais referências do
+que o orçamento comporta** — exatamente o que um build incremental não pode fazer.
+
+**Correção — queries e pontos passam a ser variáveis separadas, cada uma com banda própria.** Os
+dois erros do smoke apontaram para lados opostos (queries/ref acima do modelo, pts/query abaixo);
+uma banda única sobre o produto esconderia ambos.
+
+| Constante | Antes | Depois | Origem |
+|---|---|---|---|
+| `cold_build_queries_per_reference` | 15 | **23,4** | medido: 864 q / 37 refs |
+| `cold_build_queries_uncertainty` | — | **1,3** | banda de queries (nova) |
+| `cold_build_points_per_query` | 1,413 | 1,413 | medido, inalterado |
+| `cold_build_cost_uncertainty` | 1,2 | 1,2 | banda de pontos, inalterada |
+
+23,4 **não** é tratado como verdade universal: é a única medição real, e a carga varia com duração,
+spec, pets e paginação de `damage_events`. O fator 1,3 é a banda sobre essa medição. O objetivo
+declarado do modelo é **nunca superestimar quantas referências cabem**, não acertar o consumo exato
+— throughput menor é o resultado aceito de propósito. Quem decide se o build cabe é sempre o
+orçamento em **pontos**; a estimativa de queries serve à previsão e à observabilidade.
+
+Consequência prática numa conta de 3.600 pts/h: ~45 referências por janela cheia, contra as 100 que
+a política antiga exigia de uma vez e nunca conseguia.
+
+## Observabilidade
+
+O lifecycle do build interativo usa o mesmo canal do prewarm (D-34: nada exige abrir o DuckDB de
+fora). O snapshot expõe `mode`, `state` (`building`/`deferred_budget`/`ready`/`failed`),
+`cohort_id`, `job_id`, `planned`, `completed`, `remaining`, `batch_size`, `current_budget` e
+`estimated_points_remaining`. Todos são campos de lifecycle: `set_context` os recusa, pela mesma
+regra estrutural que o bug do prewarm impôs.
+
+O caminho da fila — o caro — passou a produzir artefato de telemetria por tentativa
+(`data/ops/analysis-runs/`), com `job_id` para correlação. Um adiamento registra
+`cold_build_started=true`, `cold_build_state=deferred_budget` e o progresso, e **nunca**
+`final_status=completed`: um adiamento não é conclusão, e também não é `analysis_failed`.
