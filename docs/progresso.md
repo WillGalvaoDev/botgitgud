@@ -675,3 +675,36 @@ defer/resume, WCL, entrega ou exceções. Detalhes em `docs/v1-operational-loggi
 - **Não substitui nada:** analysis-runs continua a fonte por análise, ops-snapshot o estado atual,
   `jobs` o estado dos pedidos. O log é a história.
 - **33 testes novos**, todos em `tmp_path`, zero rede. Suíte: 1218 passed, 1 deselected.
+
+## B6 — supervisão externa ao processo (2026-08-26)
+
+`WorkerSupervisor` só responde por consumidores dentro do processo; se `serve` inteiro morrer, nada
+o traz de volta. Detalhes em `docs/v1-process-supervision.md`.
+
+- **Solução:** política de restart/backoff/storm/stop em Python
+  (`src/botgitgud/ops/supervisor.py`, `python -m botgitgud.cli supervise`), testável com pytest;
+  PowerShell (`scripts/bot-supervisor.ps1`) é só a casca que garante venv+cwd; Task Scheduler só
+  lança essa casca uma vez no logon/boot — não decide reinício do bot.
+- **Nunca dois `serve`:** lock `msvcrt` do supervisor (verificado empiricamente: 2ª tentativa
+  levanta `PermissionError`) + único child rastreado por vez + PID liveness real na recuperação de
+  boot. Achado empírico registrado: `os.kill(pid, 0)` **não** detecta morte no Windows — usado
+  `ctypes`/`OpenProcess` em vez disso.
+- **Clean shutdown sem sinal de SO:** arquivo `control/stop.request` (nunca apagado por quem lê,
+  só por `start-bot-service.ps1`), polled pelo bot (`_stop_request_watcher`) que chama
+  `bot.close()` de dentro do próprio loop — reusa o `finally` de B5 (`process.stopping/stopped`,
+  DuckDB liberado). Supervisor só espera o PID sumir; `terminate()` é escalada, nunca o caminho
+  normal.
+- **Restart policy:** qualquer saída sem `stop.request` reinicia (mesmo exit 0 — `serve` roda pra
+  sempre por desenho). Backoff exponencial (2s→60s), reset após 300s saudável, storm-breaker (5
+  falhas/600s).
+- **Log separado:** `supervisor.jsonl` (nunca `botgitgud.jsonl`) — `enable_file_logging` ganhou
+  parâmetro `filename` opcional, generalização não-invasiva de B5.
+- **5 scripts PowerShell** idempotentes (`install/uninstall/start/stop-bot-service.ps1`,
+  `bot-supervisor.ps1`), ASCII puro (acentos quebram parsing do PS 5.1 sem BOM — achado empírico),
+  validados sintaticamente mas **não instalados**.
+- **Limitação honesta registrada:** o watcher de stop foi testado só com bot falso; a cadeia real
+  `stop.request → process.stopped` no JSONL exige ensaio real antes do soak de 24h.
+- **70 testes novos** (36 supervisor + 4 watcher + fixes em specs/config/worker_report_invariants).
+  Achado colateral corrigido: dois testes vazavam config global do structlog
+  (`cache_logger_on_first_use=True` prende `get_logger()` já resolvidos para sempre — sem
+  `reset_defaults()` no teardown, um módulo qualquer ficava mudo em testes posteriores).

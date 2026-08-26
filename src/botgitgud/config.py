@@ -55,6 +55,27 @@ class Settings(BaseSettings):
     log_backup_count: int = 5
     max_workers: int = 4
 
+    # -- B6: supervisão externa ao processo `serve` --------------------------
+    supervisor_poll_interval_s: float = 2.0
+    supervisor_backoff_base_s: float = 2.0
+    supervisor_backoff_max_s: float = 60.0
+    # Um crash raro nao deve herdar o backoff acumulado de crashes antigos: se
+    # o filho ficou de pe por mais que isto, o proximo restart volta ao
+    # attempt 1 em vez de continuar escalando um backoff que ja nao reflete o
+    # estado atual.
+    supervisor_backoff_reset_after_s: float = 300.0
+    # N falhas dentro da janela = crash-loop real, nao ma sorte pontual. O
+    # supervisor para de tentar (nao consome CPU em loop) e exige intervencao.
+    supervisor_storm_threshold: int = 5
+    supervisor_storm_window_s: float = 600.0
+    # Tempo dado ao bot para fechar sozinho (bot.close(), DuckDB liberado)
+    # antes de a escalada para TerminateProcess ser considerada.
+    supervisor_stop_grace_s: float = 30.0
+    # Intervalo de polling do arquivo de stop request DENTRO do bot — separado
+    # do polling do supervisor porque sao processos diferentes com relogios
+    # de resposta independentes.
+    bot_stop_poll_interval_s: float = 1.0
+
     # -- T0.3: WclClient ------------------------------------------------------
     wcl_connect_timeout_s: float = 5.0
     wcl_read_timeout_s: float = 30.0

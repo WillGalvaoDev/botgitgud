@@ -19,6 +19,7 @@ import contextvars
 import functools
 import re
 from collections.abc import Callable, Coroutine, Sequence
+from pathlib import Path
 from typing import Any
 
 import discord
@@ -52,6 +53,7 @@ from botgitgud.errors import (
     PlayerNotFound,
     ScopeRejected,
 )
+from botgitgud.ops.control import stop_request_path_for
 from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
 
@@ -303,12 +305,33 @@ def _enqueue_message(result: EnqueueResult) -> str:
     )
 
 
+async def _stop_request_watcher(bot: commands.Bot, data_dir: Path, poll_interval_s: float) -> None:
+    """B6 — a metade do bot do canal de controle de `ops/control.py`.
+
+    O supervisor externo nao manda nenhum sinal de SO: ele escreve
+    `control/stop.request` e espera o processo sumir sozinho. Este watcher e
+    quem torna isso um shutdown de verdade — `bot.close()` roda de dentro do
+    proprio loop de eventos, onde o websocket e (via o `finally` de
+    `_cmd_serve`) o DuckDB sao efetivamente liberados. Nunca remove o
+    arquivo: por contrato (`ops/control.py`), so `start-bot-service.ps1` faz
+    isso.
+    """
+    stop_path = stop_request_path_for(data_dir)
+    while True:
+        await asyncio.sleep(poll_interval_s)
+        if stop_path.exists():
+            log.info("discord_bot.stop_requested")
+            await bot.close()
+            return
+
+
 def build_bot(deps: Deps) -> commands.Bot:
     intents = discord.Intents.default()
     intents.message_content = True
     bot = commands.Bot(command_prefix="!", intents=intents)
     queue = JobQueue(deps.store)
     supervisor = WorkerSupervisor()
+    stop_watcher_started = False
 
     @bot.event
     async def on_connect() -> None:
@@ -318,6 +341,7 @@ def build_bot(deps: Deps) -> commands.Bot:
 
     @bot.event
     async def on_ready() -> None:
+        nonlocal stop_watcher_started
         n_reverted = queue.recover_from_crash()
         if n_reverted:
             log.info("discord_bot.crash_recovery", n_reverted=n_reverted)
@@ -327,6 +351,15 @@ def build_bot(deps: Deps) -> commands.Bot:
             # D-34: publica já no boot, para que `ops-status` responda desde o
             # primeiro segundo em vez de esperar o primeiro tick do worker.
             _publish_snapshot(deps, queue, queue.list_active(), None, None)
+        if not stop_watcher_started:
+            # on_ready pode disparar de novo numa reconexao; o watcher so
+            # precisa existir uma vez por processo, nao uma vez por conexao.
+            asyncio.get_event_loop().create_task(
+                _stop_request_watcher(
+                    bot, deps.settings.data_dir, deps.settings.bot_stop_poll_interval_s
+                )
+            )
+            stop_watcher_started = True
         log.info("discord_bot.ready", user=str(bot.user))
 
     @bot.command(name="analisar")

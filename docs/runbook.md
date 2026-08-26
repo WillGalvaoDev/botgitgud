@@ -1,5 +1,7 @@
 # Runbook operacional — botgitgud v1.0
 
+Para manter `serve` no ar continuamente no Windows (instalação, start/stop
+limpo, restart automático, reboot), consulte `docs/v1-process-supervision.md`.
 Para a trilha operacional durável (JSON Lines em `data/logs/`, session id,
 rotação e como auditar um soak), consulte `docs/v1-operational-logging.md`.
 Para determinismo do relatório e ordenação canônica, consulte

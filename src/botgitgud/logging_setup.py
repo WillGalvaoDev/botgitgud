@@ -29,6 +29,9 @@ import structlog
 
 LOG_DIRNAME = "logs"
 LOG_FILENAME = "botgitgud.jsonl"
+# B6: log próprio do supervisor de processo — nunca o mesmo arquivo do `serve`,
+# mesmo os dois rodando ao mesmo tempo (são processos Python separados).
+SUPERVISOR_LOG_FILENAME = "supervisor.jsonl"
 
 # Marca o handler que este módulo instala, para que uma reconfiguração troque o
 # destino em vez de empilhar um segundo arquivo escrevendo as mesmas linhas.
@@ -177,6 +180,7 @@ def enable_file_logging(
     max_bytes: int,
     backup_count: int,
     session_id: str | None = None,
+    filename: str = LOG_FILENAME,
 ) -> str:
     """Instala o sink durável e devolve o `session_id` deste processo.
 
@@ -186,6 +190,11 @@ def enable_file_logging(
     dá o teto: `max_bytes * (backup_count + 1)`.
 
     Chamar duas vezes troca o destino em vez de duplicar linhas.
+
+    `filename` existe para o supervisor de processo (B6): ele roda como um
+    processo Python SEPARADO do bot (sem dois writers concorrentes no mesmo
+    arquivo), mas mesmo assim nunca deve escrever em `botgitgud.jsonl` — esse é
+    o sink do processo `serve`. `supervisor.jsonl` usa este parâmetro.
     """
     global _session_id
     _session_id = session_id or uuid.uuid4().hex[:12]
@@ -193,7 +202,7 @@ def enable_file_logging(
     directory = log_dir_for(data_dir)
     directory.mkdir(parents=True, exist_ok=True)
     handler = logging.handlers.RotatingFileHandler(
-        directory / LOG_FILENAME,
+        directory / filename,
         maxBytes=max_bytes,
         backupCount=backup_count,
         encoding="utf-8",

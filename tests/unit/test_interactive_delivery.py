@@ -90,7 +90,7 @@ def _deps(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(
         store=Store(tmp_path),
         client=SimpleNamespace(),
-        settings=SimpleNamespace(data_dir=tmp_path),
+        settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
     )
 
 

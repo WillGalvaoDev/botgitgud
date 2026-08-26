@@ -75,7 +75,8 @@ def _deps(tmp_path: Path) -> SimpleNamespace:
         store=Store(tmp_path),
         client=SimpleNamespace(),
         # D-34: o worker loop e o on_ready publicam o ops-snapshot em data_dir.
-        settings=SimpleNamespace(data_dir=tmp_path),
+        # bot_stop_poll_interval_s: B6, o on_ready arma o watcher de stop.request.
+        settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
     )
 
 
@@ -391,3 +392,55 @@ def test_on_ready_revives_a_dead_worker(tmp_path: Path, monkeypatch: pytest.Monk
     asyncio.run(reconnect_after_death())
     assert starts == 2
     deps.store.close()
+
+
+# -- B6: watcher de stop-request -----------------------------------------------------
+
+
+class _FakeCloseBot:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def test_stop_request_watcher_calls_bot_close_once_the_marker_appears(
+    tmp_path: Path,
+) -> None:
+    """O canal de controle e so um arquivo (ops/control.py): a presenca dele
+    e o unico gatilho, sem nenhum sinal de SO envolvido.
+    """
+    from botgitgud.ops.control import request_stop
+
+    bot = _FakeCloseBot()
+
+    async def scenario() -> None:
+        watcher = asyncio.ensure_future(
+            discord_module._stop_request_watcher(bot, tmp_path, poll_interval_s=0.01)  # type: ignore[arg-type]
+        )
+        await asyncio.sleep(0.03)
+        assert bot.closed is False  # nao fecha sozinho sem o pedido
+        request_stop(tmp_path)
+        await asyncio.wait_for(watcher, timeout=2.0)
+
+    asyncio.run(scenario())
+    assert bot.closed is True
+
+
+def test_stop_request_watcher_never_deletes_the_marker_itself(tmp_path: Path) -> None:
+    """Contrato de ops/control.py: so start-bot-service.ps1 limpa o arquivo —
+    nunca quem o le, senao uma corrida entre o watcher e o supervisor poderia
+    fazer o segundo achar que ninguem pediu parada.
+    """
+    from botgitgud.ops.control import request_stop, stop_requested
+
+    bot = _FakeCloseBot()
+    request_stop(tmp_path)
+
+    async def scenario() -> None:
+        await discord_module._stop_request_watcher(bot, tmp_path, poll_interval_s=0.01)  # type: ignore[arg-type]
+
+    asyncio.run(scenario())
+    assert bot.closed is True
+    assert stop_requested(tmp_path) is True  # continua la

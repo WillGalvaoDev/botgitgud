@@ -29,7 +29,9 @@ def _claim(queue: JobQueue, dedup: str = "ABCDEFGHIJKLMNOP:1:Zilbag", user: str 
 
 
 def _deps(tmp_path: Path) -> Any:
-    return SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    return SimpleNamespace(
+        settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0)
+    )
 
 
 # -- RC.11: analise concluida implica artefato em disco --------------------------
@@ -145,7 +147,9 @@ def test_status_reports_worker_running_and_stopped(tmp_path: Path) -> None:
     async def scenario() -> None:
         with Store(tmp_path) as store:
             deps = SimpleNamespace(
-                store=store, client=SimpleNamespace(), settings=SimpleNamespace(data_dir=tmp_path)
+                store=store,
+                client=SimpleNamespace(),
+                settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
             )
             bot = discord_module.build_bot(deps)  # type: ignore[arg-type]
             status: Any = bot.get_command("status").callback  # type: ignore[union-attr]

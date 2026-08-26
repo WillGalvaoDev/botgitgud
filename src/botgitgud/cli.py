@@ -298,6 +298,31 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_supervise(_args: argparse.Namespace) -> int:
+    """B6 — supervisão EXTERNA ao processo `serve`. Nunca chama `_build_deps`:
+    o supervisor não fala com WCL nem Discord, apenas relança o filho.
+    """
+    from botgitgud.ops.supervisor import SupervisorSettings
+    from botgitgud.ops.supervisor import main as run_supervisor
+
+    settings = Settings()  # type: ignore[call-arg]  # populated from .env at runtime
+    supervisor_settings = SupervisorSettings(
+        poll_interval_s=settings.supervisor_poll_interval_s,
+        backoff_base_s=settings.supervisor_backoff_base_s,
+        backoff_max_s=settings.supervisor_backoff_max_s,
+        backoff_reset_after_s=settings.supervisor_backoff_reset_after_s,
+        storm_threshold=settings.supervisor_storm_threshold,
+        storm_window_s=settings.supervisor_storm_window_s,
+        stop_grace_s=settings.supervisor_stop_grace_s,
+    )
+    return run_supervisor(
+        settings.data_dir,
+        supervisor_settings,
+        log_max_bytes=settings.log_max_bytes,
+        log_backup_count=settings.log_backup_count,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="botgitgud")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -348,6 +373,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_serve = sub.add_parser("serve", help="Inicia o bot do Discord (processo de longa duração).")
     p_serve.set_defaults(func=_cmd_serve)
+
+    p_supervise = sub.add_parser(
+        "supervise",
+        help=(
+            "Supervisiona `serve` como processo filho: reinicia em crash "
+            "com backoff, nunca duplica, para em restart storm (B6)."
+        ),
+    )
+    p_supervise.set_defaults(func=_cmd_supervise)
 
     return parser
 
