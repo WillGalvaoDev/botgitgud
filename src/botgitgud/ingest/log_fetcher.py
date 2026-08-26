@@ -16,6 +16,7 @@ from typing import Any
 
 import structlog
 
+from botgitgud import telemetry
 from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
@@ -175,6 +176,9 @@ class LogFetcher:
         for player_log in fetched_logs:
             self._store.write_log(player_log)
 
+        telemetry.record_reference_batch(
+            expected=len(refs), cache_hits=cache_hits, fetched=len(fetched_logs)
+        )
         with self._query_count_lock:
             queries_made = self._query_count
         wall_time_s = time.monotonic() - start

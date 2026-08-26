@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 import structlog
 
+from botgitgud import telemetry
 from botgitgud.errors import (
     AuthError,
     ConfigError,
@@ -279,6 +280,9 @@ class WclClient:
                 duration_ms=duration_ms,
                 attempt=attempt,
             )
+            # Ponto central de contabilidade: toda query passa por aqui. Fora de
+            # uma analise instrumentada isto e no-op.
+            telemetry.record_query(op_name, attempt=attempt)
 
             if res.status_code == 200:
                 body = res.json()

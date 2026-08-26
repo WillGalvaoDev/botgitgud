@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
+from botgitgud import telemetry
 from botgitgud.analysis.cohort import (
     COHORT_MIN_HARD,
     POSITIONAL_MIN_N,
@@ -115,7 +116,10 @@ def run_analysis(
     too few survive match_cohort's covariate degradation cascade, which can
     happen on either path) on every expected failure path.
     """
-    player_log = deps.fetcher.fetch(req.report_code, req.fight_id, req.character_name)
+    # Papel explicito por fase: a mesma op_name serve jogador e referencia,
+    # entao quem distingue e o momento do pipeline, nao a query.
+    with telemetry.role_scope(telemetry.QueryRole.PLAYER_ANALYZED):
+        player_log = deps.fetcher.fetch(req.report_code, req.fight_id, req.character_name)
 
     # T0.9: the scope gate runs immediately after identifying the spec,
     # BEFORE any ranking query — no API points spent on out-of-scope input.
@@ -192,12 +196,13 @@ def run_analysis(
                 preflight_cold_build(deps.client, deps.settings, cohort_id)
                 raise CohortNotReady(f"construção da coorte {cohort_id} não foi concluída")
 
-    reference_logs = fetch_cohort_logs(
-        deps.fetcher,
-        candidates,
-        max_workers=deps.settings.max_workers,
-        expected_partition=partition,
-    )
+    with telemetry.role_scope(telemetry.QueryRole.REFERENCE):
+        reference_logs = fetch_cohort_logs(
+            deps.fetcher,
+            candidates,
+            max_workers=deps.settings.max_workers,
+            expected_partition=partition,
+        )
     matched_logs, match_report = match_cohort(player_log, reference_logs, min_n=COHORT_MIN_HARD)
     if len(matched_logs) < COHORT_MIN_HARD:
         msg = (

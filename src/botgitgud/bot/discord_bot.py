@@ -26,6 +26,7 @@ from discord.ext import commands
 
 from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
+from botgitgud.bot.analysis_runs import now_iso, track_analysis
 from botgitgud.bot.delivery import (
     ChannelResolver,
     DeliveryContext,
@@ -305,89 +306,132 @@ def build_bot(deps: Deps) -> commands.Bot:
 
         req = AnalysisRequest(report_code=code, fight_id=fight_id, character_name=char_name)
         loop = asyncio.get_running_loop()
-        # T1.7/T1.8: allow_cold_build=False — the fast path never builds a
-        # 100-log cohort synchronously; a cache miss falls back to the job
-        # queue (§8 "nunca baixa 100 logs de forma síncrona").
-        call = functools.partial(run_analysis, req, deps, allow_cold_build=False)
-        try:
-            result = await loop.run_in_executor(None, call)
-        except (PlayerNotFound, FightNotFound):
-            await ctx.send(
-                f"❌ Jogador `{char_name}` não foi encontrado neste fight "
-                "ou ocorreu um erro na busca."
-            )
-            return
-        except ScopeRejected as e:
-            await ctx.send(f"❌ {e}")
-            return
-        except CohortNotReady:
-            enqueue_result = queue.enqueue(
-                job_type="analyze",
-                dedup_key=f"{code}:{fight_id}:{char_name}",
-                discord_user_id=str(ctx.author.id),
-                discord_channel_id=str(ctx.channel.id),
-            )
-            await ctx.send(_enqueue_message(enqueue_result))
-            return
-        except InsufficientCohort as e:
-            await ctx.send(
-                "❌ Não há kills comparáveis suficientes para uma análise confiável "
-                f"({e.n_members} logs, mínimo {e.minimum_required}). Isso costuma acontecer em "
-                "encontros pouco populares ou com duração de kill atípica."
-            )
-            return
-        except ApiError as e:
-            log.warning("discord_bot.api_error", error=str(e))
-            await ctx.send("❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos.")
-            return
+        # Telemetria auditavel: o smoke do Fiskowl funcionou mas nao pode ser
+        # provado depois porque tudo vivia em stdout. O tracker publica o
+        # artefato mesmo em return antecipado ou excecao.
+        with track_analysis(
+            deps.settings.data_dir,
+            budget=deps.client,
+            player=char_name,
+            report_code=code,
+            fight_id=fight_id,
+        ) as run:
+            # T1.7/T1.8: allow_cold_build=False — the fast path never builds a
+            # 100-log cohort synchronously; a cache miss falls back to the job
+            # queue (§8 "nunca baixa 100 logs de forma síncrona").
+            call = functools.partial(run_analysis, req, deps, allow_cold_build=False)
+            try:
+                result = await loop.run_in_executor(None, call)
+            except (PlayerNotFound, FightNotFound):
+                run.final_status = "target_not_found"
+                await ctx.send(
+                    f"❌ Jogador `{char_name}` não foi encontrado neste fight "
+                    "ou ocorreu um erro na busca."
+                )
+                return
+            except ScopeRejected as e:
+                run.final_status = "scope_rejected"
+                await ctx.send(f"❌ {e}")
+                return
+            except CohortNotReady:
+                run.final_status = "enqueued_cold_build"
+                run.hot_path = False
+                enqueue_result = queue.enqueue(
+                    job_type="analyze",
+                    dedup_key=f"{code}:{fight_id}:{char_name}",
+                    discord_user_id=str(ctx.author.id),
+                    discord_channel_id=str(ctx.channel.id),
+                )
+                await ctx.send(_enqueue_message(enqueue_result))
+                return
+            except InsufficientCohort as e:
+                run.final_status = "insufficient_cohort"
+                await ctx.send(
+                    "❌ Não há kills comparáveis suficientes para uma análise confiável "
+                    f"({e.n_members} logs, mínimo {e.minimum_required}). Isso costuma acontecer em "
+                    "encontros pouco populares ou com duração de kill atípica."
+                )
+                return
+            except ApiError as e:
+                run.final_status = "wcl_api_error"
+                run.error_type = type(e).__name__
+                log.warning("discord_bot.api_error", error=str(e))
+                await ctx.send(
+                    "❌ Erro ao consultar a API do WCL. Tente novamente em alguns minutos."
+                )
+                return
 
-        # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
-        summary_text = render_header_and_top3(result.header, result.top_actions)
-        html_report = render_html_report(
-            result.header,
-            result.comparisons,
-            manifest=result.manifest,
-            build_divergence=result.build_divergence,
-            performance=result.performance,
-            dps_gap=result.dps_gap,
-            top_actions=result.top_actions,
-            duration_s=result.header.duration_max_s,
-        )
-        # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
-        # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
-        # relatorio num 403 e ainda dizendo ao usuario que o preservara.
-        artifact_id = interactive_artifact_id(code, fight_id, char_name)
-        # ctx satisfaz Sendable/o extrator de contexto em runtime; as sobrecargas
-        # de Context.send do discord.py nao casam nominalmente com o Protocol.
-        context = context_from_discord(ctx, job_id=artifact_id)
-        try:
-            persist_report(deps.settings.data_dir, artifact_id, html_report)
-        except ReportPersistenceError as e:
-            # A.5: sem artefato, nao se tenta anexar nada e nao se afirma
-            # preservacao. O processo segue saudavel.
-            log.error(
-                "discord_bot.interactive_report_persistence_failed",
-                error=str(e),
-                **context.fields(),
+            # Hot path confirmado: chegamos aqui sem CohortNotReady.
+            run.hot_path = True
+            header = result.header
+            run.class_name = header.class_name
+            run.spec_name = header.spec
+            run.duration_s = header.duration_max_s
+            run.cohort_members = header.reference_n
+            if result.manifest is not None:
+                run.cohort_id = result.manifest.cohort_id
+                run.partition = result.manifest.wcl_partition
+                run.cohort_state = "ready"
+
+            # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
+            summary_text = render_header_and_top3(result.header, result.top_actions)
+            html_report = render_html_report(
+                result.header,
+                result.comparisons,
+                manifest=result.manifest,
+                build_divergence=result.build_divergence,
+                performance=result.performance,
+                dps_gap=result.dps_gap,
+                top_actions=result.top_actions,
+                duration_s=result.header.duration_max_s,
             )
-            await send_text(
+            # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
+            # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
+            # relatorio num 403 e ainda dizendo ao usuario que o preservara.
+            artifact_id = interactive_artifact_id(code, fight_id, char_name)
+            # ctx satisfaz Sendable/o extrator de contexto em runtime; as sobrecargas
+            # de Context.send do discord.py nao casam nominalmente com o Protocol.
+            context = context_from_discord(ctx, job_id=artifact_id)
+            try:
+                persist_report(deps.settings.data_dir, artifact_id, html_report)
+            except ReportPersistenceError as e:
+                run.final_status = "report_persistence_failed"
+                run.error_type = type(e).__name__
+                run.error_message = str(e)
+                run.report_path_exists = False
+                # A.5: sem artefato, nao se tenta anexar nada e nao se afirma
+                # preservacao. O processo segue saudavel.
+                log.error(
+                    "discord_bot.interactive_report_persistence_failed",
+                    error=str(e),
+                    **context.fields(),
+                )
+                await send_text(
+                    ctx,  # type: ignore[arg-type]
+                    content=(
+                        "⚠️ A análise foi concluída, mas não consegui guardar o relatório "
+                        "neste servidor. Refaça a análise para obtê-lo."
+                    ),
+                    context=context,
+                )
+                return
+            log.info("discord_bot.interactive_report_persisted", **context.fields())
+            run.report_artifact_id = artifact_id
+            run.report_path_exists = True
+            run.report_persisted_at = now_iso()
+            run.channel_id = context.channel_id
+            run.guild_id = context.guild_id
+
+            run.delivery_started_at = now_iso()
+            outcome = await send_report(
                 ctx,  # type: ignore[arg-type]
-                content=(
-                    "⚠️ A análise foi concluída, mas não consegui guardar o relatório "
-                    "neste servidor. Refaça a análise para obtê-lo."
-                ),
+                summary=summary_text,
+                html=html_report,
                 context=context,
+                preserved=True,
             )
-            return
-        log.info("discord_bot.interactive_report_persisted", **context.fields())
-
-        await send_report(
-            ctx,  # type: ignore[arg-type]
-            summary=summary_text,
-            html=html_report,
-            context=context,
-            preserved=True,
-        )
+            run.delivery_finished_at = now_iso()
+            run.delivery_status = str(outcome.status)
 
     @bot.command(name="status")
     async def cmd_status(ctx: commands.Context) -> None:
