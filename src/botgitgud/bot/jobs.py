@@ -146,6 +146,14 @@ class JobQueue:
             # novo e sem perder a dedup_key — mas so depois de `deferred_until`.
             # Sem essa clausula o worker giraria em loop apertado sobre um
             # orcamento que so melhora no reset da janela.
+            #
+            # Esta clausula E `Job.is_claimable()` (job_models.py) sao a MESMA
+            # regra em duas linguagens — SQL aqui porque a query precisa
+            # filtrar no banco, Python la porque o guard do worker loop decide
+            # sem tocar o banco. Manter as duas sincronizadas e o que evita a
+            # regressao real do soak de 2026-08-27: um `deferred_budget`
+            # vencido que o guard nunca detectava como elegivel, entao esta
+            # query correta nunca era sequer chamada.
             rows = self._store.execute_returning(
                 f"""
                 SELECT {JOB_COLUMNS} FROM jobs

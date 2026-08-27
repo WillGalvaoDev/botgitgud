@@ -708,3 +708,29 @@ o traz de volta. Detalhes em `docs/v1-process-supervision.md`.
   Achado colateral corrigido: dois testes vazavam config global do structlog
   (`cache_logger_on_first_use=True` prende `get_logger()` já resolvidos para sempre — sem
   `reset_defaults()` no teardown, um módulo qualquer ficava mudo em testes posteriores).
+
+## B2-fix — worker loop não reconhecia deferred_budget vencido (2026-08-27)
+
+Incidente real descoberto no soak de 24h (T+2h): job de usuário real (Wargyu), 99/100 refs de cold
+build, deferiu por `no_progress`, `deferred_until` calculado corretamente via `pointsResetIn` real
+— mas nunca foi retomado (74 min observados após o prazo).
+
+- **Causa:** `_worker_loop`'s guard só testava `status == "queued"`, nunca `deferred_budget`
+  vencido. `claim_next()` já sabia reivindicar corretamente; nunca era chamado sem um `queued`
+  coexistindo por coincidência. `Job.deferral_elapsed()` existia mas nunca era chamado — dead code,
+  sintoma da desconexão.
+- **Fix:** `Job.is_claimable()` (job_models.py) como regra canônica única (queued OU
+  deferred_budget vencido), usada tanto pelo guard do worker quanto documentada como a mesma regra
+  que `claim_next()` já aplicava em SQL. Reusa a lista já buscada para o snapshot — zero consulta
+  nova, zero chamada WCL extra. Otimização original (nunca checar orçamento sem trabalho) intacta.
+- **Testes:** 30 em test_jobs.py (is_claimable puro + coerência com claim_next real), 4 em
+  test_discord_bot.py (guard do worker loop nos 4 cenários: queued/vencido/futuro/combinado), 1
+  teste sintético end-to-end obrigatório em test_worker.py reproduzindo o incidente exato
+  (planned=100, completed=99) dirigido pelo `_worker_loop` de verdade — a diferença crítica frente
+  ao teste de resumo já existente, que chamava `claim_next()` direto e por isso não capturou a
+  regressão.
+- **Não tocado:** incremental cold build, cost model, cache-as-checkpoint, single-flight, hot
+  reserve, retry timing, ops snapshot, telemetria.
+- **Soak antigo:** permanece registrado como FAIL em T+2h. Bot/supervisor da soak anterior seguem
+  rodando com o código ANTIGO (Python não recarrega) — precisam de restart antes de um novo soak
+  usar a correção. Novo soak deve recomeçar do zero (T+0), sem reaproveitar as ~2h anteriores.

@@ -52,6 +52,12 @@ trate como processo travado ou morto.
    rode `recover-jobs` para "destravá-lo": criaria um segundo pedido e pagaria a mesma coorte duas
    vezes. Se `completed` não subir entre janelas com orçamento disponível, verifique
    `defer_reason=no_progress` nos logs (referência inservível, não orçamento).
+   **Incidente real (soak de 2026-08-27):** até a correção B2-fix, um `deferred_budget` cujo
+   `deferred_until` já tinha vencido só retomava se, por coincidência, outro job `queued` chegasse
+   — o guard do worker loop só reconhecia `status == queued`. Corrigido (`Job.is_claimable()`,
+   `docs/production-readiness-cold-build.md`). Se você observar um `deferred_budget` parado por
+   muito além de `deferred_until` numa versão **anterior** a essa correção, o job está
+   genuinamente preso — não é o comportamento normal do sistema.
 4. **Job travado.** Rode `python -m botgitgud.cli ops-status` — funciona com o bot no ar. Olhe
    `running=` e `oldest_running_started_at=`: um job `running` cuja idade excede em muito a duração
    típica de uma análise é suspeito. Se `snapshot_stale=true` ou o comando devolver exit 75, o

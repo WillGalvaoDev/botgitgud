@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import botgitgud.bot.jobs as jobs_module
-from botgitgud.bot.job_models import BudgetStatus
+from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import (
     MAX_ACTIVE_JOBS_PER_USER,
     MAX_CONCURRENT_JOBS,
@@ -402,4 +402,123 @@ def test_repeated_deferrals_accumulate_instead_of_resetting(tmp_path: Path) -> N
     job = queue.get(job_id)
     assert job is not None
     assert job.defer_count == 3
+    store.close()
+
+
+# -- B3-fix (incidente real do soak): guard do worker precisa concordar com
+# claim_next() sobre o que e "trabalho pendente" -----------------------------
+
+
+def _job_with_status(
+    *,
+    status: str,
+    deferred_until: object = None,
+) -> Job:
+
+    return Job(
+        job_id="job-x",
+        job_type="analyze",
+        dedup_key="R:1:P",
+        discord_user_id="u",
+        discord_channel_id="c",
+        status=status,  # type: ignore[arg-type]
+        created_at=now_utc_naive(),
+        started_at=None,
+        finished_at=None,
+        error=None,
+        report_path=None,
+        deferred_until=deferred_until,  # type: ignore[arg-type]
+    )
+
+
+def test_is_claimable_true_for_queued() -> None:
+    assert _job_with_status(status="queued").is_claimable() is True
+
+
+def test_is_claimable_true_for_deferred_budget_past_due() -> None:
+    from datetime import timedelta
+
+    past = now_utc_naive() - timedelta(seconds=1)
+    assert _job_with_status(status="deferred_budget", deferred_until=past).is_claimable() is True
+
+
+def test_is_claimable_false_for_deferred_budget_in_the_future() -> None:
+    from datetime import timedelta
+
+    future = now_utc_naive() + timedelta(hours=1)
+    job = _job_with_status(status="deferred_budget", deferred_until=future)
+    assert job.is_claimable() is False
+
+
+def test_is_claimable_true_for_deferred_budget_with_no_deferred_until() -> None:
+    """`deferred_until=None` significa "sem prazo conhecido" — nunca bloqueia
+    a retomada indefinidamente (mesma regra de `deferral_elapsed`).
+    """
+    assert _job_with_status(status="deferred_budget", deferred_until=None).is_claimable() is True
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "running", "cancelled"])
+def test_is_claimable_false_for_terminal_or_running_status(status: str) -> None:
+    assert _job_with_status(status=status).is_claimable() is False
+
+
+def test_is_claimable_accepts_an_explicit_now_for_deterministic_tests() -> None:
+    from datetime import timedelta
+
+    deferred_until = now_utc_naive() + timedelta(seconds=10)
+    job = _job_with_status(status="deferred_budget", deferred_until=deferred_until)
+    assert job.is_claimable(now=deferred_until - timedelta(seconds=1)) is False
+    assert job.is_claimable(now=deferred_until) is True
+    assert job.is_claimable(now=deferred_until + timedelta(seconds=1)) is True
+
+
+# -- coerencia: Job.is_claimable() precisa concordar com claim_next() de verdade ----
+
+
+def test_is_claimable_agrees_with_claim_next_for_an_expired_deferral(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=0.0, reason="orçamento reservado")
+
+    stored = queue.get(job_id)
+    assert stored is not None
+    assert stored.is_claimable() is True  # a MESMA previsao que claim_next() confirma abaixo
+
+    resumed = queue.claim_next(_full_budget())
+    assert resumed is not None and resumed.job_id == job_id
+    store.close()
+
+
+def test_is_claimable_agrees_with_claim_next_for_a_future_deferral(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    job_id = _enqueue(queue)
+    assert queue.claim_next(_full_budget()) is not None
+    queue.defer(job_id, retry_after_s=3600.0, reason="orçamento reservado")
+
+    stored = queue.get(job_id)
+    assert stored is not None
+    assert stored.is_claimable() is False  # a MESMA previsao que claim_next() confirma abaixo
+
+    assert queue.claim_next(_full_budget()) is None
+    store.close()
+
+
+def test_is_claimable_agrees_with_claim_next_for_done_and_failed(tmp_path: Path) -> None:
+    queue, store = _queue(tmp_path)
+    done_id = _enqueue(queue, dedup_key="R:1:Done", user="user-done")
+    claimed = queue.claim_next(_full_budget())
+    assert claimed is not None
+    queue.mark_done(done_id)
+
+    failed_id = _enqueue(queue, dedup_key="R:1:Failed", user="user-failed")
+    claimed2 = queue.claim_next(_full_budget())
+    assert claimed2 is not None
+    queue.mark_failed(failed_id, error="boom")
+
+    for job_id in (done_id, failed_id):
+        stored = queue.get(job_id)
+        assert stored is not None
+        assert stored.is_claimable() is False
+    assert queue.claim_next(_full_budget()) is None
     store.close()

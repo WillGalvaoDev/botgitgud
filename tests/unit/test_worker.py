@@ -6,8 +6,10 @@ session's test suite).
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -15,6 +17,7 @@ from test_cohort_builder import _responses_for
 from test_log_fetcher import _meta_response
 from test_pipeline import _build_deps, _DispatchTransport, _happy_path_responses
 
+import botgitgud.bot.discord_bot as discord_module
 import botgitgud.bot.worker as worker_module
 from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
@@ -302,7 +305,9 @@ def test_build_cohort_job_requeued_not_failed_on_rate_limit_budget_exceeded(
 # -- B2: adiamento e retomada do MESMO job -------------------------------------
 
 
-def _deferred_error(planned: int = 100, completed: int = 30) -> CohortDeferredBudget:
+def _deferred_error(
+    planned: int = 100, completed: int = 30, *, retry_after_s: float | None = None
+) -> CohortDeferredBudget:
     return CohortDeferredBudget(
         "orçamento temporariamente reservado",
         cohort_id="cohort-x",
@@ -312,6 +317,7 @@ def _deferred_error(planned: int = 100, completed: int = 30) -> CohortDeferredBu
         safety_margin=250,
         planned=planned,
         completed=completed,
+        retry_after_s=retry_after_s,
     )
 
 
@@ -382,6 +388,110 @@ def test_a_deferred_job_resumes_as_the_same_job_and_finally_delivers(
     assert done is not None
     assert done.status == "done"
     assert done.report_path is not None
+    store.close()
+
+
+def test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TESTE OBRIGATÓRIO — reprodução direta do incidente do soak de
+    2026-08-27 (job_id `2b3a1091d00c4bc49094ff3231bd5332`, 99/100 refs).
+
+    A diferença crítica em relação a `test_a_deferred_job_resumes_as_the_same_
+    job_and_finally_delivers` acima: aquele teste chama `queue.claim_next()`
+    DIRETAMENTE — e é exatamente por isso que a regressão real escapou da
+    suíte antes desta correção. Este teste dirige a retomada pelo `_worker_
+    loop` de verdade (`discord_bot.py`), com ZERO job novo enfileirado — só
+    o tick do próprio loop, exatamente como em produção.
+
+    O progresso 99/100 é representado de forma abstrata via
+    `CohortDeferredBudget(planned=100, completed=99)` (mesmos números do
+    incidente real); a mecânica de cache-as-checkpoint/no-refetch do motor
+    incremental em si já tem cobertura dedicada em test_cohort_increment.py
+    e não é reexercitada aqui — o que este teste prova é que o WORKER LOOP
+    chega a chamar `claim_next()` sozinho quando `deferred_until` vence.
+    """
+    import structlog
+
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport, cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    enqueued = queue.enqueue(
+        job_type="analyze",
+        dedup_key="ABCDEFGHIJKLMNOP:1:Zarad",
+        discord_user_id="user-1",
+        discord_channel_id="chan-1",
+    )
+    assert enqueued.job is not None
+    original_job_id = enqueued.job.job_id
+
+    calls = {"n": 0}
+    real_run_analysis = worker_module.run_analysis
+
+    def _flaky(*args: object, **kwargs: object) -> object:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Retry curto o bastante para vencer de verdade dentro do teste,
+            # sem precisar de um relógio injetável no worker loop (ele usa
+            # datetime.now() de verdade, como em produção).
+            raise _deferred_error(planned=100, completed=99, retry_after_s=0.05)
+        return real_run_analysis(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(worker_module, "run_analysis", _flaky)
+
+    events: list[dict[str, object]] = []
+
+    def _capture(_logger: object, _name: str, event_dict: Any) -> Any:
+        events.append(dict(event_dict))
+        raise structlog.DropEvent
+
+    structlog.configure(
+        processors=[structlog.contextvars.merge_contextvars, _capture],
+        wrapper_class=structlog.make_filtering_bound_logger(0),
+        cache_logger_on_first_use=False,
+    )
+
+    real_sleep = asyncio.sleep
+    ticks = {"n": 0}
+
+    async def real_time_ticks(_seconds: float) -> None:
+        # Sono real e curto: e o que permite `deferred_until` vencer de
+        # verdade entre um tick e o proximo, sem scheduler externo e sem
+        # busy loop (poll_interval efetivo aqui e de ~20ms, nao ms a ms).
+        ticks["n"] += 1
+        if ticks["n"] > 15:
+            raise asyncio.CancelledError
+        await real_sleep(0.02)
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", real_time_ticks)
+    bot = SimpleNamespace(get_channel=lambda _id: None)
+
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(discord_module._worker_loop(bot, deps, queue))  # type: ignore[arg-type]
+    finally:
+        structlog.reset_defaults()
+
+    # SEM job novo: exatamente duas tentativas de run_analysis — a que
+    # deferiu (99/100) e a que, retomada pelo proprio loop, terminou.
+    assert calls["n"] == 2
+
+    final = queue.get(original_job_id)
+    assert final is not None
+    assert final.job_id == original_job_id  # mesmo job, nao um novo
+    assert final.dedup_key == "ABCDEFGHIJKLMNOP:1:Zarad"  # mesma dedup_key
+    assert final.status == "done"  # cohort READY -> analysis -> job done
+    assert final.defer_count == 1  # incrementado uma vez, nunca resetado
+    assert final.report_path is not None
+
+    resumed_events = [e for e in events if e.get("event") == "job.resumed"]
+    assert len(resumed_events) == 1
+    assert resumed_events[0]["job_id"] == original_job_id
+    assert resumed_events[0]["defer_count"] == 1
+    started_events = [e for e in events if e.get("event") == "job.started"]
+    assert len(started_events) == 1  # a primeira tentativa foi "started", nao "resumed"
+
     store.close()
 
 

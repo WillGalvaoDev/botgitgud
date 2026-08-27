@@ -9,7 +9,7 @@ import pytest
 
 import botgitgud.bot.discord_bot as discord_module
 from botgitgud.bot.discord_bot import _enqueue_message, _notify_outcome, parse_report_input
-from botgitgud.bot.job_models import EnqueueResult, Job, now_utc_naive
+from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import read_snapshot
 from botgitgud.bot.worker import JobOutcome
@@ -25,7 +25,13 @@ from botgitgud.ingest.store import Store
 from botgitgud.report.text import ReportHeader
 
 
-def _job(job_type: str = "analyze", status: str = "running") -> Job:
+def _job(
+    job_type: str = "analyze",
+    status: str = "running",
+    *,
+    deferred_until: Any = None,
+    defer_count: int = 0,
+) -> Job:
     return Job(
         job_id="job-1",
         job_type=job_type,  # type: ignore[arg-type]
@@ -38,6 +44,8 @@ def _job(job_type: str = "analyze", status: str = "running") -> Job:
         finished_at=None,
         error=None,
         report_path=None,
+        deferred_until=deferred_until,
+        defer_count=defer_count,
     )
 
 
@@ -309,6 +317,160 @@ def test_worker_loop_publishes_the_ops_snapshot_each_tick(
     assert snapshot is not None
     assert (snapshot.queued, snapshot.running) == (0, 1)
     assert snapshot.points_remaining is None  # fila sem queued: nunca consultou orçamento
+
+
+# -- B3-fix: regressao real do soak de 2026-08-27 — guard precisa considerar ---------
+# deferred_budget vencido, nao so "queued". Job real: 2b3a1091d00c4bc49094ff3231bd5332
+# (99/100 refs, deferred_until 2026-08-27T05:34:09Z, nunca retomado sozinho).
+
+
+def _budget_ok(_deps: object) -> BudgetStatus:
+    return BudgetStatus(points_remaining=3600.0, limit_per_hour=3600.0)
+
+
+def test_worker_loop_resumes_an_expired_deferred_job_without_a_new_queued_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A regressão real: um `deferred_budget` cujo `deferred_until` já passou
+    precisa abrir o guard SOZINHO — sem nenhum job `queued` coexistindo.
+    Antes da correção, `claim_next()` nunca era sequer chamado neste cenário.
+    """
+    from datetime import timedelta
+
+    past = now_utc_naive() - timedelta(seconds=1)
+    deferred_job = _job(status="deferred_budget", deferred_until=past, defer_count=1)
+
+    calls = 0
+
+    async def one_iteration(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise asyncio.CancelledError
+
+    claim_calls: list[object] = []
+
+    def spy_claim_next(budget: object) -> None:
+        claim_calls.append(budget)
+        return None  # a execução real do job resumido é coberta pelo teste
+        # sintético end-to-end em test_worker.py; aqui a prova é que o
+        # guard deixou passar sem nenhum job `queued`.
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", one_iteration)
+    monkeypatch.setattr(discord_module, "_current_budget", _budget_ok)
+    queue = SimpleNamespace(list_active=lambda: [deferred_job], claim_next=spy_claim_next)
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+
+    assert len(claim_calls) == 1
+
+
+def test_worker_loop_does_not_check_budget_for_a_deferred_job_still_in_the_future(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Preserva a otimização original: um `deferred_budget` no futuro não
+    deve gastar um budget check a cada tick — só quando `deferred_until`
+    realmente vencer.
+    """
+    from datetime import timedelta
+
+    future = now_utc_naive() + timedelta(hours=1)
+    deferred_job = _job(status="deferred_budget", deferred_until=future)
+
+    async def stop(_seconds: float) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", stop)
+    monkeypatch.setattr(
+        discord_module,
+        "_current_budget",
+        lambda _deps: pytest.fail("budget não deve ser checado: deferral ainda no futuro"),
+    )
+    queue = SimpleNamespace(list_active=lambda: [deferred_job])
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+
+
+def test_worker_loop_ignores_a_future_deferred_job_even_with_a_queued_job_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dois jobs: um `deferred_budget` futuro e um `queued`. O guard abre
+    (por causa do `queued`) e `claim_next()` decide sozinho qual roda —
+    política inalterada, não retestada aqui.
+    """
+    from datetime import timedelta
+
+    future = now_utc_naive() + timedelta(hours=1)
+    future_job = _job(status="deferred_budget", deferred_until=future)
+    queued_job = _job(status="queued")
+
+    calls = 0
+
+    async def one_iteration(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise asyncio.CancelledError
+
+    claim_calls: list[object] = []
+
+    def spy_claim_next(budget: object) -> None:
+        claim_calls.append(budget)
+        return None
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", one_iteration)
+    monkeypatch.setattr(discord_module, "_current_budget", _budget_ok)
+    queue = SimpleNamespace(list_active=lambda: [future_job, queued_job], claim_next=spy_claim_next)
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+
+    assert len(claim_calls) == 1  # o queued sozinho já abre o guard
+
+
+def test_worker_loop_opens_the_guard_when_an_expired_deferral_coexists_with_a_queued_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dois jobs elegíveis ao mesmo tempo: um `deferred_budget` vencido e um
+    `queued` novo. O guard abre; a ordem entre os dois é política já coberta
+    por `claim_next()` em test_jobs.py, não reexaminada aqui.
+    """
+    from datetime import timedelta
+
+    past = now_utc_naive() - timedelta(seconds=1)
+    expired_job = _job(status="deferred_budget", deferred_until=past, defer_count=2)
+    queued_job = _job(status="queued")
+
+    calls = 0
+
+    async def one_iteration(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise asyncio.CancelledError
+
+    claim_calls: list[object] = []
+
+    def spy_claim_next(budget: object) -> None:
+        claim_calls.append(budget)
+        return None
+
+    monkeypatch.setattr(discord_module.asyncio, "sleep", one_iteration)
+    monkeypatch.setattr(discord_module, "_current_budget", _budget_ok)
+    queue = SimpleNamespace(
+        list_active=lambda: [expired_job, queued_job], claim_next=spy_claim_next
+    )
+    deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
+    worker_loop: Any = discord_module._worker_loop
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+
+    assert len(claim_calls) == 1
 
 
 def test_snapshot_write_failure_never_kills_the_worker(

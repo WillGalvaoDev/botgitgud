@@ -648,3 +648,108 @@ O caminho da fila — o caro — passou a produzir artefato de telemetria por te
 (`data/ops/analysis-runs/`), com `job_id` para correlação. Um adiamento registra
 `cold_build_started=true`, `cold_build_state=deferred_budget` e o progresso, e **nunca**
 `final_status=completed`: um adiamento não é conclusão, e também não é `analysis_failed`.
+
+---
+
+# B2-fix — o guard do worker loop não reconhecia `deferred_budget` vencido
+
+## Incidente real (soak de 2026-08-27, T+2h)
+
+O soak real de 24h (`docs/v1-process-supervision.md`) foi interrompido em T+2h. Um usuário real
+("Wargyu") disparou o primeiro cold build interativo em produção sob esta versão: 99 de 100
+referências completadas com sucesso, em 20 janelas incrementais respeitando o piso do orçamento o
+tempo todo — a prova viva de que B1/B2/B3 funcionam sob tráfego real. O job deferiu na última
+referência (`reason=no_progress`, não orçamento), com `deferred_until` calculado corretamente a
+partir do `pointsResetIn` real da WCL.
+
+74 minutos depois de `deferred_until` vencer, o job **não havia sido retomado**. Supervisor e bot
+seguiam vivos, sem crash, sem corrupção — o job simplesmente nunca voltava a ser tentado.
+
+## Causa raiz
+
+`src/botgitgud/bot/discord_bot.py`, `_worker_loop`:
+
+```python
+if not any(j.status == "queued" for j in active):
+    continue  # never spend a rate-limit check when there's nothing to run
+```
+
+Este guard existe para uma razão legítima — nunca gastar uma consulta de orçamento à WCL quando não
+há nada a fazer. Mas ele só reconhecia `status == "queued"`. Um job `deferred_budget`, mesmo com
+`deferred_until` já no passado, nunca tornava essa condição verdadeira sozinho, então o loop nunca
+chegava a chamar `queue.claim_next()` — e é `claim_next()` (não este guard) quem já sabia, desde o
+B2, reivindicar corretamente um `deferred_budget` vencido:
+
+```python
+WHERE job_type IN (...)
+  AND (
+        status = 'queued'
+     OR (status = 'deferred_budget'
+         AND (deferred_until IS NULL OR deferred_until <= ?))
+  )
+```
+
+A lógica de retomada sempre esteve correta. O bloqueio era inteiramente anterior a ela: o guard
+nunca foi atualizado quando `deferred_budget` foi introduzido no B2, e `Job.deferral_elapsed()` —
+o método que existia especificamente para essa checagem — nunca era chamado em lugar nenhum do
+código, um sintoma direto da desconexão.
+
+Sem coincidência de outro job `queued` chegando para abrir o guard por acidente, um `deferred_budget`
+ficava preso **para sempre**, apesar de progresso preservado e `deferred_until` válido — contradizendo
+diretamente a promessa dada ao usuário ("continuará automaticamente... não é preciso repetir o
+comando").
+
+## Correção
+
+Regra canônica de elegibilidade extraída para o domínio, `Job.is_claimable()`
+(`src/botgitgud/bot/job_models.py`):
+
+```python
+def is_claimable(self, now: datetime | None = None) -> bool:
+    if self.status == "queued":
+        return True
+    if self.status == "deferred_budget":
+        return self.deferral_elapsed(now)
+    return False
+```
+
+O guard do worker loop passou a usar exatamente essa regra, reaproveitando a lista já buscada para
+publicar o snapshot — nenhuma consulta nova ao banco, nenhuma chamada à WCL adicional:
+
+```python
+active = queue.list_active()
+_publish_snapshot(deps, queue, active, last_points, last_limit)
+if not any(j.is_claimable() for j in active):
+    continue  # never spend a rate-limit check when there's nothing to run
+```
+
+A otimização original (nunca checar orçamento sem trabalho pendente) está preservada — só a
+definição de "trabalho pendente" mudou, de "existe algo `queued`" para "existe algo elegível para
+`claim_next()`", que é a MESMA pergunta que `claim_next()` já respondia sozinho em SQL. O comentário
+em `jobs.py`'s `claim_next()` agora referencia explicitamente `Job.is_claimable()` como a mesma
+regra em duas linguagens, para que as duas nunca voltem a divergir.
+
+**`no_progress` não recebeu tratamento especial.** A correção é puramente temporal: se
+`deferred_until` venceu, o job é elegível — se a próxima tentativa também não progredir, ele pode
+deferir de novo pela política já existente (`advance_cohort_build`, inalterada).
+
+## O que NÃO mudou
+
+Incremental cold build, cost model, runtime budget guard, cache-as-checkpoint, single-flight, hot
+reserve, o próprio estado `deferred_budget`, o cálculo de `deferred_until` via `pointsResetIn`,
+no-refetch, ops snapshot, telemetria — nada disso foi tocado. A correção vive inteiramente na
+decisão de QUANDO chamar `claim_next()`, não em como `claim_next()` ou o motor incremental decidem
+o que fazer.
+
+## Teste de regressão
+
+`tests/unit/test_discord_bot.py::test_worker_loop_resumes_an_expired_deferred_job_without_a_new_queued_job`
+falharia contra o código antigo: fila com **apenas** um `deferred_budget` vencido, zero `queued`,
+prova que `claim_next()` é chamado mesmo assim.
+
+O incidente real (job_id `2b3a1091d00c4bc49094ff3231bd5332`, 99/100 referências) tem reprodução
+direta em
+`tests/unit/test_worker.py::test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop`
+— dirigida pelo `_worker_loop` de verdade (não por uma chamada direta a `claim_next()`, que é
+exatamente por que a regressão escapou da suíte antes desta correção), com os mesmos números do
+incidente (planned=100, completed=99), sem nenhum job novo enfileirado.

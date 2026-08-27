@@ -170,7 +170,15 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
         # nenhum outro consegue abri-lo. Publicar o resumo a cada tick é o que
         # permite ao `ops-status` responder com o bot no ar.
         _publish_snapshot(deps, queue, active, last_points, last_limit)
-        if not any(j.status == "queued" for j in active):
+        # Elegibilidade == Job.is_claimable(), a MESMA regra que claim_next()
+        # usa em SQL (jobs.py) — nunca "status == queued" sozinho. Incidente
+        # real do soak de 2026-08-27: um `deferred_budget` com `deferred_until`
+        # ja vencido nunca abria este guard porque ele so olhava "queued", e
+        # claim_next() — que ja sabia reivindicar o job vencido — nunca chegava
+        # a ser chamado. O job ficava preso ate, por coincidencia, outro job
+        # `queued` aparecer. Reusa `active` (ja buscado para o snapshot acima):
+        # nenhuma consulta nova ao banco, nenhuma chamada a WCL.
+        if not any(j.is_claimable() for j in active):
             continue  # never spend a rate-limit check when there's nothing to run
 
         try:

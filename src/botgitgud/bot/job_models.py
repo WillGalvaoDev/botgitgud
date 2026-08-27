@@ -115,6 +115,26 @@ class Job:
             return True
         return (now or now_utc_naive()) >= self.deferred_until
 
+    def is_claimable(self, now: datetime | None = None) -> bool:
+        """Regra CANONICA de elegibilidade — a mesma que `JobQueue.claim_next()`
+        aplica em SQL (ver `_CLAIMABLE_SQL` em jobs.py). Existe para que o guard
+        do worker loop ("vale a pena checar orcamento?") nunca possa discordar
+        de `claim_next()` ("o que reivindicar?") sobre o que conta como
+        trabalho pendente.
+
+        Incidente real do soak de 2026-08-27 T+2h: um job `deferred_budget`
+        com `deferred_until` ja vencido nunca era retomado, porque o guard
+        antigo so testava `status == "queued"` e nunca chamava `claim_next()`
+        sem um job `queued` coexistindo — mesmo `claim_next()` ja sabendo
+        reivindicar o job vencido. `deferred_budget` sem esta checagem virava
+        preso para sempre, exceto por coincidencia de outro job chegar.
+        """
+        if self.status == "queued":
+            return True
+        if self.status == "deferred_budget":
+            return self.deferral_elapsed(now)
+        return False
+
 
 @dataclass(frozen=True, slots=True)
 class EnqueueResult:
