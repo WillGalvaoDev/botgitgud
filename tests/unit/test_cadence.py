@@ -42,15 +42,46 @@ def test_ring_of_peace_is_not_filtered_by_name() -> None:
 
 
 def test_no_lexical_filters_anywhere_in_src() -> None:
-    """`grep -n 'potion\\|healthstone\\|trinket' src/` deve retornar vazio."""
+    """achado 3.12: elegibilidade de spell nunca pode depender do NOME.
+
+    `legacy/bot.py:523` decidia com
+    `any(x in name_lower for x in ["potion", "healthstone", ..., "trinket"])`,
+    e por isso este guard bane essas palavras em `src/`.
+
+    EB.0 introduziu a única exceção auditada: `domain/models.py` usa
+    "trinket" como nome de SLOT de equipamento (`TRINKET_SLOTS = (12, 13)`),
+    selecionado por índice numérico do `combatantInfo.gear[]` — nunca
+    comparando o nome de coisa alguma. O intento do guard (nada de decisão
+    lexical sobre spells) continua valendo em todo o resto de `src/`,
+    incluindo `analysis/` inteiro, que é onde a elegibilidade é decidida.
+    """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
+    reviewed_exceptions = {src_root / "botgitgud" / "domain" / "models.py"}
+
     offenders = []
     for path in src_root.rglob("*.py"):
+        if path in reviewed_exceptions:
+            continue
         text = path.read_text(encoding="utf-8").lower()
         if any(word in text for word in banned_words):
             offenders.append(path)
     assert offenders == []
+
+
+def test_the_reviewed_trinket_exception_selects_by_slot_never_by_name() -> None:
+    """Guarda a própria exceção acima: se `domain/models.py` algum dia
+    passar a comparar nomes, este teste quebra em vez de deixar a exceção
+    virar um buraco silencioso no achado 3.12.
+    """
+    models = Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "domain" / "models.py"
+    text = models.read_text(encoding="utf-8")
+
+    assert "TRINKET_SLOTS: tuple[int, int] = (12, 13)" in text
+    assert "g.slot in TRINKET_SLOTS" in text
+    # nenhuma comparação de nome, em nenhuma forma
+    assert ".lower()" not in text
+    assert "name_lower" not in text
 
 
 # -- classification branches --------------------------------------------------

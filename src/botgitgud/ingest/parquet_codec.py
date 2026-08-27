@@ -13,7 +13,55 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from botgitgud.domain.models import AbilityDamage, FightRef, PhaseInterval, PlayerBuild, PlayerLog
+from botgitgud.domain.models import (
+    AbilityDamage,
+    FightRef,
+    GearPiece,
+    PhaseInterval,
+    PlayerBuild,
+    PlayerLog,
+    SetupProfile,
+    TalentNode,
+)
+
+
+def _encode_setup(setup: SetupProfile | None) -> str | None:
+    """EB.0: compact arrays, not objects — this is written once per log and
+    there are already ~1k of them; per-row key repetition is pure waste.
+    None (not "{}") when there is no setup, so a log written before EB.0
+    and a log whose combatantInfo was genuinely absent read back the same
+    honest way.
+    """
+    if setup is None:
+        return None
+    return json.dumps(
+        {
+            "talents": [[t.node_id, t.rank, t.spell_id] for t in setup.talents],
+            "gear": [[g.slot, g.item_id, g.item_level, g.set_id] for g in setup.gear],
+            "stats": dict(setup.stats),
+        },
+        separators=(",", ":"),
+    )
+
+
+def _decode_setup(raw: str | None) -> SetupProfile | None:
+    """Tolerant by contract: the ~977 Parquet files written before EB.0 have
+    no `setup_json` column at all, so `row.get(...)` yields None and this
+    returns None — they stay readable, and nothing is inferred for them.
+    """
+    if not raw:
+        return None
+    payload = json.loads(raw)
+    return SetupProfile(
+        talents=tuple(
+            TalentNode(node_id=t[0], rank=t[1], spell_id=t[2]) for t in payload.get("talents", [])
+        ),
+        gear=tuple(
+            GearPiece(slot=g[0], item_id=g[1], item_level=g[2], set_id=g[3])
+            for g in payload.get("gear", [])
+        ),
+        stats=dict(payload.get("stats", {})),
+    )
 
 
 def write_parquet_log(log: PlayerLog, path: Path) -> None:
@@ -31,6 +79,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
     resource_waste_json = json.dumps(dict(log.resource_waste))
     avg_targets_per_cast_json = json.dumps({str(k): v for k, v in log.avg_targets_per_cast.items()})
     talent_pairs_json = json.dumps([list(p) for p in sorted(build.talent_pairs)])
+    setup_json = _encode_setup(build.setup)
     phase_intervals_json = json.dumps(
         [[iv.phase_id, iv.occurrence, iv.start_ms, iv.end_ms] for iv in fight.phase_intervals]
     )
@@ -75,6 +124,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
             "resource_waste_json": [resource_waste_json],
             "avg_targets_per_cast_json": [avg_targets_per_cast_json],
             "talent_pairs_json": [talent_pairs_json],
+            "setup_json": [setup_json],
             "phase_intervals_json": [phase_intervals_json],
             "phase_cast_timeline_json": [phase_cast_timeline_json],
         }
@@ -114,6 +164,7 @@ def read_parquet_log(path: Path) -> PlayerLog:
         talent_pairs=frozenset(
             (p[0], p[1]) for p in json.loads(row.get("talent_pairs_json") or "[]")
         ),
+        setup=_decode_setup(row.get("setup_json")),
     )
     cast_timeline = {int(k): tuple(v) for k, v in json.loads(row["cast_timeline_json"]).items()}
     damage_by_ability = {

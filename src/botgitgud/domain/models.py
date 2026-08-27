@@ -58,6 +58,78 @@ class FightRef:
     phase_intervals: tuple[PhaseInterval, ...] = ()
 
 
+TRINKET_SLOTS: tuple[int, int] = (12, 13)
+
+
+@dataclass(frozen=True, slots=True)
+class GearPiece:
+    """EB.0: one equipped item, as `combatantInfo.gear[]` reports it.
+
+    `set_id` is non-null exactly for the raid's current tier-set pieces
+    (docs/schema_confirmado.md §4) — the same signal `count_tier_pieces`
+    already collapses into a bare count, kept here per-slot so a future
+    benchmark can say WHICH pieces, not just how many.
+
+    Empty slots (WCL reports `id: 0`) are never materialized as GearPiece.
+    """
+
+    slot: int
+    item_id: int
+    item_level: float | None = None
+    set_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TalentNode:
+    """EB.0: one talent-tree pick. `(node_id, rank)` is the pair T2.2's
+    Jaccard clustering already uses; `spell_id` is `talentTree[].id`, kept
+    because it is the only bridge from a talent to an observable cast.
+
+    docs/desvios.md D-26: `spell_id` does NOT resolve through
+    `gameData.ability` and there is no talent-name catalog anywhere in this
+    project — it is an identity, never a display name.
+    """
+
+    node_id: int
+    rank: int
+    spell_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SetupProfile:
+    """EB.0: everything the player CHOSE before the pull, as opposed to how
+    they executed. Parsed from the `combatantInfo` that
+    `QUERY_PLAYER_META` already fetches — zero additional API cost.
+
+    Exists so the Encounter Benchmark can ask "what are high performers
+    using?" independently of the analyzed player's own choices; see
+    docs/production-readiness-cold-build.md and the architecture review for
+    why deriving that from the player's own matched cohort is circular.
+
+    `stats` holds the LOWEST observed value per stat (`stats.<name>.min`),
+    the closest available proxy for the gear-derived baseline. It is NOT
+    armory-equivalent: a raid buff active for the whole fight is included,
+    and these are raw ratings, not percentages — converting to % needs
+    per-patch diminishing-returns tables this project does not have.
+    """
+
+    talents: tuple[TalentNode, ...] = ()
+    gear: tuple[GearPiece, ...] = ()
+    stats: Mapping[str, float] = field(default_factory=dict)
+
+    @property
+    def trinkets(self) -> tuple[GearPiece, ...]:
+        """Slots 12/13, ascending. May be shorter than 2 — a missing trinket
+        is reported as missing, never padded with a placeholder.
+        """
+        worn = (g for g in self.gear if g.slot in TRINKET_SLOTS)
+        return tuple(sorted(worn, key=lambda g: g.slot))
+
+    @property
+    def set_pieces(self) -> tuple[GearPiece, ...]:
+        return tuple(g for g in self.gear if g.set_id is not None)
+
+
 @dataclass(frozen=True, slots=True)
 class PlayerBuild:
     character_name: str
@@ -71,6 +143,10 @@ class PlayerBuild:
     external_buffs: frozenset[int] = frozenset()  # spell_ids of received external buffs (T2.1)
     has_augmentation: bool = False  # an Augmentation Evoker buffed this player (T2.1)
     talent_pairs: frozenset[tuple[int, int]] = frozenset()  # (nodeID, rank) set (T2.2)
+    # EB.0: None means "this log predates setup capture", NOT "this player
+    # had no setup" — the 977 logs cached before EB.0 read back this way,
+    # and every consumer must degrade honestly instead of inferring.
+    setup: SetupProfile | None = None
 
 
 @dataclass(frozen=True, slots=True)

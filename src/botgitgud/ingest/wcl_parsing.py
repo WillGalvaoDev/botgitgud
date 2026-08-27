@@ -14,7 +14,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from botgitgud.analysis.phases import find_interval
-from botgitgud.domain.models import PhaseInterval, PhaseKey
+from botgitgud.domain.models import (
+    GearPiece,
+    PhaseInterval,
+    PhaseKey,
+    SetupProfile,
+    TalentNode,
+)
 from botgitgud.domain.spells import SpellCatalog
 
 _ROLE_GROUP_TO_ROLE = {"dps": "dps", "healers": "healer", "tanks": "tank"}
@@ -32,6 +38,7 @@ class PlayerMatch:
     talent_hash: str | None
     tier_pieces: int | None
     talent_pairs: frozenset[tuple[int, int]] = frozenset()
+    setup: SetupProfile | None = None
 
 
 def extract_talent_pairs(talent_tree: list[dict[str, Any]]) -> frozenset[tuple[int, int]]:
@@ -60,6 +67,63 @@ def compute_talent_hash(talent_tree: list[dict[str, Any]]) -> str | None:
         return None
     payload = json.dumps(sorted(pairs), separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _as_float(value: Any) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
+
+
+def extract_setup_profile(combatant_info: dict[str, Any]) -> SetupProfile | None:
+    """EB.0: the pre-pull choices, from the `combatantInfo` the Summary
+    table already carries — no extra query, no extra API point.
+
+    Returns None only when there is genuinely nothing to record, so an
+    empty-but-present profile is never confused with "no combatantInfo".
+    Every field is independently optional: a log with gear but no stats
+    yields a profile with gear and an empty `stats`.
+
+    Deliberately does NOT reinterpret `talent_pairs`/`tier_pieces` — those
+    keep their own extractors and their exact current behavior, so EB.0
+    changes what is STORED, never what is ANALYZED.
+    """
+    if not isinstance(combatant_info, dict):
+        return None
+
+    talents = tuple(
+        TalentNode(
+            node_id=int(t["nodeID"]),
+            rank=int(t["rank"]),
+            spell_id=int(t["id"]) if isinstance(t.get("id"), int) else None,
+        )
+        for t in (combatant_info.get("talentTree") or [])
+        if isinstance(t, dict) and "nodeID" in t and "rank" in t
+    )
+
+    gear = tuple(
+        GearPiece(
+            slot=int(g["slot"]),
+            item_id=int(g["id"]),
+            item_level=_as_float(g.get("itemLevel")),
+            set_id=int(g["setID"]) if isinstance(g.get("setID"), int) else None,
+        )
+        for g in (combatant_info.get("gear") or [])
+        # `id == 0` is WCL's empty-slot marker (verified in the recorded
+        # cassettes: slots 16/17 come back as id 0, itemLevel 0).
+        if isinstance(g, dict) and isinstance(g.get("slot"), int) and g.get("id")
+    )
+
+    raw_stats = combatant_info.get("stats")
+    stats: dict[str, float] = {}
+    if isinstance(raw_stats, dict):
+        for name, value in raw_stats.items():
+            if isinstance(value, dict):
+                lowest = _as_float(value.get("min"))
+                if lowest is not None:
+                    stats[str(name)] = lowest
+
+    if not talents and not gear and not stats:
+        return None
+    return SetupProfile(talents=talents, gear=gear, stats=stats)
 
 
 def count_tier_pieces(gear: list[dict[str, Any]]) -> int | None:
@@ -107,11 +171,14 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                 talent_hash = None
                 tier_pieces = None
                 talent_pairs: frozenset[tuple[int, int]] = frozenset()
+                setup = None
                 if isinstance(combatant_info, dict):
                     talent_tree = combatant_info.get("talentTree") or []
                     talent_hash = compute_talent_hash(talent_tree)
                     talent_pairs = extract_talent_pairs(talent_tree)
                     tier_pieces = count_tier_pieces(combatant_info.get("gear") or [])
+                    # EB.0: mesmo combatantInfo, nenhuma query nova.
+                    setup = extract_setup_profile(combatant_info)
                 return PlayerMatch(
                     player_id=p["id"],
                     class_name=p.get("type") or "Unknown",
@@ -123,6 +190,7 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
                     talent_hash=talent_hash,
                     tier_pieces=tier_pieces,
                     talent_pairs=talent_pairs,
+                    setup=setup,
                 )
     return None
 
