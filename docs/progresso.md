@@ -734,3 +734,32 @@ build, deferiu por `no_progress`, `deferred_until` calculado corretamente via `p
 - **Soak antigo:** permanece registrado como FAIL em T+2h. Bot/supervisor da soak anterior seguem
   rodando com o código ANTIGO (Python não recarrega) — precisam de restart antes de um novo soak
   usar a correção. Novo soak deve recomeçar do zero (T+0), sem reaproveitar as ~2h anteriores.
+
+## Revisão arquitetural — Encounter Benchmark / Setup Analysis / Execution Cohort (2026-08-27)
+
+Revisão completa (sem implementação) confirmou por código, não por suposição: a Execution Cohort
+filtra candidatos pela covariável `talent_cluster` do PRÓPRIO jogador analisado
+(`cohort_match.py`), o que torna `analyze_build_divergence` cego a builds ruins populares — o aviso
+só dispara quando a build é rara o bastante para não formar cohort. Decisão: **GO** para separar
+Encounter Benchmark (o que quem vai bem usa, independente do jogador) + Setup Analysis (comparação
+sem causalidade) + Execution Cohort (redesenhada). Roadmap completo aprovado (EB.0→EB.5→SA→EC→RP);
+condições obrigatórias: EC.1 (presença relativa por spell) antes de EC.3 (remover talent_cluster do
+matching), `matching_policy_version` versionado antes de qualquer mudança de coorte, linguagem
+causal protegida por teste, Phase 4 sem promoção. Soak de 24h suspenso até a migração completa.
+
+**EB.0 — captura de SetupProfile (inerte por contrato):** `combatantInfo` já baixado por
+`QUERY_PLAYER_META` (zero custo WCL adicional) agora também produz `SetupProfile` (talentos
+completos, gear com `setID` por peça, trinkets, secondary stats), persistido em `setup_json`
+nullable no Parquet. `extract_talent_pairs`/`count_tier_pieces` — os únicos dois campos que o
+pipeline de fato consome — permanecem bit-a-bit idênticos; goldens intocados; os ~977 Parquet
+antigos leem `setup=None`. 19 testes novos (`test_setup_profile.py`).
+
+**EB.1 — identidade + política versionada do benchmark (offline, sem agregação):**
+`src/botgitgud/analysis/benchmark.py` define `EncounterBenchmarkTarget` (identidade =
+spec/encounter_id/difficulty/partition/benchmark_policy_version — `duration` e `item_level`
+deliberadamente FORA, por aprovação explícita) com `benchmark_id` determinístico e path-safe
+(formato slash-separado + `parse()`, mesmo padrão de `Phase4Target.target_id`, escolhido sobre hash
+opaco porque precisa ser reversível). `BenchmarkPolicy` versionada com as 3 bandas aprovadas
+(p50-75/p75-95/p95-99), semântica de fronteira explícita e testada (`[low, high)`; 99 e 100 ficam
+sem banda por design — gap documentado, não implementado silenciosamente). 53 testes novos
+(`test_benchmark.py`). Nenhuma agregação real, nenhum I/O — isso é EB.2.
