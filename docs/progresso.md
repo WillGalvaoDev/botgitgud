@@ -763,3 +763,54 @@ opaco porque precisa ser reversível). `BenchmarkPolicy` versionada com as 3 ban
 (p50-75/p75-95/p95-99), semântica de fronteira explícita e testada (`[low, high)`; 99 e 100 ficam
 sem banda por design — gap documentado, não implementado silenciosamente). 53 testes novos
 (`test_benchmark.py`). Nenhuma agregação real, nenhum I/O — isso é EB.2.
+
+## QA.0 — teste ambiental de `data/logs` (2026-08-27)
+
+`test_no_test_ever_writes_to_the_real_data_logs_directory` exigia o diretório ausente antes da
+suíte — falso positivo sempre que um bot real já tinha rodado na máquina (soak, supervisor).
+Substituído por `tests/conftest.py`'s `_protect_real_data_logs` (fixture de sessão, autouse):
+snapshot por conteúdo (tamanho+sha256, nunca `mtime` — reescrever os mesmos bytes ainda move
+`mtime`) no início da sessão, diff no fim. `data/logs` pode existir e conter evidência operacional
+real; a suíte só garante que nada nela muda. Mecanismo isolado em `tests/fixtures/dir_snapshot.py`,
+testado contra alvo sintético (`tmp_path`) em `test_operational_logging.py` (criação, remoção,
+adição, conteúdo-idêntico-tamanho-diferente-bytes, mtime-restaurado-mas-conteúdo-mudou).
+
+## EB.2 — agregação offline do Encounter Benchmark (2026-08-27)
+
+`src/botgitgud/analysis/benchmark_aggregate.py`: `build_encounter_benchmark(observations, *,
+target, policy) -> EncounterBenchmark`, pura/determinística, sem I/O — reutiliza `PlayerLog` como
+observação (já carrega tudo: report_code, identidade, rank_percent, duration, item_level,
+`SetupProfile`, dimensões do target), sem criar tipo novo redundante. Sem parâmetro de "jogador
+alvo" — a população inteira é agregada por banda, nunca filtrada por setup de ninguém (testado
+explicitamente via introspecção da assinatura, e via cenário 10 build-ruim/40 build-boa onde a
+build ruim aparece no p95-99 do mesmo jeito quando teve execução boa).
+
+- **`talent_build_key`**: identidade = `(node_id, rank)` ordenados; `spell_id` explicitamente
+  excluído (metadado auxiliar inconsistente, não decide identidade de build).
+- **Dedup real**: uma observação por jogador por banda (`DedupPolicy.ONE_LOG_PER_PLAYER` de EB.1
+  ganhou semântica). Prioridade determinística: maior `rank_percent`, depois `report_code` menor,
+  depois `fight_id` menor — nunca ordem de chegada, `hash()` ou timing.
+  `deduped_count` reporta quantas observações foram removidas.
+- **Trinkets**: individual por `item_id` (ilvl é contexto, não identidade); par canonicalizado por
+  `item_id` ordenado (slot 12/13 não importa); mesmo trinket nos dois slots conta o jogador uma vez
+  (nunca >100% de prevalência).
+- **Sets**: `setID` por peça agregado separadamente — não reusa `count_tier_pieces` legado, que
+  soma setIDs distintos juntos (o achado do cassete real com 2 setIDs, de EB.0). 2pc/4pc real fica
+  para SA.4.
+- **Stats secundárias**: Crit/Haste/Mastery/Versatility, ratings crus (sem conversão a %), n/median/
+  p25/p75 — as 4 chaves sempre presentes mesmo com n=0 (nunca desaparecem silenciosamente).
+- **Denominadores explícitos por dimensão**: nunca o total da banda — cada `PrevalenceDistribution`
+  carrega seu próprio `n_available`.
+- **Bandas fora da policy** (0-50, 99-100 com a policy padrão): contadas em `outside_policy_bands`,
+  nunca descartadas silenciosamente. `min_sample_size` marca banda como `"insufficient"` sem
+  descartar os dados.
+- **Determinismo**: testado com permutação de input (incl. `random.Random(42).shuffle`) produzindo
+  resultado byte-idêntico; nenhum campo com nome causal (`best_build`/`optimal`/`recommended`/
+  `ideal`) — guardado por teste de grep no próprio módulo.
+- Guard de achado 3.12 (`test_no_lexical_filters_anywhere_in_src`) ganhou uma segunda exceção
+  revisada: `benchmark_aggregate.py` usa "trinket" como termo de domínio, chaveado por `item_id`
+  (nunca nome — `GearPiece`/`TalentNode` nem têm campo de nome).
+- **46 testes novos** (`test_benchmark_aggregate.py`) + 2 (`test_cadence.py`, guarda da exceção).
+  Não implementado (fora de escopo, próximas tarefas): `analyze_setup`, `SetupFinding`,
+  persistência do benchmark, staleness, integração no pipeline/relatório, per-spell presence,
+  Phase 4 F3.

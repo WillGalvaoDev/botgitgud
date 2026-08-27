@@ -48,16 +48,23 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     `any(x in name_lower for x in ["potion", "healthstone", ..., "trinket"])`,
     e por isso este guard bane essas palavras em `src/`.
 
-    EB.0 introduziu a única exceção auditada: `domain/models.py` usa
-    "trinket" como nome de SLOT de equipamento (`TRINKET_SLOTS = (12, 13)`),
-    selecionado por índice numérico do `combatantInfo.gear[]` — nunca
-    comparando o nome de coisa alguma. O intento do guard (nada de decisão
-    lexical sobre spells) continua valendo em todo o resto de `src/`,
-    incluindo `analysis/` inteiro, que é onde a elegibilidade é decidida.
+    EB.0 introduziu a única exceção auditada até então: `domain/models.py`
+    usa "trinket" como nome de SLOT de equipamento (`TRINKET_SLOTS =
+    (12, 13)`), selecionado por índice numérico do `combatantInfo.gear[]`
+    — nunca comparando o nome de coisa alguma. EB.2 introduziu a segunda:
+    `analysis/benchmark_aggregate.py` agrega prevalência de trinkets, mas
+    por `item_id` (um inteiro), nunca por nome — não existe sequer um campo
+    de nome de item em `GearPiece`/`TalentNode` (domain/models.py) para
+    filtrar por ele. O intento do guard (nada de decisão lexical sobre
+    spells) continua valendo em todo o resto de `src/`, incluindo
+    `analysis/` fora dessas duas exceções, onde elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
-    reviewed_exceptions = {src_root / "botgitgud" / "domain" / "models.py"}
+    reviewed_exceptions = {
+        src_root / "botgitgud" / "domain" / "models.py",
+        src_root / "botgitgud" / "analysis" / "benchmark_aggregate.py",
+    }
 
     offenders = []
     for path in src_root.rglob("*.py"):
@@ -82,6 +89,30 @@ def test_the_reviewed_trinket_exception_selects_by_slot_never_by_name() -> None:
     # nenhuma comparação de nome, em nenhuma forma
     assert ".lower()" not in text
     assert "name_lower" not in text
+
+
+def test_the_reviewed_benchmark_aggregate_exception_keys_trinkets_by_item_id() -> None:
+    """Segunda exceção (EB.2): identidade de trinket é `item_id` (inteiro),
+    nunca um nome. `GearPiece`/`TalentNode` (domain/models.py) nem têm um
+    campo de nome — não há nada para comparar por string aqui.
+    """
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "botgitgud"
+        / "analysis"
+        / "benchmark_aggregate.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "str(g.item_id)" in text  # chave de trinket = item_id, não nome
+    assert "sorted(t.item_id for t in trinkets)" in text  # par canônico por item_id
+    # `.lower()` aqui só normaliza identidade de JOGADOR (achado 3.12 é sobre
+    # nome de SPELL/item) — mas nenhuma decisão de elegibilidade de spell
+    # pode depender de string em lugar nenhum deste arquivo.
+    assert "spell.lower()" not in text
+    assert "ability.lower()" not in text
+    assert ".name.lower()" not in text
 
 
 # -- classification branches --------------------------------------------------
