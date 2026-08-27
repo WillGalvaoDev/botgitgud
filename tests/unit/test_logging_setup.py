@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -113,8 +114,34 @@ def test_configure_logging_json_mode_does_not_raise() -> None:
         structlog.reset_defaults()
 
 
+_RAW_PRINT_CALL = re.compile(r"(?<![A-Za-z_])print\(")
+
+
 def test_no_raw_print_calls_anywhere_in_src() -> None:
-    """`grep -rn "print(" src/` deve retornar vazio (achado 4.9)."""
+    """`grep -rn "print(" src/` deve retornar vazio (achado 4.9).
+
+    Fronteira de palavra, não substring nua: EB.3 introduziu
+    `population_fingerprint`/`policy_fingerprint`
+    (analysis/benchmark_store_models.py), cujo nome contém "print(" só
+    porque "fingerprint" tem "print" como substring — não é uma chamada à
+    função embutida `print()`. `(?<![A-Za-z_])` garante que o "print(" real
+    (nunca precedido por letra/underscore) continua sendo pego.
+    """
     src_root = Path(__file__).resolve().parents[2] / "src"
-    offenders = [p for p in src_root.rglob("*.py") if "print(" in p.read_text(encoding="utf-8")]
+    offenders = [
+        p for p in src_root.rglob("*.py") if _RAW_PRINT_CALL.search(p.read_text(encoding="utf-8"))
+    ]
     assert offenders == []
+
+
+def test_the_print_call_guard_still_catches_a_real_print(tmp_path: Path) -> None:
+    """Guarda a própria correção acima: garante que a fronteira de palavra
+    não abriu um buraco silencioso para uma chamada `print(...)` real.
+    """
+    decoy = tmp_path / "decoy.py"
+    decoy.write_text("def f():\n    print('leaked to stdout')\n", encoding="utf-8")
+    assert _RAW_PRINT_CALL.search(decoy.read_text(encoding="utf-8")) is not None
+
+    clean = tmp_path / "clean.py"
+    clean.write_text("def population_fingerprint(x):\n    return x\n", encoding="utf-8")
+    assert _RAW_PRINT_CALL.search(clean.read_text(encoding="utf-8")) is None

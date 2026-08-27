@@ -53,17 +53,22 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     (12, 13)`), selecionado por índice numérico do `combatantInfo.gear[]`
     — nunca comparando o nome de coisa alguma. EB.2 introduziu a segunda:
     `analysis/benchmark_aggregate.py` agrega prevalência de trinkets, mas
-    por `item_id` (um inteiro), nunca por nome — não existe sequer um campo
-    de nome de item em `GearPiece`/`TalentNode` (domain/models.py) para
-    filtrar por ele. O intento do guard (nada de decisão lexical sobre
-    spells) continua valendo em todo o resto de `src/`, incluindo
-    `analysis/` fora dessas duas exceções, onde elegibilidade é decidida.
+    por `item_id` (um inteiro), nunca por nome. EB.3 introduziu a terceira:
+    `analysis/benchmark_store_models.py` apenas serializa o CAMPO
+    `trinket_prevalence` (nome de atributo Python, não uma decisão sobre
+    spell/item) de/para uma chave de dicionário JSON, ida e volta. Não
+    existe sequer um campo de nome de item em `GearPiece`/`TalentNode`
+    (domain/models.py) para filtrar por ele. O intento do guard (nada de
+    decisão lexical sobre spells) continua valendo em todo o resto de
+    `src/`, incluindo `analysis/` fora dessas três exceções, onde
+    elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
     reviewed_exceptions = {
         src_root / "botgitgud" / "domain" / "models.py",
         src_root / "botgitgud" / "analysis" / "benchmark_aggregate.py",
+        src_root / "botgitgud" / "analysis" / "benchmark_store_models.py",
     }
 
     offenders = []
@@ -112,6 +117,33 @@ def test_the_reviewed_benchmark_aggregate_exception_keys_trinkets_by_item_id() -
     # pode depender de string em lugar nenhum deste arquivo.
     assert "spell.lower()" not in text
     assert "ability.lower()" not in text
+
+
+def test_the_reviewed_benchmark_store_models_exception_only_passes_field_names_through() -> None:
+    """Terceira exceção (EB.3): `trinket_prevalence`/`trinket_pair_prevalence`
+    são nomes de CAMPO de `BandBenchmark` (EB.2), só copiados entre atributo
+    Python e chave JSON — nenhuma comparação de string decide elegibilidade
+    aqui.
+    """
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "botgitgud"
+        / "analysis"
+        / "benchmark_store_models.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "b.trinket_prevalence" in text  # leitura de atributo, não string
+    assert '"trinket_prevalence"' in text  # só a chave JSON correspondente
+    # `.lower()` aparece aqui só para normalizar IDENTIDADE DE JOGADOR
+    # (`population_fingerprint`), mesma convenção de
+    # benchmark_aggregate.py's `_player_identity` — não é elegibilidade de
+    # spell, então não é banida nesta exceção (diferente da 1a exceção,
+    # domain/models.py, onde nenhum `.lower()` deveria existir de jeito
+    # nenhum). O que este teste garante é mais específico: nenhuma decisão
+    # de SPELL/item por nome.
+    assert "spell" not in text.lower()
     assert ".name.lower()" not in text
 
 

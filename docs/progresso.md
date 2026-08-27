@@ -814,3 +814,53 @@ build ruim aparece no p95-99 do mesmo jeito quando teve execução boa).
   Não implementado (fora de escopo, próximas tarefas): `analyze_setup`, `SetupFinding`,
   persistência do benchmark, staleness, integração no pipeline/relatório, per-spell presence,
   Phase 4 F3.
+
+## EB.3 — persistência + staleness do Encounter Benchmark (2026-08-27)
+
+`src/botgitgud/analysis/benchmark_store.py` (`BenchmarkStore`) + `benchmark_store_models.py`
+(schema/serialização/freshness — mesmo split de `bot/job_models.py`/`jobs.py`): tabela dedicada
+`encounter_benchmarks` no MESMO warehouse DuckDB de `ingest/store.py`'s `Store` (nunca um banco
+separado), seguindo o padrão de extensão que `bot/jobs.py`'s `JobQueue` já estabeleceu — uma classe
+própria que recebe um `Store` e usa seus métodos SQL genéricos, então toda escrita continua
+serializada pelo lock único do `Store`. `ingest/store.py` **não foi tocado**.
+
+- **Identidade == upsert de graça**: `benchmark_id` (EB.1: spec/encounter/difficulty/partition/
+  policy_version) é `PRIMARY KEY`. Como qualquer dimensão diferente já produz um `benchmark_id`
+  diferente, coexistência (partition ou policy_version diferentes) cai direto do desenho de EB.1 —
+  nenhuma lógica extra. `INSERT ... ON CONFLICT (benchmark_id) DO UPDATE` é uma única transação
+  DuckDB (atômica por construção); `created_at` fica fora do `SET`, então um upsert nunca reescreve
+  a data de criação original.
+- **Payload**: JSON canônico do `EncounterBenchmark` inteiro (bands/prevalências/denominadores/
+  stats/coverage/status insufficient/target/policy_version) — round-trip exato testado. Payload
+  corrompido ou incompleto levanta `EncounterBenchmarkCorruptPayloadError` (falha fechada, nunca um
+  objeto parcial).
+- **Fingerprints** (nunca `hash()` do Python): `population_fingerprint` — sha256 de identidades
+  `(report_code, fight_id, jogador)` ORDENADAS antes de hashear (independente de ordem de input);
+  `policy_fingerprint` — sha256 do corpo inteiro da `BenchmarkPolicy` (mais fino que a string
+  `policy_version`: pega drift onde a versão declarada não mudou mas a definição real mudou).
+- **`BenchmarkFreshness`** (nunca bool solto): `status` fresh/stale + `reasons` estruturadas
+  (`partition_changed`, `policy_changed`, `population_growth`, `max_age_exceeded`, `missing`,
+  `corrupt`). `evaluate_benchmark_freshness` busca o benchmark mais RECENTE para spec/encontro/
+  dificuldade (sem partition/policy_version na busca) e compara contra o target/policy atuais —
+  é assim que uma mudança de partition ou de policy vira uma razão DETECTADA, não um "missing"
+  menos informativo.
+- **`BenchmarkFreshnessPolicy`** (nova, deliberadamente separada de `BenchmarkPolicy`):
+  `ttl_days=7` (TTL de cache) + `stale_population_growth_ratio=0.30` (heurística operacional,
+  versionável — documentado como tal). `BenchmarkPolicy.max_data_age_days` (EB.1, elegibilidade de
+  DADO) nunca é lido por `evaluate_benchmark_freshness` — distinção preservada e guardada por teste
+  de introspecção de bytecode.
+- **Fronteiras sem ambiguidade** (mesma convenção de EB.1): `age_days > ttl_days` é stale (o valor
+  exato do TTL ainda é fresco); `growth_ratio > threshold` é stale (30% exato ainda é fresco).
+- Cobertura parcial (setup disponível em parte da população) é persistível sem rejeição — freshness/
+  Setup Analysis futuras decidem publicabilidade, não o Store.
+- Sobrevive fechar/reabrir o `Store` (testado); migração (`CREATE TABLE IF NOT EXISTS` +
+  `ALTER ... ADD COLUMN IF NOT EXISTS`, hoje vazio) é idempotente.
+- Duas correções de guards existentes, ambas por colisão lexical genuína, não por enfraquecimento:
+  terceira exceção revisada do achado 3.12 em `test_cadence.py` (`benchmark_store_models.py` só
+  repassa o NOME do campo `trinket_prevalence` entre atributo Python e chave JSON); guard do achado
+  4.9 (`test_no_raw_print_calls_anywhere_in_src`) corrigido para fronteira de palavra — `"print("`
+  aparecia como substring dentro de `population_fingerprint`/`policy_fingerprint`, nunca uma chamada
+  real a `print()`; nova asserção prova que a correção ainda pega um `print()` de verdade.
+- **34 testes novos** (`test_benchmark_store.py`) + 2 guards. Não implementado (fora de escopo):
+  benchmark job, background refresh, integração com jobs/`!analisar`, `SetupFinding`,
+  `analyze_setup`, cohort policy v2, per-spell presence, Phase 4 F3.
