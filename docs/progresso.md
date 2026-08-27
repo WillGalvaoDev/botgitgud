@@ -864,3 +864,49 @@ serializada pelo lock único do `Store`. `ingest/store.py` **não foi tocado**.
 - **34 testes novos** (`test_benchmark_store.py`) + 2 guards. Não implementado (fora de escopo):
   benchmark job, background refresh, integração com jobs/`!analisar`, `SetupFinding`,
   `analyze_setup`, cohort policy v2, per-spell presence, Phase 4 F3.
+
+## EB.4 — construção incremental/resumível do Encounter Benchmark (2026-08-27)
+
+Auditoria prévia (obrigatória, feita antes de codar) encontrou dois fatos que mudaram o desenho:
+`table(dataType: Summary)` (a fonte de `combatantInfo`) é fight-wide e pode ser isolada da
+`QUERY_PLAYER_META` (que também baixa `castsTable`/`damageTable`, irrelevantes para setup) numa
+query nova, mínima; e `reportData.report.rankings` (já existente, `ingest/fight_rankings.py`, do
+gate de dados da Fase 4) dá `rankPercent` fight-wide a **~2,0 pts/fight**, contra ~1 pt **por
+jogador** da fonte de percentil usada no fetch completo — juntas, as duas cobrem 100% do que um
+benchmark de setup precisa por **no máximo 2 queries por fight único**, nunca por candidato.
+
+- **`ingest/benchmark_fetch.py`** (novo): `QUERY_PLAYER_SETUP_ONLY` (wcl/queries.py, aditiva) +
+  `fetch_fight_player_details` — reusa `find_player_in_details`/`extract_setup_profile` (EB.0) sem
+  duplicar parsing. Verificado ponta a ponta contra um cassete real antes de escrever testes.
+- **Cache em 2 níveis, mais barato primeiro**: (1) `Store.read_log()` — um `PlayerLog` já
+  analisado com `setup` presente é reaproveitado por inteiro, custo WCL = 0, dá `SetupProfile` E
+  `rank_percent` de graça; `setup=None` (log pré-EB.0) não conta como hit. (2) fetch fight-wide
+  para o resto, 2 queries por fight único não importa quantos candidatos compartilhem.
+- **`analysis/benchmark_build_progress.py`** (novo): tabela dedicada `benchmark_build_progress`
+  (nunca o `logs`/Parquet existente — uma observação de benchmark é um `PlayerLog` FINO, só em
+  memória, nunca escrito como log real). `register_candidates` é idempotente por PK
+  `(benchmark_id, report_code, fight_id, player_name)` — é isso que torna resume possível sem
+  refetch. Falha transitória incrementa `attempts`; vira `failed` permanente só ao atingir
+  `MAX_CANDIDATE_ATTEMPTS=3`, preservando evidência (`last_error`) em vez de girar para sempre.
+- **`analysis/benchmark_build_budget.py`** (novo): cost model SEPARADO do cold build da Execution
+  Cohort (~23,4 q/ref não se aplica — workload é outro). Deliberadamente NÃO estende
+  `ColdBuildMode` (misturaria conceitos — mode ali decide floor de `!analisar` vs prewarm, não um
+  terceiro workload estruturalmente diferente). Piso = `api_points_floor + hot_path_reserve`
+  (somado, não `max` como INTERACTIVE) + margem própria — mais conservador que qualquer
+  `ColdBuildMode` existente. Todas as constantes em `config.py`/`.env.example` documentadas como
+  não medidas (provisórias), banda de incerteza mais larga (1.5x) que o cold build por isso.
+- **`analysis/benchmark_builder.py`** (novo): `advance_benchmark_build`/`build_benchmark_until_budget`,
+  mirror do desenho já provado de `analysis/cohort_increment.py` (checkpoint, lote, reavaliação de
+  orçamento por lote), com uma diferença estrutural pedida explicitamente: `NO_PROGRESS` é estado
+  IRMÃO de `READY`/`DEFERRED_BUDGET`/`FAILED`, não um `defer_reason` aninhado. Ao esvaziar
+  `pending`, finaliza chamando o agregador EB.2 (`build_encounter_benchmark`, reusado sem alteração)
+  e persiste via `BenchmarkStore.write_benchmark` (EB.3, reusado sem alteração) — parcial nunca
+  aparece em `read_benchmark()`.
+- Guard do achado 3.12 ganhou uma quarta exceção revisada (`ingest/benchmark_fetch.py`, "trinkets"
+  só em prosa de docstring, nenhuma comparação de nome no código).
+- **28 testes novos** (`test_benchmark_builder.py`, com `tests/fixtures/fake_wcl_backend.py` — um
+  backend WCL falso verificado contra cassete real) + 1 guard. Cenário obrigatório (90 candidatos,
+  3 bandas de 30, 3 janelas de orçamento) confirmado: exatamente 60 queries no total (2 por cada um
+  dos 30 fights únicos, nunca por candidato), zero fight refetched entre janelas, prevalências
+  corretas via EB.2. Não implementado (fora de escopo): job/worker, prioridade de fila, comando
+  Discord, refresh automático, Setup Analysis, Execution Cohort v2, seção de relatório, Phase 4 F3.

@@ -86,6 +86,22 @@ query GetPlayerResourceEvents(
 }
 """
 
+# EB.4: the setup-only slice of QUERY_PLAYER_META — `table(dataType: Summary)`
+# alone, minus `fights.phaseTransitions`, `masterData.actors`, `castsTable`,
+# `damageTable` (none of which contribute to combatantInfo/talents/gear/
+# stats; see ingest/wcl_parsing.py's extract_setup_profile). Fight-wide, same
+# as QUERY_PLAYER_META's own Summary table: one call returns every player's
+# combatantInfo for the fight, never filtered to one name server-side.
+QUERY_PLAYER_SETUP_ONLY = """
+query GetPlayerSetup($code: String!, $fightIDs: [Int]!) {
+  reportData {
+    report(code: $code) {
+      table(fightIDs: $fightIDs, dataType: Summary, translate: true)
+    }
+  }
+}
+"""
+
 QUERY_PLAYER_PERCENTILE = """
 query GetPercentile(
   $name: String!, $serverSlug: String!, $serverRegion: String!,

@@ -56,11 +56,15 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     por `item_id` (um inteiro), nunca por nome. EB.3 introduziu a terceira:
     `analysis/benchmark_store_models.py` apenas serializa o CAMPO
     `trinket_prevalence` (nome de atributo Python, não uma decisão sobre
-    spell/item) de/para uma chave de dicionário JSON, ida e volta. Não
-    existe sequer um campo de nome de item em `GearPiece`/`TalentNode`
+    spell/item) de/para uma chave de dicionário JSON, ida e volta. EB.4
+    introduziu a quarta: `ingest/benchmark_fetch.py`'s docstring de módulo
+    lista "trinkets" em prosa como um dos dados que `SetupProfile` precisa
+    — o arquivo não contém nenhuma linha de código que compare nome
+    algum, só a query/fetch fight-wide de `combatantInfo`. Não existe
+    sequer um campo de nome de item em `GearPiece`/`TalentNode`
     (domain/models.py) para filtrar por ele. O intento do guard (nada de
     decisão lexical sobre spells) continua valendo em todo o resto de
-    `src/`, incluindo `analysis/` fora dessas três exceções, onde
+    `src/`, incluindo `analysis/` fora dessas quatro exceções, onde
     elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
@@ -69,6 +73,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "domain" / "models.py",
         src_root / "botgitgud" / "analysis" / "benchmark_aggregate.py",
         src_root / "botgitgud" / "analysis" / "benchmark_store_models.py",
+        src_root / "botgitgud" / "ingest" / "benchmark_fetch.py",
     }
 
     offenders = []
@@ -145,6 +150,23 @@ def test_the_reviewed_benchmark_store_models_exception_only_passes_field_names_t
     # de SPELL/item por nome.
     assert "spell" not in text.lower()
     assert ".name.lower()" not in text
+
+
+def test_the_reviewed_benchmark_fetch_exception_only_mentions_trinkets_in_prose() -> None:
+    """Quarta exceção (EB.4): `ingest/benchmark_fetch.py` só cita "trinkets"
+    no docstring de módulo, ao listar os dados que `SetupProfile` precisa —
+    nenhuma linha de CÓDIGO deste arquivo compara nome de spell/item.
+    """
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "ingest" / "benchmark_fetch.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "spell" not in text.lower()
+    assert ".lower()" not in text  # nenhuma normalização de nome sequer existe aqui
+    # a única query deste arquivo é fight-wide por combatantInfo — nenhuma
+    # comparação de nome de player/item decide o que é buscado.
+    assert "QUERY_PLAYER_SETUP_ONLY" in text
 
 
 # -- classification branches --------------------------------------------------

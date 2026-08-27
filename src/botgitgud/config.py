@@ -124,6 +124,33 @@ class Settings(BaseSettings):
     # orcamento so melhora com o reset da janela.
     cold_build_defer_retry_s: float = 600.0
 
+    # -- EB.4: construção incremental do Encounter Benchmark -------------------
+    # NENHUM valor abaixo foi medido ao vivo ainda (measured=false, provisório)
+    # — ao contrário dos `cold_build_*` acima, que carregam a proveniência da
+    # medição real nos próprios comentários. O workload é outro: setup-only
+    # nunca baixa damage/casts/buffs/debuffs/resource events, então o modelo de
+    # ~23,4 queries/referência da Execution Cohort NÃO se aplica aqui — seria
+    # inventar precisão que não existe. Unidade é FIGHT, não referência: uma
+    # única `report.rankings` (rankPercent+partition) + uma única
+    # `QUERY_PLAYER_SETUP_ONLY` (combatantInfo) servem TODOS os candidatos
+    # daquele fight, fight-wide.
+    benchmark_build_points_per_query: float = 2.0
+    benchmark_build_queries_per_fight: float = 2.0
+    # Banda mais larga que `cold_build_cost_uncertainty` (1.2) de propósito:
+    # sem medição real nenhuma para ancorar a estimativa, um build de
+    # prioridade baixa deve superestimar o próprio custo, não subestimar.
+    benchmark_build_cost_uncertainty: float = 1.5
+    benchmark_build_fixed_queries: int = 2  # partition/1a página de rankings na descoberta
+    # Reavaliado a cada lote (guarda em tempo de execução, não só preflight) —
+    # mesmo papel de cold_build_chunk_references.
+    benchmark_build_chunk_fights: int = 5
+    # Piso EXTRA além de api_points_floor — deliberadamente mais conservador
+    # que qualquer ColdBuildMode existente (nem PREWARM, nem INTERACTIVE):
+    # benchmark é a prioridade mais baixa do sistema, nunca deve competir por
+    # orçamento com um `!analisar` real nem com um prewarm operacional.
+    benchmark_build_safety_margin: float = 250.0
+    benchmark_build_defer_retry_s: float = 600.0
+
     # -- T0.4: BlizzardClient -------------------------------------------------
     blizzard_connect_timeout_s: float = 5.0
     blizzard_read_timeout_s: float = 10.0
