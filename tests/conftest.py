@@ -17,6 +17,7 @@ import pytest
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures"))
+from dir_snapshot import diff_snapshots, snapshot_directory
 from http_cassette import cassette_key, load_cassette
 from synthetic import build_synthetic_cohort, build_synthetic_user_timeline
 
@@ -87,3 +88,28 @@ def synthetic_user_timeline() -> dict[int, list[float]]:
 def synthetic_cohort() -> list[dict[str, Any]]:
     """10 reference players with known presence/variance; see tests/fixtures/synthetic.py."""
     return build_synthetic_cohort()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _protect_real_data_logs() -> Any:
+    """QA.0: `data/logs` real pode conter evidência operacional legítima de
+    uma execução real do bot (soaks, supervisor) — não é mais seguro supor
+    que está ausente antes da suíte, e apagá-lo só para satisfazer um guard
+    destruiria essa evidência.
+
+    O que a suíte de fato garante, provado aqui: nenhum teste cria, apaga
+    ou modifica o que já estava em `data/logs` quando a sessão começou —
+    comparado por conteúdo (tamanho+sha256 via dir_snapshot.py), nunca por
+    mtime. Escopo de SESSÃO (não de um teste isolado) e teardown (não
+    setup): o snapshot final só é tirado depois que TODO teste já rodou,
+    então nenhum teste posterior escapa da checagem por ordem de coleção.
+    """
+    from botgitgud.logging_setup import log_dir_for
+
+    real_logs = log_dir_for(Path(__file__).resolve().parent.parent / "data")
+    before = snapshot_directory(real_logs)
+    yield
+    violations = diff_snapshots(before, snapshot_directory(real_logs))
+    assert not violations, (
+        f"a suíte mutou {real_logs} (dado operacional real, não um fixture de teste): {violations}"
+    )

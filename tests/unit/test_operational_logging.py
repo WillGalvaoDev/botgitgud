@@ -346,10 +346,142 @@ def test_cli_start_writes_process_started_with_the_session_id(tmp_path: Path) ->
     assert record["log_file"].endswith(LOG_FILENAME)
 
 
-def test_no_test_ever_writes_to_the_real_data_logs_directory() -> None:
-    """Guarda direta do requisito: a suíte não pode sujar `data/logs` do
-    projeto. Se algum teste esquecer o `tmp_path`, isto falha.
+# -- QA.0: prova que o mecanismo de proteção (não o guard antigo) funciona --
+#
+# A proteção real é `tests/conftest.py`'s `_protect_real_data_logs` (fixture
+# de sessão, autouse) — ela roda sobre o `data/logs` REAL e por isso não
+# pode ser exercitada aqui sem risco de falso positivo/negativo dependendo
+# do que já existe na máquina. O que É testável aqui, contra um alvo
+# sintético (`tmp_path`), é o mecanismo que essa fixture usa:
+# `dir_snapshot.snapshot_directory`/`diff_snapshots`. Se este mecanismo tem
+# um furo, a fixture de sessão herda o furo silenciosamente — daí a
+# necessidade de uma guarda para a guarda (mesmo padrão de
+# test_cadence.py's `test_the_reviewed_trinket_exception_selects_by_slot...`).
+
+
+def test_directory_that_never_existed_stays_a_pass(tmp_path: Path) -> None:
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    absent = tmp_path / "never_created"
+    before = snapshot_directory(absent)
+    after = snapshot_directory(absent)
+    assert before.exists is False
+    assert diff_snapshots(before, after) == []
+
+
+def test_directory_created_after_not_existing_is_flagged(tmp_path: Path) -> None:
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    before = snapshot_directory(target)  # ainda não existe
+    target.mkdir()
+    (target / "new.jsonl").write_text("hello\n", encoding="utf-8")
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert violations, "criar o diretório do nada deveria ser sinalizado"
+
+
+def test_unchanged_directory_is_a_pass(tmp_path: Path) -> None:
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    (target / "botgitgud.jsonl").write_bytes(b'{"event": "real"}\n')
+    (target / "supervisor.jsonl").write_bytes(b'{"event": "real2"}\n')
+
+    before = snapshot_directory(target)
+    after = snapshot_directory(target)  # nada mudou entre as duas leituras
+    assert diff_snapshots(before, after) == []
+
+
+def test_content_change_is_detected_even_with_identical_size(tmp_path: Path) -> None:
+    """O caso que uma checagem só-de-tamanho deixaria passar: mesmo número
+    de bytes, conteúdo diferente.
     """
-    repo_root = Path(__file__).resolve().parents[2]
-    real_logs = repo_root / "data" / "logs"
-    assert not real_logs.exists(), f"{real_logs} foi criado por um teste"
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    log_file = target / "botgitgud.jsonl"
+    log_file.write_bytes(b"AAAA")
+
+    before = snapshot_directory(target)
+    log_file.write_bytes(b"BBBB")  # mesmo tamanho, conteúdo diferente
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert any("conteúdo alterado" in v for v in violations)
+
+
+def test_content_change_is_detected_even_when_mtime_does_not_move(tmp_path: Path) -> None:
+    """A garantia central do QA.0: `os.utime` reescreve o mtime de volta ao
+    valor original depois de mutar o conteúdo — se o mecanismo dependesse
+    de mtime, isto passaria silenciosamente. Ele não depende.
+    """
+    import os
+
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    log_file = target / "botgitgud.jsonl"
+    log_file.write_bytes(b'{"event": "original"}\n')
+    original_stat = log_file.stat()
+
+    before = snapshot_directory(target)
+    log_file.write_bytes(b'{"event": "MUTATED"}\n')
+    os.utime(log_file, (original_stat.st_atime, original_stat.st_mtime))
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert any("conteúdo alterado" in v for v in violations), (
+        "mtime idêntico não deve mascarar uma mutação real de conteúdo"
+    )
+
+
+def test_file_removal_is_detected(tmp_path: Path) -> None:
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    (target / "botgitgud.jsonl").write_bytes(b"real evidence")
+
+    before = snapshot_directory(target)
+    (target / "botgitgud.jsonl").unlink()
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert any("removidos" in v for v in violations)
+
+
+def test_new_file_addition_is_detected(tmp_path: Path) -> None:
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    (target / "botgitgud.jsonl").write_bytes(b"real evidence")
+
+    before = snapshot_directory(target)
+    (target / "sneaky_test_output.jsonl").write_bytes(b"a test forgot tmp_path")
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert any("criados" in v for v in violations)
+
+
+def test_whole_directory_deletion_is_detected(tmp_path: Path) -> None:
+    import shutil
+
+    from dir_snapshot import diff_snapshots, snapshot_directory
+
+    target = tmp_path / "logs"
+    target.mkdir()
+    (target / "botgitgud.jsonl").write_bytes(b"real evidence")
+
+    before = snapshot_directory(target)
+    shutil.rmtree(target)
+    after = snapshot_directory(target)
+
+    violations = diff_snapshots(before, after)
+    assert any("apagado" in v for v in violations)
