@@ -985,3 +985,70 @@ mesma tabela `jobs` — nunca uma segunda fila) era suficiente; só faltava um t
   restart/reopen (fecha e reabre o `Store`, `deferred_budget` sobrevive, progresso de EB.4 continua
   em 3 linhas). Não implementado (fora de escopo): comando Discord, gatilho automático/scheduler,
   SetupFinding, Setup Analysis, Execution Cohort v2, EC.1, Phase 4 F3.
+
+## SA.1 — contrato de domínio para achados de Setup Analysis (2026-08-28)
+
+**Setup Analysis = comparação observacional, nunca causal.** Ela responde "como o setup observado
+do jogador se compara ao que aparece no Encounter Benchmark?" — nunca "esse setup causa X DPS" ou
+"troque isso e ganhará Y%". SA.1 não compara nenhum jogador ainda; define só o vocabulário.
+
+- **`SetupScore` foi explicitamente rejeitado.** Nenhum `SetupScore`/`setup_score`/
+  `overall_setup_grade`/`setup_rating` existe em `analysis/setup_finding.py` (novo) nem no projeto —
+  guardado por teste (`test_no_setup_score_exists_anywhere`). Setup é uma coleção de
+  `SetupFinding` independentes, cada um com sua própria `evidence_level`/`publicability`, nunca
+  agregados numa nota única.
+- **`SetupFinding`** (novo, `analysis/setup_finding.py`, domínio puro — zero Store/WCL/Discord,
+  auditado por AST de imports, não por grep de prosa): `category` (derivado do `subject`, nunca um
+  campo solto que possa divergir), `subject`, `observation`, `evidence_level`, `publicability`,
+  `sample` (benchmark_id + banda), `prevalence`/`distribution` opcionais, `caveats` estruturados,
+  `actionable`, `finding_id` (propriedade, `sha256`, nunca `hash()`), `reason_code` (propriedade,
+  `"{category}.{observation}"`).
+- **`FindingCategory`**: `TALENT_BUILD`/`TRINKET`/`TRINKET_PAIR`/`SET_BONUS`/`SECONDARY_STATS` — sem
+  "gear" genérico por antecipação. **`FindingSubject`**: identifica o objeto sem frase humana
+  (`talent_fingerprint` opaco `(node_id,rank)`, `item_id` inteiro, `set_id`, `stat_name`) via
+  fábricas dedicadas; `__post_init__` exige EXATAMENTE os campos da categoria escolhida. Talent pair
+  de trinkets é canônico (menor `item_id` primeiro, mesma convenção de
+  `benchmark_aggregate._trinket_pair_key`, EB.2). Talent names permanecem NÃO resolvidos (D-26).
+- **`ObservationCode`**: `MATCHES_COMMON_PATTERN`/`DIFFERS_FROM_COMMON_PATTERN`/`LOW_PREVALENCE`/
+  `HIGH_PREVALENCE`/`INSUFFICIENT_EVIDENCE`/`MISSING_DATA` — nenhum membro com semântica causal
+  (BAD/WRONG/OPTIMAL/BEST não existem). **`EvidenceLevel`** (`INSUFFICIENT`/`WEAK`/`MODERATE`/
+  `STRONG`, via `compute_evidence_level`, limiares simples de tamanho de amostra contra o piso da
+  própria `BenchmarkPolicy`, EB.1 — nunca DPS) faz dupla função como o "confidence" simples que o
+  ticket pede; nenhum campo `confidence` redundante foi criado. **`Publicability`** (`HIDDEN`/
+  `CAUTION`/`PUBLISHABLE`, via `compute_publicability(evidence_level)`, testável por construção).
+  **`CaveatCode`**: códigos estruturados, incluindo os três formatos de dado ausente
+  (`PLAYER_SETUP_MISSING`/`BENCHMARK_UNAVAILABLE`/`CATEGORY_UNAVAILABLE`) com fábricas dedicadas
+  (`missing_player_setup_finding`/`missing_benchmark_finding`/`category_unavailable_finding`).
+- **Band breakdown reutilizável**: `BandPrevalence` embrulha a MESMA `PercentileBand` de EB.1 — nenhum
+  nome de banda hardcoded, banda customizada funciona sem mudança no tipo. `PrevalenceSummary`
+  valida `count<=n_available`, `0<=prevalence<=1`, ordena `bands` canonicamente por `band.low`.
+  `DistributionContext` (para `SECONDARY_STATS`) reusa `DescriptiveStats` (EB.2) para o lado do
+  benchmark e carrega o rating bruto do jogador — nenhuma conversão para porcentagem, nenhum
+  percentile relativo calculado (SA.2+, quando tabelas de diminishing returns por patch existirem).
+- **Determinismo**: `finding_id` é uma PROPRIEDADE (nunca campo mutável) computada só de
+  `benchmark_id + band_name + category + subject.key + observation` — a mesma evidência sem mudança
+  semântica produz o mesmo ID; `evidence_level`/`caveats`/`actionable`/números de prevalência NUNCA
+  entram no ID, porque descrevem a QUALIDADE da evidência, não O QUE está sendo alegado.
+  `sort_setup_findings` ordena por `category` (ordem do enum) → `evidence_level` (mais forte
+  primeiro) → `subject.key` → `finding_id` — nunca ordem de chegada.
+- **`actionable` != alegação causal**: um trinket raro entre o benchmark forte pode ser
+  `actionable=True` com o texto "worth reviewing" — nunca "replace this for more DPS". Não existe
+  `estimated_gain_pct` em `SetupFinding` (ao contrário de `analysis/findings.py`'s `Finding`, da
+  Execution Cohort, legitimamente causal/medido — os dois tipos nunca se misturam).
+- **Vocabulário permitido/proibido, escopado ao módulo** (não um grep global — o ticket pediu
+  explicitamente para não repetir aqui o padrão do achado 3.12): `OBSERVATION_TEMPLATES` é o
+  vocabulário oficial reutilizável (validado contra o guard na própria definição do módulo, e de
+  novo já formatado em `render_observation`). `validate_setup_language`/
+  `ForbiddenSetupVocabularyError` bloqueiam termos (best/optimal/better/worse/upgrade/cause[s]),
+  frases (bad build/wrong talent/you should/should use/increases damage) e padrões numéricos
+  causais ("+X% DPS"/"gain X%").
+- Guard do achado 3.12 ganhou uma quinta exceção revisada (`analysis/setup_finding.py`,
+  `FindingCategory.TRINKET`/`TRINKET_PAIR` e `FindingSubject` por `item_id`, nunca por nome — mesmo
+  padrão da segunda exceção).
+- **50 testes novos** (`test_setup_finding.py`) + 1 exceção de guard com teste companheiro
+  (`test_cadence.py`). Teste de honestidade obrigatório confirmado: um achado de 80% de prevalência
+  (talent build) e um de 10% (trinket), ambos com evidência forte, nunca são comparados entre si —
+  nenhum campo `score`/`estimated_gain_pct` existe para tornar "A é melhor que B" representável.
+  Não implementado (fora de escopo, explícito no ticket): comparação real player-vs-benchmark,
+  geração de finding real de talent/trinket/set/stats, seção de relatório HTML, Top 3, Execution
+  Cohort, Phase 4 F3.

@@ -60,12 +60,15 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     introduziu a quarta: `ingest/benchmark_fetch.py`'s docstring de módulo
     lista "trinkets" em prosa como um dos dados que `SetupProfile` precisa
     — o arquivo não contém nenhuma linha de código que compare nome
-    algum, só a query/fetch fight-wide de `combatantInfo`. Não existe
-    sequer um campo de nome de item em `GearPiece`/`TalentNode`
-    (domain/models.py) para filtrar por ele. O intento do guard (nada de
-    decisão lexical sobre spells) continua valendo em todo o resto de
-    `src/`, incluindo `analysis/` fora dessas quatro exceções, onde
-    elegibilidade é decidida.
+    algum, só a query/fetch fight-wide de `combatantInfo`. SA.1 introduziu
+    a quinta: `analysis/setup_finding.py` define `FindingCategory.TRINKET`/
+    `TRINKET_PAIR` (nomes de categoria de domínio) e um `FindingSubject`
+    identificado por `item_id` (inteiro), nunca por nome — mesmo padrão da
+    segunda exceção. Não existe sequer um campo de nome de item em
+    `GearPiece`/`TalentNode` (domain/models.py) para filtrar por ele. O
+    intento do guard (nada de decisão lexical sobre spells) continua
+    valendo em todo o resto de `src/`, incluindo `analysis/` fora dessas
+    cinco exceções, onde elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
@@ -74,6 +77,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "analysis" / "benchmark_aggregate.py",
         src_root / "botgitgud" / "analysis" / "benchmark_store_models.py",
         src_root / "botgitgud" / "ingest" / "benchmark_fetch.py",
+        src_root / "botgitgud" / "analysis" / "setup_finding.py",
     }
 
     offenders = []
@@ -167,6 +171,26 @@ def test_the_reviewed_benchmark_fetch_exception_only_mentions_trinkets_in_prose(
     # a única query deste arquivo é fight-wide por combatantInfo — nenhuma
     # comparação de nome de player/item decide o que é buscado.
     assert "QUERY_PLAYER_SETUP_ONLY" in text
+
+
+def test_the_reviewed_setup_finding_exception_keys_trinkets_by_item_id() -> None:
+    """Quinta exceção (SA.1): `FindingSubject.trinket`/`trinket_pair` são
+    identificados por `item_id` (inteiro) — mesmo padrão da segunda
+    exceção (`benchmark_aggregate.py`), nunca um nome de item comparado.
+    """
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "analysis" / "setup_finding.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "item_id: int | None" in text
+    assert "spell" not in text.lower()
+    # `.lower()` aparece aqui só para normalizar TEXTO LIVRE contra o
+    # vocabulário causal proibido (`validate_setup_language`) — não é
+    # elegibilidade de spell/item por nome, então não é banida nesta
+    # exceção (mesma distinção da terceira exceção, benchmark_store_models.py).
+    assert ".item_id.lower()" not in text
+    assert "item_name" not in text.lower()
 
 
 # -- classification branches --------------------------------------------------
