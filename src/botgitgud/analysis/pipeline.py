@@ -32,6 +32,9 @@ from dataclasses import dataclass, field
 import structlog
 
 from botgitgud import telemetry
+from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget
+from botgitgud.analysis.benchmark_store import BenchmarkStore
+from botgitgud.analysis.benchmark_store_models import EncounterBenchmarkCorruptPayloadError
 from botgitgud.analysis.cohort import (
     COHORT_MIN_HARD,
     POSITIONAL_MIN_N,
@@ -57,6 +60,7 @@ from botgitgud.analysis.performance_features import (
     analyze_performance_features,
 )
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
+from botgitgud.analysis.setup_analysis import SetupAnalysis, analyze_setup
 from botgitgud.config import Settings
 from botgitgud.domain.models import CohortCriteria, RankingCandidate, RunManifest
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
@@ -105,6 +109,11 @@ class AnalysisResult:
     header: ReportHeader
     comparisons: tuple[SpellComparison, ...]
     manifest: RunManifest
+    # RP.2: sempre calculado (best-effort, nunca bloqueia), mas SÓ carrega
+    # dado real quando um Encounter Benchmark já foi persistido para este
+    # target — ver `run_analysis`. `None` só quando `analyze_setup` nunca
+    # chegou a rodar (não deveria acontecer no caminho normal).
+    setup_analysis: SetupAnalysis | None = None
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
@@ -252,6 +261,34 @@ def run_analysis(
         if deps.phase4_resolver is not None
         else ModelResolution(ResolutionStatus.UNAVAILABLE)
     )
+
+    # RP.2: Setup Analysis é INDEPENDENTE do Execution Cohort por desenho —
+    # nunca usa `matched_logs`/`criteria` abaixo, nunca bloqueia a análise
+    # de execução. Leitura best-effort, read-only: nenhum cold build de
+    # benchmark é disparado por aqui (isso é o job de baixa prioridade de
+    # EB.5 — `ensure_benchmark_job`, deliberadamente não chamado neste
+    # caminho interativo). Benchmark ausente/corrompido -> `benchmark=None`
+    # -> `analyze_setup` (SA.6) já degrada sozinho para findings
+    # `MISSING_DATA`/`HIDDEN`, nunca uma exceção.
+    benchmark_target = EncounterBenchmarkTarget(
+        spec=spec_id,
+        encounter_id=player_log.fight.encounter_id,
+        difficulty=player_log.fight.difficulty,
+        partition=partition,
+    )
+    benchmark_policy = BenchmarkPolicy.default()
+    try:
+        benchmark = BenchmarkStore(deps.store).read_benchmark(benchmark_target.benchmark_id)
+    except EncounterBenchmarkCorruptPayloadError:
+        log.warning("pipeline.benchmark_read_failed", benchmark_id=benchmark_target.benchmark_id)
+        benchmark = None
+    setup_analysis = analyze_setup(
+        target=benchmark_target,
+        policy=benchmark_policy,
+        player_setup=player_log.build.setup,
+        benchmark=benchmark,
+    )
+
     bucket_lo, bucket_hi = duration_bucket_bounds(duration_bucket_id(player_log.fight.duration_s))
     criteria = CohortCriteria(
         encounter_id=player_log.fight.encounter_id,
@@ -406,6 +443,7 @@ def run_analysis(
         header=header,
         comparisons=tuple(comparisons),
         manifest=manifest,
+        setup_analysis=setup_analysis,
         performance=performance,
         dps_gap=dps_gap,
         top_actions=tuple(top_actions),

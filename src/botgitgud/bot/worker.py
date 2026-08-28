@@ -167,6 +167,7 @@ def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
             dps_gap=result.dps_gap,
             top_actions=result.top_actions,
             duration_s=result.header.duration_max_s,
+            setup=result.setup_analysis,
         )
         return summary, html
 

@@ -126,6 +126,7 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         result.performance,
         result.dps_gap,
         result.top_actions,
+        setup=result.setup_analysis,
     )
     sys.stdout.write(report_text + "\n")
     return 0

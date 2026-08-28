@@ -481,6 +481,7 @@ def build_bot(deps: Deps) -> commands.Bot:
                 dps_gap=result.dps_gap,
                 top_actions=result.top_actions,
                 duration_s=result.header.duration_max_s,
+                setup=result.setup_analysis,
             )
             # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
             # caminho da fila; o smoke seguinte mostrou o interativo perdendo o

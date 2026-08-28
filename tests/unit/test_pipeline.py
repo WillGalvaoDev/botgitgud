@@ -26,8 +26,23 @@ from test_log_fetcher import (
     _report_rankings_response,
 )
 
+from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget
+from botgitgud.analysis.benchmark_aggregate import (
+    CANONICAL_SECONDARY_STATS,
+    BandBenchmark,
+    CoverageSummary,
+    DescriptiveStats,
+    EncounterBenchmark,
+    PrevalenceDistribution,
+    PrevalenceEntry,
+    SetSummary,
+    talent_build_key,
+)
+from botgitgud.analysis.benchmark_store import BenchmarkStore
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
+from botgitgud.analysis.setup_finding import FindingCategory, ObservationCode, Publicability
 from botgitgud.config import Settings
+from botgitgud.domain.models import SetupProfile, TalentNode
 from botgitgud.domain.specs import SpecId
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import (
@@ -279,6 +294,156 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.header.player_dps == pytest.approx(10000.0)  # 1_000_000 / 100s
     assert len(result.comparisons) >= 1
     assert result.phase4_resolution.status is ResolutionStatus.UNAVAILABLE
+
+
+# -- RP.2: Setup Analysis integration --------------------------------------------
+
+
+def test_setup_analysis_is_always_computed_and_never_blocks_execution(tmp_path: Path) -> None:
+    """No Encounter Benchmark has ever been persisted in this fresh Store —
+    `setup_analysis` must still be populated (never `None`, never an
+    exception), degrading to missing-data findings, while EXECUTION
+    (comparisons/header) works exactly as in the plain happy path.
+    """
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.setup_analysis is not None
+    assert len(result.setup_analysis.findings) > 0
+    assert all(
+        f.observation is ObservationCode.MISSING_DATA for f in result.setup_analysis.findings
+    )
+    assert all(f.publicability is Publicability.HIDDEN for f in result.setup_analysis.findings)
+    # execução continua funcionando normalmente, sem qualquer degradação:
+    assert result.header.char_name == "Zarad"
+    assert len(result.comparisons) >= 1
+
+
+def test_setup_analysis_reflects_a_persisted_benchmark(tmp_path: Path) -> None:
+    """When an Encounter Benchmark for this exact target already exists in
+    the Store, `setup_analysis` must reflect it — proving the read-only
+    wiring actually reaches real data, not just the missing-data path.
+    """
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    # A mesma identidade que o pipeline vai calcular para este fixture:
+    # SpecId(Warlock, Demonology), encounter_id=3179 (default de
+    # _meta_response), difficulty=5, partition=3 (default de
+    # _zone_partitions_response).
+    target = EncounterBenchmarkTarget(
+        spec=SpecId("Warlock", "Demonology"), encounter_id=3179, difficulty=5, partition=3
+    )
+    policy = BenchmarkPolicy.default()
+
+    # A mesma build de talentos que _SHARED_COMBATANT_INFO produz —
+    # calculada via a função real, nunca uma string chutada.
+    player_key = talent_build_key(
+        SetupProfile(
+            talents=(
+                TalentNode(node_id=100, rank=1, spell_id=1),
+                TalentNode(node_id=101, rank=1, spell_id=2),
+            )
+        )
+    )
+    assert player_key is not None
+
+    empty_dist = PrevalenceDistribution(n_available=0, entries=())
+    empty_stats = DescriptiveStats(n=0, median=None, p25=None, p75=None)
+    empty_set = SetSummary(n_available=0, entries=())
+    talent_dist = PrevalenceDistribution(
+        n_available=50, entries=(PrevalenceEntry(key=player_key, n_observed=40, prevalence=0.8),)
+    )
+    top_band = BandBenchmark(
+        band_name=policy.bands[-1].name,
+        status="ok",
+        sample_size=50,
+        raw_observation_count=50,
+        talent_build_prevalence=talent_dist,
+        trinket_prevalence=empty_dist,
+        trinket_pair_prevalence=empty_dist,
+        set_summary=empty_set,
+        secondary_stats={s: empty_stats for s in CANONICAL_SECONDARY_STATS},
+        duration_summary=empty_stats,
+        item_level_summary=empty_stats,
+    )
+    other_bands = {
+        b.name: BandBenchmark(
+            band_name=b.name,
+            status="insufficient",
+            sample_size=0,
+            raw_observation_count=0,
+            talent_build_prevalence=empty_dist,
+            trinket_prevalence=empty_dist,
+            trinket_pair_prevalence=empty_dist,
+            set_summary=empty_set,
+            secondary_stats={s: empty_stats for s in CANONICAL_SECONDARY_STATS},
+            duration_summary=empty_stats,
+            item_level_summary=empty_stats,
+        )
+        for b in policy.bands[:-1]
+    }
+    bands = {**other_bands, policy.bands[-1].name: top_band}
+    benchmark = EncounterBenchmark(
+        target=target,
+        policy_version=policy.policy_version,
+        total_input_observations=50,
+        eligible_observations=50,
+        missing_setup_count=0,
+        deduped_count=0,
+        outside_policy_bands=0,
+        coverage=CoverageSummary(50, 50, 0, 1.0),
+        bands=bands,
+    )
+    BenchmarkStore(deps.store).write_benchmark(benchmark, policy=policy, observations=())
+
+    result = run_analysis(_req(), deps)
+
+    assert result.setup_analysis is not None
+    talent_findings = [
+        f for f in result.setup_analysis.findings if f.category is FindingCategory.TALENT_BUILD
+    ]
+    assert len(talent_findings) == 1
+    assert talent_findings[0].observation is ObservationCode.MATCHES_COMMON_PATTERN
+    assert talent_findings[0].publicability is Publicability.PUBLISHABLE
+    # execução continua funcionando, e nenhuma categoria de setup mexeu nela:
+    assert len(result.comparisons) >= 1
+
+
+def test_setup_analysis_never_flows_into_execution_computations() -> None:
+    """Architectural guard (RP.2's own rules: 'setup findings não entram no
+    Top 3'; 'nenhuma categoria de setup altera execution grade'):
+    `setup_analysis` must never be passed as an argument to any of the
+    functions that compute execution findings/grading/Top 3 — checked via
+    AST over every Call node in `run_analysis`, not just documentation.
+    """
+    import ast
+    import inspect
+
+    import botgitgud.analysis.pipeline as pipeline_module
+
+    forbidden_targets = {
+        "build_findings",
+        "analyze_dps_gap",
+        "compare_all_spells",
+        "analyze_performance_features",
+        "build_cd_reference_profile",
+        "match_cohort",
+        "select_top_actions",
+    }
+    tree = ast.parse(inspect.getsource(pipeline_module))
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+            continue
+        if node.func.id not in forbidden_targets:
+            continue
+        for arg in list(node.args) + [kw.value for kw in node.keywords]:
+            if isinstance(arg, ast.Name):
+                assert arg.id != "setup_analysis", (
+                    f"{node.func.id} must never receive setup_analysis as an argument"
+                )
 
 
 def test_reference_logs_reuse_criteria_partition_without_report_rankings(tmp_path: Path) -> None:

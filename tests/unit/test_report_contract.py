@@ -170,19 +170,21 @@ def test_setup_can_be_supplied_explicitly() -> None:
     assert contract.setup is setup
 
 
-def test_pipeline_never_calls_analyze_setup_yet() -> None:
-    """RP.0 only builds the contract slot — RP.2 wires it. `analysis/
-    pipeline.py` must not call `analyze_setup` yet (checked via AST, not
-    substring, since this file's own docstring discusses that boundary).
+def test_pipeline_now_calls_analyze_setup() -> None:
+    """RP.0 only built the contract slot; RP.2 is the wiring this test now
+    confirms actually happened — `analysis/pipeline.py` calls
+    `analyze_setup` for real (checked via AST, not substring).
     """
     import botgitgud.analysis.pipeline as pipeline_module
 
     tree = ast.parse(inspect.getsource(pipeline_module))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            assert node.func.id != "analyze_setup"
-        if isinstance(node, ast.ImportFrom):
-            assert all(alias.name != "analyze_setup" for alias in node.names)
+    called = any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "analyze_setup"
+        for node in ast.walk(tree)
+    )
+    assert called, "analysis/pipeline.py must call analyze_setup (RP.2)"
 
 
 # -- top_actions: execution-only, enforced structurally AND at runtime --------------

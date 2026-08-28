@@ -3,6 +3,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from botgitgud.analysis.comparison import SpellComparison, compare_spell_usage
+from botgitgud.analysis.setup_analysis import SetupAnalysis
+from botgitgud.analysis.setup_finding import (
+    BenchmarkSampleRef,
+    EvidenceLevel,
+    FindingSubject,
+    ObservationCode,
+    PrevalenceSummary,
+    Publicability,
+    SetupFinding,
+)
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
@@ -135,6 +145,51 @@ def test_no_warning_banner_when_absent() -> None:
 def test_build_divergente_never_appears_in_the_report() -> None:
     text = render_report(_header(), [])
     assert "BUILD DIVERGENTE" not in text
+
+
+# -- RP.2: SETUP section integration ---------------------------------------------
+
+
+def _setup_finding() -> SetupFinding:
+    sample = BenchmarkSampleRef(benchmark_id="Warlock/Demonology/1/1/1/v1", band_name=None)
+    return SetupFinding(
+        subject=FindingSubject.talent_build("1:1|2:2"),
+        observation=ObservationCode.MATCHES_COMMON_PATTERN,
+        evidence_level=EvidenceLevel.STRONG,
+        publicability=Publicability.PUBLISHABLE,
+        sample=sample,
+        prevalence=PrevalenceSummary(count=40, n_available=50, prevalence=0.8),
+    )
+
+
+def _setup_analysis(*findings: SetupFinding) -> SetupAnalysis:
+    return SetupAnalysis(
+        benchmark_id="Warlock/Demonology/1/1/1/v1",
+        findings=findings,
+        player_setup_available=True,
+        benchmark_available=True,
+    )
+
+
+def test_no_setup_param_leaves_the_report_unaffected() -> None:
+    """Every pre-RP.2 caller — none of which pass `setup=` — must see a
+    byte-for-byte identical report."""
+    with_default = render_report(_header(), [])
+    explicit_none = render_report(_header(), [], setup=None)
+    assert with_default == explicit_none
+    assert "SETUP" not in with_default
+
+
+def test_setup_section_appears_when_findings_are_publishable() -> None:
+    text = render_report(_header(), [], setup=_setup_analysis(_setup_finding()))
+    assert "SETUP" in text
+    assert "Build de talentos" in text
+
+
+def test_setup_section_never_contains_html_tags_in_the_text_report() -> None:
+    text = render_report(_header(), [], setup=_setup_analysis(_setup_finding()))
+    assert "<" not in text
+    assert ">" not in text
 
 
 # -- T2.3: quantile grading, bootstrap CI, BH collapsing -------------------------

@@ -264,17 +264,22 @@ def test_render_setup_section_never_contains_html_tags() -> None:
 # -- not wired into render_report/render_html_report yet (RP.2's job) ---------------
 
 
-def test_not_imported_by_render_report_or_render_html_report_yet() -> None:
-    import botgitgud.report.html_report as html_report_module
+def test_render_report_is_wired_to_the_setup_section() -> None:
+    """RP.2: `render_report` (report/text.py) now actually calls this
+    module — the integration this docstring's RP.1 version explicitly
+    deferred. `render_html_report` uses its own separate HTML rendering
+    (RP.1's own design principle: no shared tag-generation code), so it
+    imports `setup_text`'s pure data helpers, never `render_setup_section`
+    itself.
+    """
     import botgitgud.report.text as text_module
 
-    for module in (text_module, html_report_module):
-        tree = ast.parse(inspect.getsource(module))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "botgitgud.report.setup_text":
-                raise AssertionError(
-                    f"{module.__name__} must not import setup_text yet (RP.2's job)"
-                )
+    tree = ast.parse(inspect.getsource(text_module))
+    found = any(
+        isinstance(node, ast.ImportFrom) and node.module == "botgitgud.report.setup_text"
+        for node in ast.walk(tree)
+    )
+    assert found, "render_report must import setup_text (RP.2)"
 
 
 # -- zero WCL / Discord / Store / job -------------------------------------------------

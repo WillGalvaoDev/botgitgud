@@ -251,6 +251,7 @@ def test_analisar_happy_path_sends_summary_and_attachment(
         header=ReportHeader("Zarad", "Boss", "Warlock", "Demonology", 20, 300.0, 360.0),
         comparisons=(),
         manifest=None,
+        setup_analysis=None,
         performance=None,
         dps_gap=None,
         top_actions=(),

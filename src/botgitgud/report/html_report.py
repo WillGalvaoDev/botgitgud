@@ -22,7 +22,15 @@ from botgitgud.analysis.dps_gap import DIAGNOSIS_LABELS, DpsGapReport
 from botgitgud.analysis.findings import Finding
 from botgitgud.analysis.grading import Grade
 from botgitgud.analysis.performance_features import PerformanceFindings, ScalarFinding
+from botgitgud.analysis.setup_analysis import SetupAnalysis
+from botgitgud.analysis.setup_finding import CaveatCode, Publicability
 from botgitgud.domain.models import RunManifest
+from botgitgud.report.setup_text import (
+    distribution_fragment,
+    prevalence_fragment,
+    render_observation_text,
+    subject_label,
+)
 from botgitgud.report.svg_charts import (
     render_ability_timeline_svg,
     render_dps_gap_waterfall_svg,
@@ -140,6 +148,55 @@ def _render_top_actions(top_actions: Sequence[Finding]) -> str:
     return f"{scope}<ol>{items}</ol>"
 
 
+def _render_setup_html(setup: SetupAnalysis | None) -> str:
+    """RP.2: HTML rendering for the SETUP section — a genuinely separate
+    implementation from `report/setup_text.py`'s plain-text renderer (RP.1's
+    own design principle: no shared tag-generation code between the
+    plain-text/Discord-inline path and this file-attachment-only HTML
+    path). Reuses only the pure data-extraction helpers
+    (`subject_label`/`render_observation_text`/`prevalence_fragment`/
+    `distribution_fragment`, RP.1) — never their `**bold**`-flavored line
+    assembly — and applies `escape()` to every piece of text, matching
+    this module's own strict-XML-parser requirement (T3.4).
+    """
+    if setup is None:
+        return ""
+    visible = [f for f in setup.findings if f.publicability is not Publicability.HIDDEN]
+    if not visible:
+        return ""
+
+    items = []
+    for finding in visible:
+        label = escape(subject_label(finding.subject))
+        text = escape(render_observation_text(finding))
+        extra = prevalence_fragment(finding) or distribution_fragment(finding)
+        extra_html = f" — {escape(extra)}" if extra else ""
+        coverage_html = (
+            " — cobertura parcial de dados de setup na amostra"
+            if CaveatCode.PARTIAL_SETUP_COVERAGE in finding.caveats
+            else ""
+        )
+        items.append(f"<li><strong>{label}</strong>: {text}{extra_html}{coverage_html}</li>")
+
+    disclaimers = []
+    if any(CaveatCode.TALENT_NAMES_UNRESOLVED in f.caveats for f in visible):
+        disclaimers.append(
+            "<p>Nomes de talentos ainda não são resolvidos — identificados por nó/rank.</p>"
+        )
+    if any(CaveatCode.RAW_RATING_ONLY in f.caveats for f in visible):
+        disclaimers.append(
+            "<p>Secondary stats mostrados como rating bruto, sem conversão para porcentagem.</p>"
+        )
+
+    return (
+        '<div class="section">'
+        "<h2>🧩 Setup</h2>"
+        f"<ul>{''.join(items)}</ul>"
+        f"{''.join(disclaimers)}"
+        "</div>"
+    )
+
+
 def render_html_report(
     header: ReportHeader,
     comparisons: Sequence[SpellComparison],
@@ -149,6 +206,7 @@ def render_html_report(
     dps_gap: DpsGapReport | None = None,
     top_actions: Sequence[Finding] = (),
     duration_s: float = 0.0,
+    setup: SetupAnalysis | None = None,
 ) -> str:
     title = f"Análise de {header.char_name} — {header.boss_name}"
     parts: list[str] = [
@@ -172,6 +230,8 @@ def render_html_report(
         _render_top_actions(top_actions),
         "</div>",
     ]
+
+    parts.append(_render_setup_html(setup))
 
     if dps_gap is not None:
         parts.append('<div class="section">')

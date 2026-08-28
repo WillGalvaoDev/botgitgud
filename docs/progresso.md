@@ -1455,3 +1455,59 @@ distinção explícita do ticket, mesmo padrão EB.4→EB.5/SA.1-5→SA.6 já us
   goldens confirmados INALTERADOS (nada consome o renderer ainda).
 - Não implementado (fora de escopo, explícito no ticket): wiring em `render_report`/
   `render_html_report` ou no pipeline ao vivo (RP.2), qualquer variante HTML do renderer.
+
+**Milestone Report (RP.0-RP.2) fechado.**
+
+## RP.2 — Setup Analysis integrada ao fluxo real do relatório (2026-08-28)
+
+`analysis/pipeline.py`'s `run_analysis` agora calcula `setup_analysis` de verdade — leitura
+read-only, best-effort, de um `EncounterBenchmark` já persistido (`BenchmarkStore.read_benchmark`,
+EB.3, sem alteração) para o target do jogador (`EncounterBenchmarkTarget` a partir de spec/encounter/
+difficulty/partition já computados), e `analyze_setup` (SA.6) sobre `player_log.build.setup` (EB.0,
+sem custo extra). `AnalysisResult` ganhou `setup_analysis: SetupAnalysis | None = None`.
+
+- **"Não bloquear se benchmark ausente" — comprovado, não só código**: nenhum cold build de
+  benchmark é disparado por aqui (isso é o job de EB.5, `ensure_benchmark_job`, deliberadamente NÃO
+  chamado no caminho interativo). `EncounterBenchmarkCorruptPayloadError` é capturado, nunca propaga.
+  `analyze_setup` (SA.6, sem alteração) já degrada sozinho para findings `MISSING_DATA`/`HIDDEN`
+  quando `benchmark=None` — nenhuma lógica de degradação nova foi necessária aqui.
+- **"Execução continua funcionando" — comprovado com um teste dedicado**
+  (`test_setup_analysis_is_always_computed_and_never_blocks_execution`): mesmo com Store vazia (nenhum
+  benchmark jamais persistido), `header`/`comparisons` saem exatamente como no happy path puro.
+- **"Setup reflete um benchmark real quando existe"** — `test_setup_analysis_reflects_a_persisted_
+  benchmark` persiste um `EncounterBenchmark` de verdade (com a MESMA build de talentos que a fixture
+  do jogador produz, calculada via `talent_build_key` real, nunca uma string chutada) e confirma um
+  finding `PUBLISHABLE`/`MATCHES_COMMON_PATTERN` de verdade saindo do pipeline.
+- **"Setup findings não entram no Top 3" / "nenhuma categoria de setup altera execution grade" —
+  ISOLAMENTO ARQUITETURAL, guardado por teste AST** (`test_setup_analysis_never_flows_into_execution_
+  computations`): `setup_analysis` nunca é passado como argumento para `build_findings`/
+  `analyze_dps_gap`/`compare_all_spells`/`analyze_performance_features`/`build_cd_reference_profile`/
+  `match_cohort`/`select_top_actions` — verificado varrendo cada `Call` do código-fonte real, não só
+  documentado. `RP.0`'s `ReportContractError` (runtime) segue como a segunda camada de defesa.
+- **Renderização de texto conectada**: `report/text.py`'s `render_report` ganhou `setup:
+  SetupAnalysis | None = None` (parâmetro NOVO, no fim da lista — nenhum call site posicional
+  existente quebra) e chama `render_setup_section` (RP.1) logo após a seção de DPS gap. `setup=None`
+  (default em toda chamada pré-RP.2) produz saída byte-a-byte idêntica — `cli.py` foi atualizado para
+  passar `result.setup_analysis` de verdade.
+- **Renderização HTML conectada, com implementação REALMENTE separada** (princípio do próprio RP.1):
+  `report/html_report.py` ganhou `_render_setup_html` — reusa só os helpers PUROS de extração de dado
+  de `setup_text.py` (`subject_label`/`render_observation_text`/`prevalence_fragment`/
+  `distribution_fragment`, tornados públicos nesta tarefa), nunca a montagem de linha em texto puro —
+  cada valor passa por `escape()`, mantendo a garantia de XML estrito de T3.4 (testado:
+  `test_setup_section_appears_and_still_parses_under_strict_xml`). `bot/discord_bot.py`/
+  `bot/worker.py` atualizados para passar `setup=result.setup_analysis` ao anexo HTML — NUNCA ao
+  resumo inline (`render_header_and_top3`, que não recebeu nenhuma mudança).
+- **Guards do RP.1 que diziam "ainda não conectado" foram invertidos, não apagados** — agora
+  confirmam a conexão real (`test_render_report_is_wired_to_the_setup_section`,
+  `test_pipeline_now_calls_analyze_setup`), preservando a mesma disciplina de prova estrutural.
+- **Goldens: diff VAZIO** — nenhuma fixture de teste jamais persistiu um `EncounterBenchmark` real, então
+  `benchmark=None` em todo cenário existente, e a seção SETUP nunca aparece nesses relatórios.
+  Comportamento novo é real (comprovado pelos 2 testes dedicados acima), só não visível nos fixtures
+  atuais — exatamente o esperado para uma integração aditiva sem dado de benchmark ainda construído
+  em produção.
+- **~10 testes novos/reescritos** através de `test_pipeline.py` (3), `test_report_text.py` (3),
+  `test_html_report.py` (2), `test_setup_text.py`/`test_report_contract.py` (2 guards invertidos).
+  Suíte completa (lotes) e goldens confirmados corretos.
+- Não implementado (fora de escopo Phase 4/roadmap): qualquer gatilho automático de construção de
+  benchmark a partir do caminho interativo (`ensure_benchmark_job` continua não chamado por
+  `!analisar`), promoção/treino de Phase 4.

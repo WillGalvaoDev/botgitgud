@@ -1,11 +1,16 @@
-"""RP.1 — plain-text renderer for the SETUP section (RP.0's `ReportContract.
-setup: SetupAnalysis | None`, SA.6).
+"""RP.1/RP.2 — plain-text renderer for the SETUP section (RP.0's
+`ReportContract.setup: SetupAnalysis | None`, SA.6).
 
-**Not wired into `render_report`/`render_html_report` yet.** RP.1 is only
-the renderer — RP.2 integrates it into the live report flow. Calling
-`render_setup_section` today has zero effect on any existing report,
-matching the pattern already established by SA.1-SA.6/EB.4-EB.5 (build the
-engine in one ticket, wire it into the live path in the next).
+**Wired into `render_report` (RP.2)** — `report/text.py` calls
+`render_setup_section` directly; `setup=None` (the default on every
+existing call site) still renders nothing, so no pre-RP.2 caller's output
+changed. `report/html_report.py` does NOT import `render_setup_section` —
+it has its own, genuinely separate HTML rendering
+(`_render_setup_html`), reusing only this module's pure data-extraction
+helpers (`subject_label`/`render_observation_text`/`prevalence_fragment`/
+`distribution_fragment`), never this file's `**bold**`-flavored line
+assembly. See those functions' own docstrings for why the two outputs are
+never allowed to share tag-generation code.
 
 **Observational language only, guaranteed, not just intended.** Every line
 this module ever returns is built from SA.1's own approved vocabulary
@@ -23,10 +28,7 @@ a file attachment (`bot/discord_bot.py`/`bot/worker.py`'s
 emits `<strong>`/`<br>` tags into that inline-text path would show up to
 the user as literal angle-bracket garbage — Discord does not interpret
 arbitrary HTML. This module NEVER emits an HTML tag; guarded by test
-(`test_render_setup_section_never_contains_html_tags`). An HTML-flavored
-sibling (for `render_html_report`'s file-attachment path only) belongs to
-a later, clearly-separated function if RP.2 needs one — the two must never
-share implementation, or a tag from one path could leak into the other.
+(`test_render_setup_section_never_contains_html_tags`).
 """
 
 from __future__ import annotations
@@ -46,7 +48,7 @@ from botgitgud.analysis.setup_finding import (
 _SEPARATOR = "=" * 42
 
 
-def _subject_label(subject: FindingSubject) -> str:
+def subject_label(subject: FindingSubject) -> str:
     if subject.category is FindingCategory.TALENT_BUILD:
         return "Build de talentos"
     if subject.category is FindingCategory.TRINKET:
@@ -58,21 +60,21 @@ def _subject_label(subject: FindingSubject) -> str:
     return f"{subject.stat_name}"
 
 
-def _render_observation_text(finding: SetupFinding) -> str:
+def render_observation_text(finding: SetupFinding) -> str:
     kwargs: dict[str, object] = {}
     if finding.observation is ObservationCode.HIGH_PREVALENCE and finding.prevalence is not None:
         kwargs["prevalence_pct"] = finding.prevalence.prevalence * 100
     return render_observation(finding.observation, **kwargs)
 
 
-def _prevalence_fragment(finding: SetupFinding) -> str | None:
+def prevalence_fragment(finding: SetupFinding) -> str | None:
     if finding.prevalence is None:
         return None
     pct = finding.prevalence.prevalence * 100
     return f"observado em {pct:.0f}% da amostra disponível (n={finding.prevalence.n_available})"
 
 
-def _distribution_fragment(finding: SetupFinding) -> str | None:
+def distribution_fragment(finding: SetupFinding) -> str | None:
     if finding.distribution is None or finding.distribution.player_value is None:
         return None
     d = finding.distribution
@@ -85,9 +87,9 @@ def _distribution_fragment(finding: SetupFinding) -> str | None:
 
 
 def _render_finding_line(finding: SetupFinding) -> str:
-    label = _subject_label(finding.subject)
-    parts = [_render_observation_text(finding)]
-    extra = _prevalence_fragment(finding) or _distribution_fragment(finding)
+    label = subject_label(finding.subject)
+    parts = [render_observation_text(finding)]
+    extra = prevalence_fragment(finding) or distribution_fragment(finding)
     if extra:
         parts.append(extra)
     if CaveatCode.PARTIAL_SETUP_COVERAGE in finding.caveats:

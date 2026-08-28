@@ -15,6 +15,16 @@ from botgitgud.analysis.performance_features import (
     UptimeFinding,
     WasteFinding,
 )
+from botgitgud.analysis.setup_analysis import SetupAnalysis
+from botgitgud.analysis.setup_finding import (
+    BenchmarkSampleRef,
+    EvidenceLevel,
+    FindingSubject,
+    ObservationCode,
+    PrevalenceSummary,
+    Publicability,
+    SetupFinding,
+)
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.html_report import render_html_report
@@ -190,6 +200,62 @@ def test_html_report_parses_under_a_strict_xml_parser() -> None:
     html = _full_html()
     root = ET.fromstring(html)  # raises ET.ParseError on any malformed markup
     assert root.tag == "{http://www.w3.org/1999/xhtml}html"
+
+
+# -- RP.2: SETUP section integration ---------------------------------------------
+
+
+def _setup_finding() -> SetupFinding:
+    sample = BenchmarkSampleRef(benchmark_id="Warlock/Demonology/1/1/1/v1", band_name=None)
+    return SetupFinding(
+        subject=FindingSubject.talent_build("1:1|2:2"),
+        observation=ObservationCode.MATCHES_COMMON_PATTERN,
+        evidence_level=EvidenceLevel.STRONG,
+        publicability=Publicability.PUBLISHABLE,
+        sample=sample,
+        prevalence=PrevalenceSummary(count=40, n_available=50, prevalence=0.8),
+    )
+
+
+def _setup_analysis(*findings: SetupFinding) -> SetupAnalysis:
+    return SetupAnalysis(
+        benchmark_id="Warlock/Demonology/1/1/1/v1",
+        findings=findings,
+        player_setup_available=True,
+        benchmark_available=True,
+    )
+
+
+def test_no_setup_param_leaves_the_html_report_unaffected() -> None:
+    with_default = _full_html()
+    explicit_none = render_html_report(
+        _header(),
+        [_comparison()],
+        manifest=_manifest(),
+        performance=_performance(),
+        dps_gap=_dps_gap(),
+        top_actions=[_finding()],
+        duration_s=345.0,
+        setup=None,
+    )
+    assert with_default == explicit_none
+    assert "Setup" not in with_default
+
+
+def test_setup_section_appears_and_still_parses_under_strict_xml() -> None:
+    html = render_html_report(
+        _header(),
+        [_comparison()],
+        manifest=_manifest(),
+        performance=_performance(),
+        dps_gap=_dps_gap(),
+        top_actions=[_finding()],
+        duration_s=345.0,
+        setup=_setup_analysis(_setup_finding()),
+    )
+    ET.fromstring(html)  # raises on any malformed markup
+    assert "Setup" in html
+    assert "Build de talentos" in html
 
 
 def test_html_report_has_no_external_resource_urls() -> None:
