@@ -1212,3 +1212,35 @@ SA.2-SA.4 cujo subject só existe quando há dado.
   SetupScore/estimated_gain_pct/normalized_position, zero Execution Cohort/WCL/Discord. Não
   implementado (fora de escopo): orchestration (SA.6), HTML/Discord/`!analisar`, Execution Cohort,
   Phase 4.
+
+## SA.6 — orquestração de Setup Analysis (2026-08-28)
+
+`analysis/setup_analysis.py` (novo) — `analyze_setup(*, target, policy, player_setup, benchmark) ->
+SetupAnalysis`, camada pura que chama as quatro comparações (SA.2-SA.5) e combina os resultados numa
+única lista ordenada. **Fecha o milestone SA** (contrato SA.1 + as quatro comparações + orquestração).
+
+- **`SetupAnalysis`**: `benchmark_id`, `findings: tuple[SetupFinding, ...]` (já na ordem canônica de
+  `sort_setup_findings`), `player_setup_available`/`benchmark_available` (metadados de
+  disponibilidade). SEM `SetupScore`, SEM recomendação global, SEM ganho de DPS agregado — combinar
+  quatro categorias numa lista não é o mesmo que combiná-las numa nota; essa distinção é o ponto
+  central de todo o milestone (guardado por teste: `analysis.score`/`.grade` não existem).
+- **Degradação honesta por CONSTRUÇÃO, não por lógica extra em SA.6**: cada `compare_*` (SA.2-SA.5)
+  já lida sozinho com setup ausente/benchmark ausente/categoria indisponível/evidência insuficiente/
+  cobertura parcial, sem depender do resultado de nenhuma outra categoria — SA.6 só concatena. Uma
+  categoria degradada (ex.: jogador sem peça de set) nunca reduz as outras 3 (talent/trinket/stats
+  continuam comparados normalmente na MESMA análise) — testado explicitamente
+  (`test_one_missing_category_does_not_destroy_the_others`,
+  `test_insufficient_sample_category_does_not_destroy_others`,
+  `test_partial_coverage_in_one_category_does_not_affect_others`).
+- **Determinismo**: `findings` já sai ordenado (mesma chave canônica de `sort_setup_findings`, SA.1);
+  chamadas repetidas com o mesmo input produzem os mesmos `finding_id`s na mesma ordem.
+- Guard do achado 3.12 ganhou uma 7ª exceção revisada (`setup_analysis.py` só chama
+  `setup_trinkets.compare_trinkets`, já auditada — nenhuma decisão de elegibilidade nova).
+- **12 testes novos** (`test_setup_analysis.py`): combina as 4 categorias (8 findings: 1 talent + 1
+  trinket + 1 par + 1 set + 4 stats), metadados de identidade/disponibilidade, ordenação
+  pré-canônica, determinismo, todos os cenários de degradação honesta (player ausente, benchmark
+  ausente, 1 categoria ausente, evidência insuficiente, cobertura parcial isolada por categoria),
+  zero SetupScore/recomendação global/estimated_gain_pct, zero Execution Cohort/WCL/Discord/Store/job.
+
+**Milestone Setup Analysis (SA.1-SA.6) fechado.** Não implementado (fora de escopo, próximos
+milestones): EC.1-EC.4 (Execution Cohort), RP.0-RP.2 (relatório), HTML/Discord/`!analisar`, Phase 4.

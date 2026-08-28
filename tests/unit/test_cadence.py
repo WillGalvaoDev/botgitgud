@@ -68,11 +68,15 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     compara trinkets equipados contra o benchmark, também só por `item_id`
     (via `FindingSubject.trinket`/`trinket_pair` e a chave crua
     `str(item_id)`/`"{a}+{b}"`, o mesmo formato de
-    `benchmark_aggregate.trinket_pair_key`). Não existe sequer um campo de
-    nome de item em `GearPiece`/`TalentNode` (domain/models.py) para
-    filtrar por ele. O intento do guard (nada de decisão lexical sobre
-    spells) continua valendo em todo o resto de `src/`, incluindo
-    `analysis/` fora dessas seis exceções, onde elegibilidade é decidida.
+    `benchmark_aggregate.trinket_pair_key`). SA.6 introduziu a sétima:
+    `analysis/setup_analysis.py` só importa e chama
+    `setup_trinkets.compare_trinkets` (orquestração pura, nenhuma decisão
+    de elegibilidade nova aqui — a palavra aparece só como nome de função/
+    módulo já auditado). Não existe sequer um campo de nome de item em
+    `GearPiece`/`TalentNode` (domain/models.py) para filtrar por ele. O
+    intento do guard (nada de decisão lexical sobre spells) continua
+    valendo em todo o resto de `src/`, incluindo `analysis/` fora dessas
+    sete exceções, onde elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
@@ -83,6 +87,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "ingest" / "benchmark_fetch.py",
         src_root / "botgitgud" / "analysis" / "setup_finding.py",
         src_root / "botgitgud" / "analysis" / "setup_trinkets.py",
+        src_root / "botgitgud" / "analysis" / "setup_analysis.py",
     }
 
     offenders = []
@@ -211,6 +216,22 @@ def test_the_reviewed_setup_trinkets_exception_keys_trinkets_by_item_id() -> Non
     assert "g.item_id" in text
     assert "spell" not in text.lower()
     assert "item_name" not in text.lower()
+
+
+def test_the_reviewed_setup_analysis_exception_only_calls_the_audited_function() -> None:
+    """Sétima exceção (SA.6): `setup_analysis.py` só importa/chama
+    `compare_trinkets` (já auditada, sexta exceção) — nenhuma decisão de
+    elegibilidade nova neste arquivo.
+    """
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "analysis" / "setup_analysis.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "from botgitgud.analysis.setup_trinkets import compare_trinkets" in text
+    assert "spell" not in text.lower()
+    assert "item_name" not in text.lower()
+    assert ".lower()" not in text  # nenhuma normalização de nome existe neste arquivo
 
 
 # -- classification branches --------------------------------------------------
