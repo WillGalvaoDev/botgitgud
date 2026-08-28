@@ -113,11 +113,15 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     `analysis/setup_analysis.py` só importa e chama
     `setup_trinkets.compare_trinkets` (orquestração pura, nenhuma decisão
     de elegibilidade nova aqui — a palavra aparece só como nome de função/
-    módulo já auditado). Não existe sequer um campo de nome de item em
+    módulo já auditado). RP.1 introduziu a oitava: `report/setup_text.py`
+    exibe o rótulo de um `SetupFinding` de categoria `TRINKET`/
+    `TRINKET_PAIR` usando `subject.item_id` (inteiro) — só exibição, mesma
+    identidade por ID já auditada nas exceções anteriores, nenhuma
+    comparação de nome. Não existe sequer um campo de nome de item em
     `GearPiece`/`TalentNode` (domain/models.py) para filtrar por ele. O
     intento do guard (nada de decisão lexical sobre spells) continua
     valendo em todo o resto de `src/`, incluindo `analysis/` fora dessas
-    sete exceções, onde elegibilidade é decidida.
+    oito exceções, onde elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
@@ -129,6 +133,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "analysis" / "setup_finding.py",
         src_root / "botgitgud" / "analysis" / "setup_trinkets.py",
         src_root / "botgitgud" / "analysis" / "setup_analysis.py",
+        src_root / "botgitgud" / "report" / "setup_text.py",
     }
 
     offenders = []
@@ -273,6 +278,19 @@ def test_the_reviewed_setup_analysis_exception_only_calls_the_audited_function()
     assert "spell" not in text.lower()
     assert "item_name" not in text.lower()
     assert ".lower()" not in text  # nenhuma normalização de nome existe neste arquivo
+
+
+def test_the_reviewed_setup_text_exception_labels_trinkets_by_item_id() -> None:
+    """Oitava exceção (RP.1): `report/setup_text.py` rotula um trinket só
+    por `item_id` (inteiro) — mesmo padrão de identidade das exceções
+    anteriores, nenhuma comparação de nome.
+    """
+    path = Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "report" / "setup_text.py"
+    text = path.read_text(encoding="utf-8")
+
+    assert "subject.item_id" in text
+    assert "spell" not in text.lower()
+    assert "item_name" not in text.lower()
 
 
 # -- classification branches --------------------------------------------------

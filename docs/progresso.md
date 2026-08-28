@@ -1421,3 +1421,37 @@ matched_covariates/relaxed_covariates). `build_report_contract(result, *, setup=
 - Não implementado (fora de escopo, explícito no ticket): renderização de verdade da seção SETUP
   (RP.1), integração/wiring de `analyze_setup()` no pipeline ao vivo (RP.2), qualquer mudança em
   `report/text.py`/`report/html_report.py`.
+
+## RP.1 — renderização em texto da seção SETUP (2026-08-28)
+
+`report/setup_text.py` (novo) — `render_setup_section(setup: SetupAnalysis | None) -> list[str]`,
+mesma convenção dos outros `render_*_section` de `report/`. **Ainda NÃO conectado a `render_report`/
+`render_html_report`** — RP.1 só constrói o renderer; RP.2 é quem integra ("renderize" vs "integre",
+distinção explícita do ticket, mesmo padrão EB.4→EB.5/SA.1-5→SA.6 já usado o resto da sessão).
+
+- **Linguagem observacional GARANTIDA, não só pretendida**: toda linha vem de `setup_finding.
+  render_observation`/`OBSERVATION_TEMPLATES` (SA.1, já validados na importação) e é reconferida por
+  `validate_setup_language` antes de ser devolvida — defesa em profundidade. Testado com um cenário
+  de prevalência zero explicitamente confirmando que nenhum termo causal aparece.
+- **Findings `HIDDEN` nunca renderizam; `CAUTION` renderizam normalmente** — como SA.2-SA.5 SEMPRE
+  mapeiam evidência fraca para `INSUFFICIENT_EVIDENCE` (nunca para MATCHES/DIFFERS fabricado), um
+  finding `CAUTION` automaticamente usa o texto certo ("amostra pequena") sem lógica extra aqui.
+- **Auditoria do bug histórico "Discord não mostra HTML cru" — DIRECIONADA, não genérica**:
+  confirmado que `render_header_and_top3` (texto puro) é o que vai para a mensagem inline do Discord;
+  o relatório HTML completo só sai como ANEXO de arquivo, nunca como texto de mensagem. Este módulo é
+  só texto puro — nunca produz `<...>` — guardado por teste dedicado
+  (`test_render_setup_section_never_contains_html_tags`). Um renderer HTML (para `render_html_report`,
+  se necessário) fica para uma função SEPARADA, deliberadamente, para nunca haver implementação
+  compartilhada por onde uma tag pudesse vazar entre os dois caminhos.
+- Guard do achado 3.12 ganhou uma 8ª exceção revisada (`report/setup_text.py`'s rótulo de trinket usa
+  só `item_id`, mesma identidade já auditada 3x antes).
+- **21 testes novos** (`test_setup_text.py`): seção vazia quando `setup=None` ou nada publicável;
+  finding `HIDDEN` nunca aparece; `CAUTION` ainda aparece; rótulo correto por categoria (talent/
+  trinket/par/set/stat); números de prevalência/distribuição corretos; caveat de cobertura parcial
+  por finding, disclaimers de nomes-não-resolvidos/rating-bruto uma única vez por seção (nunca
+  repetidos por finding); toda linha passa o guard de linguagem; honestidade (prevalência zero nunca
+  vira "bad"/"wrong"/"should"); zero tag HTML; `render_report`/`render_html_report` confirmados por
+  AST como NÃO importando este módulo ainda; zero WCL/Discord/Store/job. Suíte completa (lotes) e
+  goldens confirmados INALTERADOS (nada consome o renderer ainda).
+- Não implementado (fora de escopo, explícito no ticket): wiring em `render_report`/
+  `render_html_report` ou no pipeline ao vivo (RP.2), qualquer variante HTML do renderer.
