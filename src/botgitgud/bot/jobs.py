@@ -29,6 +29,18 @@ from botgitgud.ingest.store import Store
 
 _ACTIVE_SQL = ", ".join(f"'{status}'" for status in ACTIVE_STATUSES)
 
+# EB.5: prioridade EXPLÍCITA e ordinal — "HOT ANALYSIS > EXECUTION COHORT
+# RESUME > ENCOUNTER BENCHMARK BUILD" — nunca "quem chegou primeiro". Uma
+# única fonte de verdade (esta tupla) gera a expressão SQL usada por
+# `claim_next()`; nenhum job_type novo pode ganhar prioridade por acidente
+# ao cair no "ELSE" — cada tipo precisa de uma entrada explícita aqui.
+_JOB_TYPE_PRIORITY: tuple[str, ...] = ("analyze", "build_cohort", "benchmark_build")
+_JOB_TYPE_PRIORITY_SQL = (
+    "CASE job_type "
+    + " ".join(f"WHEN '{t}' THEN {i}" for i, t in enumerate(_JOB_TYPE_PRIORITY))
+    + f" ELSE {len(_JOB_TYPE_PRIORITY)} END"
+)
+
 MAX_ACTIVE_JOBS_PER_USER = 1
 MAX_QUEUED_JOBS_PER_USER = 3
 USER_COOLDOWN_S = 60.0
@@ -59,25 +71,40 @@ class JobQueue:
         dedup_key: str,
         discord_user_id: str,
         discord_channel_id: str,
+        payload_json: str | None = None,
     ) -> EnqueueResult:
         with self._lock:
             existing = self._find_active_by_dedup_key(dedup_key)
             if existing is not None:
                 return EnqueueResult(job=existing, deduped=True)
 
-            last_created = self._last_created_at_for_user(discord_user_id)
-            if last_created is not None:
-                elapsed = (now_utc_naive() - last_created).total_seconds()
-                if elapsed < USER_COOLDOWN_S:
-                    wait_s = USER_COOLDOWN_S - elapsed
-                    return EnqueueResult(
-                        job=None,
-                        deduped=False,
-                        rejected_reason=f"aguarde mais {wait_s:.0f}s antes de pedir outra análise",
-                    )
+            # EB.5: cooldown/cota por usuário existem para conter um HUMANO
+            # reenviando `!analisar` depressa demais — não fazem sentido para
+            # `benchmark_build`, que nunca tem um usuário Discord real do
+            # outro lado (bot/benchmark_job.py's `_system_user_id`) e cujo
+            # único gate de repetição já é o dedup por `dedup_key` acima. Sem
+            # este pulo, reconstruir um benchmark que ficou stale minutos
+            # depois de um READY recente esbarraria num cooldown pensado
+            # para um problema completamente diferente.
+            if job_type != "benchmark_build":
+                last_created = self._last_created_at_for_user(discord_user_id)
+                if last_created is not None:
+                    elapsed = (now_utc_naive() - last_created).total_seconds()
+                    if elapsed < USER_COOLDOWN_S:
+                        wait_s = USER_COOLDOWN_S - elapsed
+                        return EnqueueResult(
+                            job=None,
+                            deduped=False,
+                            rejected_reason=(
+                                f"aguarde mais {wait_s:.0f}s antes de pedir outra análise"
+                            ),
+                        )
 
             active_count = self._count_active_for_user(discord_user_id)
-            if active_count >= MAX_ACTIVE_JOBS_PER_USER + MAX_QUEUED_JOBS_PER_USER:
+            if (
+                job_type != "benchmark_build"
+                and active_count >= MAX_ACTIVE_JOBS_PER_USER + MAX_QUEUED_JOBS_PER_USER
+            ):
                 return EnqueueResult(
                     job=None,
                     deduped=False,
@@ -99,6 +126,7 @@ class JobQueue:
                 finished_at=None,
                 error=None,
                 report_path=None,
+                payload_json=payload_json,
             )
             placeholders = ", ".join("?" * len(JOB_COLUMNS.split(", ")))
             self._store.execute(
@@ -120,6 +148,7 @@ class JobQueue:
                     job.deferred_until,
                     job.defer_reason,
                     job.defer_count,
+                    job.payload_json,
                 ],
             )
             position = self._count_by_status("queued")  # this job included: it's last-in-line
@@ -128,16 +157,22 @@ class JobQueue:
     # -- claiming / lifecycle -------------------------------------------------------
 
     def claim_next(self, budget: BudgetStatus) -> Job | None:
-        """Never claims more than MAX_CONCURRENT_JOBS running at once;
-        prefers `analyze` over `build_cohort` (§5); skips job types the
-        budget doesn't currently allow (§3) — those stay queued, not
+        """Never claims more than MAX_CONCURRENT_JOBS running at once.
+        Priority is explicit and ordinal, not "inserted earlier wins"
+        (EB.5 §"prioridade da fila"): `analyze` > `build_cohort` >
+        `benchmark_build` — see `_JOB_TYPE_PRIORITY_SQL`. Skips job types
+        the budget doesn't currently allow (§3) — those stay queued, not
         cancelled.
         """
         with self._lock:
             if self._count_by_status("running") >= MAX_CONCURRENT_JOBS:
                 return None
 
-            allowed_types = [t for t in ("analyze", "build_cohort") if budget.allows(t)]  # type: ignore[list-item]
+            allowed_types = [
+                t
+                for t in ("analyze", "build_cohort", "benchmark_build")
+                if budget.allows(t)  # type: ignore[list-item]
+            ]
             if not allowed_types:
                 return None
 
@@ -163,7 +198,7 @@ class JobQueue:
                      OR (status = 'deferred_budget'
                          AND (deferred_until IS NULL OR deferred_until <= ?))
                   )
-                ORDER BY CASE job_type WHEN 'analyze' THEN 0 ELSE 1 END, created_at ASC
+                ORDER BY {_JOB_TYPE_PRIORITY_SQL}, created_at ASC
                 LIMIT 1
                 """,
                 [*allowed_types, now_utc_naive()],
@@ -194,6 +229,7 @@ class JobQueue:
                 deferred_until=None,
                 defer_reason=job.defer_reason,
                 defer_count=job.defer_count,
+                payload_json=job.payload_json,
             )
 
     def mark_done(self, job_id: str, *, report_path: str | None = None) -> None:

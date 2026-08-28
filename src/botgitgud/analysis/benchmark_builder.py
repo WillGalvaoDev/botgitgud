@@ -331,11 +331,22 @@ def advance_benchmark_build(
     target: EncounterBenchmarkTarget,
     policy: BenchmarkPolicy,
     candidates: Sequence[RankingCandidate],
+    max_batches: int | None = None,
 ) -> BenchmarkBuildResult:
     """Uma janela: avança o quanto o orçamento ATUAL permitir, então devolve.
     `RateLimitBudgetExceeded` continua propagando (mesmo contrato de
     `advance_cohort_build`) — é o backstop do próprio cliente, não uma
     decisão deste motor.
+
+    `max_batches` (EB.5): teto de EQUIDADE, não de orçamento — `None`
+    (padrão, comportamento inalterado de EB.4) deixa o laço avançar até o
+    orçamento OU o trabalho acabarem, como sempre. Um chamador de fila
+    (job de baixa prioridade) passa um valor pequeno (tipicamente 1) para
+    nunca monopolizar o worker por múltiplos lotes numa única reivindicação
+    — devolve `DEFERRED_BUDGET` ao atingir o teto mesmo com orçamento de
+    sobra, porque do ponto de vista de quem enfileira a diferença entre
+    "sem orçamento" e "sem sua vez" não importa: os dois retomam sozinhos
+    depois, pelo mesmo checkpoint.
     """
     benchmark_id = target.benchmark_id
     progress_store.register_candidates(benchmark_id, candidates)
@@ -368,6 +379,7 @@ def advance_benchmark_build(
     newly_fetched = 0
     attempted_fights: set[tuple[str, int]] = set()
     state: BenchmarkBuildState | None = None
+    batches_run = 0
 
     while pending:
         candidates_by_fight: dict[tuple[str, int], list[str]] = {}
@@ -399,9 +411,20 @@ def advance_benchmark_build(
             candidates_by_fight=candidates_by_fight,
         )
         attempted_fights.update(batch)
+        batches_run += 1
 
         rows = progress_store.read_progress(benchmark_id)
         pending = [r for r in rows if r.status == "pending"]
+
+        if pending and max_batches is not None and batches_run >= max_batches:
+            state = BenchmarkBuildState.DEFERRED_BUDGET
+            log.info(
+                "benchmark_builder.batch_cap_reached",
+                benchmark_id=benchmark_id,
+                batches_run=batches_run,
+                remaining=len(pending),
+            )
+            break
 
     if not pending:
         return _finalize(

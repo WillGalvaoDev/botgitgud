@@ -13,14 +13,13 @@ dedup_key doubles as the job's own parameters, parsed back out here:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import structlog
 
 from botgitgud.analysis.cohort_builder import build_cohorts
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.analysis_runs import record_analysis_result, track_analysis
-from botgitgud.bot.job_models import Job
+from botgitgud.bot.benchmark_job import run_benchmark_build_job
+from botgitgud.bot.job_models import Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.report_store import ReportPersistenceError, persist_report
 from botgitgud.errors import BotGitGudError, CohortDeferredBudget, RateLimitBudgetExceeded
@@ -28,20 +27,6 @@ from botgitgud.report.html_report import render_html_report
 from botgitgud.report.text import render_header_and_top3
 
 log = structlog.get_logger(__name__)
-
-
-@dataclass(frozen=True, slots=True)
-class JobOutcome:
-    job: Job
-    ok: bool
-    message: str
-    html_report: str | None = None
-    requeued: bool = False
-    report_path: str | None = None
-    # B2: adiado por orcamento. `ok=False` porque nao ha relatorio ainda, mas
-    # NAO e falha: o job continua elegivel e retoma sozinho.
-    deferred: bool = False
-    deferred_until: str | None = None
 
 
 def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
@@ -53,6 +38,14 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
     progress LogFetcher/Store already made kept (docs/desvios.md D-18) —
     never marked `failed`.
     """
+    if job.job_type == "benchmark_build":
+        # EB.5: fluxo de mapeamento de estado inteiramente distinto
+        # (READY/DEFERRED_BUDGET/NO_PROGRESS/FAILED de
+        # analysis/benchmark_builder.py, não CohortDeferredBudget) — vive em
+        # bot/benchmark_job.py, não misturado no try/except abaixo, que é
+        # específico do par analyze/build_cohort.
+        return run_benchmark_build_job(queue, job, deps)
+
     report_path: str | None = None
     try:
         if job.job_type == "analyze":

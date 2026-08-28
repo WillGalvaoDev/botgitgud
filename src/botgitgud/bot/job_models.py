@@ -22,7 +22,11 @@ JobStatus = Literal["queued", "running", "deferred_budget", "done", "failed", "c
 # Estados em que o job ainda tem trabalho pela frente: contam para dedup, para
 # a cota do usuario e para `!status`.
 ACTIVE_STATUSES: tuple[JobStatus, ...] = ("queued", "running", "deferred_budget")
-JobType = Literal["analyze", "build_cohort"]
+# EB.5: "benchmark_build" é a terceira fila, sempre a de menor prioridade —
+# ver claim_next()'s ORDER BY (jobs.py) e BudgetStatus.allows() abaixo. Nunca
+# compete pelo mesmo slot que um `!analisar` real; existe só para progredir
+# quando o sistema está ocioso.
+JobType = Literal["analyze", "build_cohort", "benchmark_build"]
 
 # RC.2 — o estado da ANALISE e o estado da ENTREGA sao fatos diferentes. Uma
 # falha do Discord nao pode reescrever "a analise terminou" como "o job
@@ -59,6 +63,11 @@ MIGRATE_JOBS_TABLE = (
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS deferred_until TIMESTAMP",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS defer_reason VARCHAR",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS defer_count INTEGER",
+    # EB.5: payload JSON genérico — não específico de benchmark_build, para
+    # que um futuro job_type não precise inventar um segundo mecanismo.
+    # "Mínimo": target/policy/plano de candidatos, nunca um objeto Python
+    # arbitrário serializado.
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS payload_json VARCHAR",
 )
 # Plain TIMESTAMP, not TIMESTAMPTZ: DuckDB's TIMESTAMPTZ support needs the
 # optional `pytz` package (not in this project's dependency list, §1.2 —
@@ -70,7 +79,8 @@ MIGRATE_JOBS_TABLE = (
 JOB_COLUMNS = (
     "job_id, job_type, dedup_key, discord_user_id, discord_channel_id, "
     "status, created_at, started_at, finished_at, error, report_path, "
-    "delivery_status, delivery_error, deferred_until, defer_reason, defer_count"
+    "delivery_status, delivery_error, deferred_until, defer_reason, defer_count, "
+    "payload_json"
 )
 
 
@@ -99,6 +109,10 @@ class Job:
     deferred_until: datetime | None = None
     defer_reason: str | None = None
     defer_count: int = 0
+    # EB.5: JSON opaco para este módulo — quem lê/escreve o CONTEÚDO é o
+    # dono do job_type (bot/benchmark_job.py para "benchmark_build"). `Job`
+    # só transporta a string.
+    payload_json: str | None = None
 
     @property
     def analysis_completed(self) -> bool:
@@ -137,6 +151,27 @@ class Job:
 
 
 @dataclass(frozen=True, slots=True)
+class JobOutcome:
+    """O que uma execução de job produziu — vive aqui (não em bot/worker.py,
+    que a define há mais tempo) desde EB.5: bot/benchmark_job.py também
+    precisa construir/devolver este tipo, e worker.py precisa importar DE
+    benchmark_job.py (`run_benchmark_build_job`) — mantê-lo em worker.py
+    criaria um import circular entre os dois módulos.
+    """
+
+    job: Job
+    ok: bool
+    message: str
+    html_report: str | None = None
+    requeued: bool = False
+    report_path: str | None = None
+    # B2: adiado por orcamento. `ok=False` porque nao ha relatorio ainda, mas
+    # NAO e falha: o job continua elegivel e retoma sozinho.
+    deferred: bool = False
+    deferred_until: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class EnqueueResult:
     job: Job | None  # None only when rejected
     deduped: bool
@@ -168,9 +203,21 @@ class BudgetStatus:
         return self.limit_per_hour * self.interactive_reserve_pct
 
     def allows(self, job_type: JobType) -> bool:
+        """EB.5: `benchmark_build` reusa o MESMO `reserve_threshold` de
+        `build_cohort` — nunca um piso próprio inventado aqui (isso
+        duplicaria o cost model, que `analysis/benchmark_build_budget.py`
+        já possui). Esta é só a checagem GROSSA de "este tipo de job pode
+        sequer ser reivindicado agora" — a decisão FINA (quantos fights
+        cabem neste instante) continua sendo de `advance_benchmark_build`
+        via `affordable_fights`, chamada depois do claim. Se o orçamento
+        cair entre as duas checagens, o builder simplesmente devolve
+        `DEFERRED_BUDGET` de novo — nunca um erro, nunca gasto indevido.
+        """
         if self.points_remaining < self.floor:
             return False
-        return not (job_type == "build_cohort" and self.points_remaining < self.reserve_threshold)
+        if job_type in ("build_cohort", "benchmark_build"):
+            return self.points_remaining >= self.reserve_threshold
+        return True
 
 
 def row_to_job(row: tuple[object, ...]) -> Job:
@@ -191,4 +238,5 @@ def row_to_job(row: tuple[object, ...]) -> Job:
         deferred_until=row[13],  # type: ignore[arg-type]
         defer_reason=row[14],  # type: ignore[arg-type]
         defer_count=int(row[15]) if row[15] is not None else 0,  # type: ignore[arg-type]
+        payload_json=row[16] if len(row) > 16 else None,  # type: ignore[arg-type]
     )

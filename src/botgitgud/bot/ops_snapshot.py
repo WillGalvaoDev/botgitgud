@@ -24,7 +24,7 @@ import os
 import threading
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -79,6 +79,12 @@ class OpsSnapshot:
     latest_completed_job: dict[str, Any] | None
     ready_cohorts: list[dict[str, Any]]
     cold_build: dict[str, Any] | None
+    # EB.5: contagem por job_type x status — {"queued": N, "running": N,
+    # "deferred_budget": N, "done": N, "failed": N, ...}. Não redesenha o
+    # snapshot: os totais globais acima (queued/running/done/failed)
+    # continuam existindo, isto só soma a dimensão job_type que faltava
+    # para distinguir `analyze`/`build_cohort`/`benchmark_build` entre si.
+    by_type: dict[str, dict[str, int]] = field(default_factory=dict)
     age_seconds: float = 0.0
 
     @property
@@ -152,8 +158,20 @@ def write_snapshot(
         }
 
     oldest = min((j.started_at for j in running if j.started_at is not None), default=None)
+
+    # EB.5: por job_type x status — `active` cobre queued/running/
+    # deferred_budget corretamente (a fonte viva); `recent` cobre done/
+    # failed. Um job_id presente nos dois (raro, mas possível na borda de
+    # uma transição) usa o estado de `active`, que é o mais atual.
+    by_type: dict[str, dict[str, int]] = {}
+    merged: dict[str, Job] = {j.job_id: j for j in recent}
+    merged.update({j.job_id: j for j in active})
+    for j in merged.values():
+        by_status = by_type.setdefault(j.job_type, {})
+        by_status[j.status] = by_status.get(j.status, 0) + 1
+
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "pid": os.getpid() if pid is None else pid,
         "written_at": moment,
         "queued": sum(1 for j in active if j.status == "queued"),
@@ -169,6 +187,7 @@ def write_snapshot(
         "latest_completed_job": job_summary(latest),
         "ready_cohorts": list(ready_cohorts),
         "cold_build": cold_build,
+        "by_type": by_type,
     }
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / SNAPSHOT_FILENAME

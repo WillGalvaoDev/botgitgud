@@ -55,6 +55,10 @@ def _snapshot_lines(data_dir: Path) -> list[str] | None:
         f"jobs done={snapshot.done} failed={snapshot.failed}",
         f"oldest_running_started_at={snapshot.oldest_running_started_at}",
     ]
+    for job_type in sorted(snapshot.by_type):
+        by_status = snapshot.by_type[job_type]
+        counts = " ".join(f"{status}={n}" for status, n in sorted(by_status.items()))
+        lines.append(f"jobs[{job_type}] {counts}")
     if snapshot.active_job is not None:
         lines.append("active_job=" + str(snapshot.active_job))
     if snapshot.latest_completed_job is not None:

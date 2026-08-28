@@ -36,7 +36,7 @@ from botgitgud.bot.delivery import (
     send_report,
     send_text,
 )
-from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job
+from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import write_snapshot
 from botgitgud.bot.report_store import (
@@ -44,7 +44,7 @@ from botgitgud.bot.report_store import (
     interactive_artifact_id,
     persist_report,
 )
-from botgitgud.bot.worker import JobOutcome, run_claimed_job
+from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import (
     ApiError,
     CohortNotReady,
@@ -101,7 +101,21 @@ async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQ
     """RC.3 — fronteira de entrega. Nenhuma excecao do Discord sai daqui: a
     camada bot/delivery.py classifica cada falha e devolve um DeliveryOutcome,
     que este nivel persiste sem jamais tocar no estado da analise (RC.2).
+
+    EB.5: `benchmark_build` é job interno — nunca toca o Discord, nem para
+    avisar sucesso/falha. `discord_channel_id` desse job_type é o sentinela
+    `SYSTEM_ACTOR_ID` (bot/benchmark_job.py), não numérico de propósito —
+    passá-lo para `int()` abaixo quebraria; este retorno antecipado garante
+    que isso nunca acontece.
     """
+    if outcome.job.job_type == "benchmark_build":
+        log.info(
+            "discord_bot.benchmark_job_internal_no_notice",
+            job_id=outcome.job.job_id,
+            ok=outcome.ok,
+            deferred=outcome.deferred,
+        )
+        return
     if outcome.requeued or outcome.deferred:
         # T1.8 §3 / B2: o orcamento acabou no meio do job. Nos dois casos o job
         # continua elegivel e retoma sozinho, entao nao ha nada que o usuario

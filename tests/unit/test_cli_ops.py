@@ -92,7 +92,9 @@ def test_ops_snapshot_schema_atomicity_freshness_and_cohort_observability(tmp_pa
     )
     snapshot = read_snapshot(tmp_path, now=105.0)
     assert snapshot is not None
-    assert snapshot.schema_version == 2
+    # EB.5: 3 (não 2) — bump legítimo de schema ao adicionar `by_type`
+    # (contagem de jobs por job_type x status), não uma regressão.
+    assert snapshot.schema_version == 3
     assert snapshot.worker_alive
     assert snapshot.age_seconds == 5.0 and not snapshot.is_stale
     assert snapshot.ready_cohorts == ready

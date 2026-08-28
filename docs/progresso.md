@@ -910,3 +910,78 @@ benchmark de setup precisa por **no máximo 2 queries por fight único**, nunca 
   dos 30 fights únicos, nunca por candidato), zero fight refetched entre janelas, prevalências
   corretas via EB.2. Não implementado (fora de escopo): job/worker, prioridade de fila, comando
   Discord, refresh automático, Setup Analysis, Execution Cohort v2, seção de relatório, Phase 4 F3.
+
+### ⚠️ Achado de custo EB.4, relevante para decisões futuras de budget
+
+**`analysis/benchmark_build_budget.py`'s constantes (`benchmark_build_*` em `config.py`) NÃO são
+medição real de produção** — são um modelo provisório, `measured=false`, documentado como tal em
+todo comentário. Diferença estrutural do cost model da Execution Cohort (~23,4 q/ref, medido):
+
+- `reportData.report.rankings` (`ingest/fight_rankings.py`, já existente do gate de dados da
+  Fase 4) é **fight-wide**: `rankPercent`/`partition`/dps/class/spec de TODOS os jogadores de um
+  fight custam ~2,0 pontos **por fight**, não por jogador — contra ~1 pt **por jogador** da fonte
+  de percentil que o fetch completo (`fetch_player_percentile`) usa.
+- `QUERY_PLAYER_SETUP_ONLY` (novo, EB.4 — `table(dataType: Summary)` isolado de `QUERY_PLAYER_META`,
+  minus `castsTable`/`damageTable`/`masterData`) também é **fight-wide**: `combatantInfo`
+  (talentos/trinkets/setIDs/stats) de TODOS os jogadores de um fight numa única query.
+- Consequência: o workload de um benchmark de setup escala com **fights únicos**, não com
+  candidatos/referências — 2 queries no máximo por fight, não importa quantos jogadores aquele
+  fight sirva (confirmado no cenário sintético de EB.4: 90 candidatos em 30 fights únicos = 60
+  queries totais, nunca 90×algo).
+- Nenhuma medição real foi feita (nenhuma chamada WCL real em EB.0-EB.5) — os valores em
+  `benchmark_build_points_per_query`/`benchmark_build_queries_per_fight`/etc. são estimativas
+  conservadoras de estrutura, com banda de incerteza mais larga (1.5x) que a do cold build (1.2x)
+  exatamente por não terem essa validação ainda. Uma medição real deve substituir estas constantes
+  antes de qualquer decisão de capacidade que dependa de precisão, não só de "nunca superestimar".
+
+## EB.5 — Encounter Benchmark como job de fila de baixa prioridade (2026-08-28)
+
+Auditoria prévia confirmou: reusar `bot/jobs.py`'s `JobQueue` inteira (mesmo warehouse, mesmo lock,
+mesma tabela `jobs` — nunca uma segunda fila) era suficiente; só faltava um terceiro `job_type`.
+
+- **Job type**: `JobType` ganhou `"benchmark_build"` (`bot/job_models.py`). **Payload**: coluna
+  genérica `payload_json` (nova, migração `ALTER TABLE ... ADD COLUMN`) — JSON versionado com
+  `target.to_dict()`/`policy.to_dict()` (EB.1, reusados sem alteração) + lista de candidatos
+  `(report_code, fight_id, player_name, duration_s)`. Nunca um objeto Python serializado.
+- **Dedup/single-flight**: `dedup_key = f"benchmark:{target.benchmark_id}"` — a identidade completa
+  de EB.1 já basta; o dedup atômico que `JobQueue.enqueue()` já faz (mesmo lock que TODO enqueue já
+  usava) É o single-flight, sem lock paralelo novo. Dois `ensure_benchmark_job()` concorrentes para
+  o mesmo `benchmark_id` produzem exatamente um job ativo (testado com `threading.Barrier`).
+- **Prioridade explícita e ordinal** (não "quem chegou primeiro"): `_JOB_TYPE_PRIORITY =
+  ("analyze", "build_cohort", "benchmark_build")` gera a expressão `CASE job_type WHEN ... END` de
+  `claim_next()` — uma fonte de verdade só, nenhum job_type novo ganha prioridade por acidente ao
+  cair no `ELSE`. `BudgetStatus.allows()` reusa o MESMO `reserve_threshold` de `build_cohort` para
+  `benchmark_build` — nunca um piso novo inventado ali (isso duplicaria o cost model).
+- **Fairness/hot-path preemption**: cada reivindicação de job roda `advance_benchmark_build(...,
+  max_batches=2)` — a ÚNICA mudança em EB.4 nesta tarefa (parâmetro novo, opcional, `None` por
+  padrão preserva 100% do comportamento anterior; os 28 testes de EB.4 continuam verdes sem
+  alteração). `max_batches=2` (não 1): `advance_benchmark_build` só reconhece `NO_PROGRESS`
+  reavaliando `untried_fights` numa segunda iteração do laço — com teto 1 essa iteração nunca
+  acontece, e toda falha transitória viraria `DEFERRED_BUDGET` por engano.
+- **Mapeamento de estado**: READY→`mark_done` (sem `report_path` — job interno, sem relatório);
+  DEFERRED_BUDGET/NO_PROGRESS→`queue.defer()` (mesmo primitivo de B2, mesma retomada automática via
+  `Job.is_claimable()`); FAILED (hoje nunca devolvido pelo builder — falhas reais propagam como
+  `ValueError`, capturadas aqui) →`mark_failed`. Um defer causado só pelo teto de fairness (não
+  orçamento real) usa `retry_after_s=0.0` — reconferido chamando `affordable_fights` (EB.4, a MESMA
+  função, nunca uma segunda estimativa) —, então o benchmark cede a vez ao hot path mas retoma quase
+  imediatamente, sem esperar os ~10min de um defer por orçamento genuíno.
+- **NO_PROGRESS**: nunca vira `done`; defer com `reason="benchmark_no_progress"`; teto de segurança
+  (`_MAX_CONSECUTIVE_DEFERS=50`) contra loop infinito, mesmo sendo matematicamente redundante com o
+  `MAX_CANDIDATE_ATTEMPTS` de EB.4 (candidatos retentáveis viram falha permanente e somem de
+  `pending`, terminando em READY mais cedo ou mais tarde).
+- **Freshness**: `ensure_benchmark_job` chama `BenchmarkStore.evaluate_benchmark_freshness` (EB.3,
+  sem alteração) primeiro — `fresh` nunca enfileira. Nenhum gatilho automático/periódico criado.
+- **Cooldown por usuário desativado para `benchmark_build`** (`jobs.py`'s `enqueue()`): o cooldown
+  de 60s/cota de 4 jobs existem para conter um HUMANO reenviando `!analisar` — aplicá-los a um
+  "usuário" sintético travaria reconstruir um benchmark que ficou stale minutos depois do último
+  READY, sem relação com o motivo do cooldown existir. O dedup por `dedup_key` já é a proteção real
+  contra repetição do MESMO benchmark.
+- **`ops_snapshot.py`**: `by_type: dict[job_type, dict[status, int]]` (schema_version 2→3) — extensão
+  mínima, não redesenho; totais globais (`queued`/`running`/`done`/`failed`) intactos.
+  `cli_ops.py`'s `ops-status` imprime uma linha `jobs[benchmark_build] queued=N running=N ...`.
+- **25 testes novos** (`test_benchmark_job.py`), incluindo o cenário integrado
+  obrigatório (benchmark queued → 1 janela parcial → analyze chega → analyze reivindicado primeiro →
+  MESMO job_id de benchmark retomado → READY, zero fight refetched em nenhuma janela) e prova de
+  restart/reopen (fecha e reabre o `Store`, `deferred_budget` sobrevive, progresso de EB.4 continua
+  em 3 linhas). Não implementado (fora de escopo): comando Discord, gatilho automático/scheduler,
+  SetupFinding, Setup Analysis, Execution Cohort v2, EC.1, Phase 4 F3.
