@@ -1511,3 +1511,45 @@ sem custo extra). `AnalysisResult` ganhou `setup_analysis: SetupAnalysis | None 
 - Não implementado (fora de escopo Phase 4/roadmap): qualquer gatilho automático de construção de
   benchmark a partir do caminho interativo (`ensure_benchmark_job` continua não chamado por
   `!analisar`), promoção/treino de Phase 4.
+
+## Validação final (SA.3 → RP.2) — fechamento do roadmap
+
+**Milestones fechados nesta execução autônoma**: Setup Analysis (SA.3-SA.6), Execution Cohort
+(EC.1-EC.4), Report (RP.0-RP.2) — 11 tickets, 11 commits isolados, um por ticket.
+
+- **Suíte offline completa**: 101 arquivos em `tests/unit/` (11 lotes de ~10 arquivos, estratégia
+  adotada por instabilidade de ambiente/RAM da máquina do usuário durante execuções monolíticas —
+  nunca uma falha de teste real, sempre "killed" sem output de falha) + `tests/golden/` — **todos
+  verdes**, zero falhas, zero erros. `tests/golden`: 2 snapshots, diff vazio (nenhuma fixture
+  persiste um `EncounterBenchmark` real, então a seção SETUP nunca aparece nos goldens atuais —
+  esperado, documentado acima no RP.2).
+- **ruff check**: All checks passed. **ruff format --check**: 237 arquivos já formatados.
+  **pyright**: 0 errors, 0 warnings, 0 informations (repo inteiro).
+- **git status --porcelain**: limpo — nada pendente de commit.
+- **`data/logs`**: inalterado durante toda a sessão (nunca lido/escrito por nenhum ticket deste
+  segmento; apenas 2 arquivos fixture, mesmos de antes).
+- **Zero chamadas reais a WCL ou Discord**: confirmado — nenhum comando executado nesta sessão
+  iniciou o bot real (`discord_bot.py`/`worker.py` main) ou chamou a API WCL fora de fixtures/
+  cassettes; grep por `requests.get/post`, `httpx.get/post/AsyncClient(`, `aiohttp.ClientSession(`
+  nos arquivos de teste novos desta sessão não encontrou nenhuma chamada de rede real.
+- **Smokes focados** (todos via teste automatizado, sem serviço real):
+  - Construção de relatório (texto + HTML): `test_report_text.py`, `test_html_report.py` — verdes.
+  - Setup indisponível (fallback) / disponível (benchmark real): `test_setup_analysis_is_always_
+    computed_and_never_blocks_execution`, `test_setup_analysis_reflects_a_persisted_benchmark` —
+    verdes.
+  - Coexistência de cohort v1/v2: `test_cohort_match.py`/`test_models.py` (`-k "v1 or v2 or
+    matching_policy"`) — 11 testes verdes, incluindo o cenário obrigatório 10-BAD/40-GOOD (v1
+    colapsa, v2 não).
+  - Benchmark pronto/faltando: `test_setup_analysis.py`/`test_benchmark_store.py` (`-k "missing or
+    ready or unavailable or available"`) — 5 testes verdes.
+  - Fila de jobs/worker/supervisor inalterados: `test_benchmark_job.py`, `test_jobs.py`,
+    `test_ops_supervisor.py`, `test_worker.py`, `test_worker_lifecycle.py`,
+    `test_worker_report_invariants.py` — todos verdes.
+  - Saída HTML sem regressão óbvia: `test_html_report_parses_under_a_strict_xml_parser` e os novos
+    testes de seção SETUP — verdes.
+- **Phase 4: PARTIAL CONTINUE** — dataset preservado — promotion ainda bloqueada até setup-controlled
+  feature plan. Nenhum Parquet antigo foi apagado ou reescrito, nenhum fingerprint histórico foi
+  reinterpretado, nenhum treino/promoção de modelo foi iniciado ou tocado nesta sessão.
+- **READY_FOR_FINAL_SOAK**: sim. Nenhum soak de 24h com serviço real (WCL/Discord) foi iniciado
+  automaticamente — por regra explícita do mandato desta sessão, isso requer início manual do
+  operador humano.
