@@ -1,7 +1,8 @@
 """T3.1 — report/text.py's section ordering + rendering for the
 performance-beyond-casts findings (docs/implementacao.md T3.1's own
-normative order: 1. Build 2. Mortes/downtime 3. Active time 4. Uptimes
-5. Waste de recurso 6. Usos perdidos de CD 7. Timing de CD).
+normative order: 1. Mortes/downtime 2. Active time 3. Uptimes 4. Waste de
+recurso 5. Usos perdidos de CD 6. Timing de CD — "Build" was item 1 under
+T2.2/T3.1, removed by EC.4; see analysis/talent_cluster.py's docstring).
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from botgitgud.analysis.performance_features import (
     UptimeFinding,
     WasteFinding,
 )
-from botgitgud.analysis.talent_cluster import BuildDivergence, TalentDifference
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.text import ReportHeader, render_report
 
@@ -61,17 +61,6 @@ def _header(**overrides: object) -> ReportHeader:
     return ReportHeader(**defaults)  # type: ignore[arg-type]
 
 
-def _build_divergence() -> BuildDivergence:
-    return BuildDivergence(
-        player_cluster_n=2,
-        total_n=20,
-        dominant_cluster_n=15,
-        dominant_median_dps=100_000.0,
-        player_median_dps=80_000.0,
-        differences=(TalentDifference(node_id=1, dominant_rank=2, player_rank=1),),
-    )
-
-
 def _timing_comparison() -> SpellComparison:
     return compare_spell_usage(
         spell=SpellInfo(spell_id=1, name="Call Dreadstalkers", source="wcl"),
@@ -87,7 +76,6 @@ def test_section_order_matches_the_normative_t31_sequence() -> None:
     text = render_report(
         _header(),
         [_timing_comparison()],
-        build_divergence=_build_divergence(),
         performance=_performance(
             uptimes=(
                 UptimeFinding(
@@ -102,14 +90,13 @@ def test_section_order_matches_the_normative_t31_sequence() -> None:
     )
 
     order = [
-        "BUILD DIVERGENTE" if "BUILD DIVERGENTE" in text else None,
         "MORTES E DOWNTIME",
         "ACTIVE TIME",
         "UPTIMES",
         "WASTE DE RECURSO",
         "MINOR CDS / BURST UTILITIES",
     ]
-    positions = [text.index(marker) for marker in order if marker is not None]
+    positions = [text.index(marker) for marker in order]
     assert positions == sorted(positions)
 
 

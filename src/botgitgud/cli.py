@@ -123,7 +123,6 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         result.header,
         result.comparisons,
         result.manifest,
-        result.build_divergence,
         result.performance,
         result.dps_gap,
         result.top_actions,

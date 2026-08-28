@@ -163,7 +163,6 @@ def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
             result.header,
             result.comparisons,
             manifest=result.manifest,
-            build_divergence=result.build_divergence,
             performance=result.performance,
             dps_gap=result.dps_gap,
             top_actions=result.top_actions,

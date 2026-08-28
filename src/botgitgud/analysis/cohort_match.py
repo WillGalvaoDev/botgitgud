@@ -10,12 +10,10 @@ has_augmentation, external_buffs, talent_cluster.
 docs/desvios.md D-24 (resolved by T2.2): `talent_cluster` now uses
 analysis/talent_cluster.py's Jaccard similarity — a candidate matches
 "strictly" when its build is >= JACCARD_THRESHOLD similar to the target's,
-same pairwise-to-target shape as item_level/tier_pieces. This is
-deliberately NOT a full cohort-wide clustering call (analysis/
-talent_cluster.py's cluster_builds/analyze_build_divergence) — matching
-only needs "close enough to the target," while the report-level "BUILD
-DIVERGENTE" finding needs the full cohort clustered together, a separate
-concern handled in analysis/talent_cluster.py itself.
+same pairwise-to-target shape as item_level/tier_pieces (this is a
+pairwise-to-target check, never a full cohort-wide clustering call — EC.4
+removed the report-level clustering that used to live in analysis/
+talent_cluster.py; see that module's docstring for why).
 
 EC.3: `matching_policy_version` (same string as `domain/models.py`'s
 `CohortCriteria.matching_policy_version`, EC.2) selects which covariate

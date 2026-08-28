@@ -57,7 +57,6 @@ from botgitgud.analysis.performance_features import (
     analyze_performance_features,
 )
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
-from botgitgud.analysis.talent_cluster import BuildDivergence, analyze_build_divergence
 from botgitgud.config import Settings
 from botgitgud.domain.models import CohortCriteria, RankingCandidate, RunManifest
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
@@ -106,7 +105,6 @@ class AnalysisResult:
     header: ReportHeader
     comparisons: tuple[SpellComparison, ...]
     manifest: RunManifest
-    build_divergence: BuildDivergence | None = None
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
@@ -326,11 +324,6 @@ def run_analysis(
         )
         raise InsufficientCohort(msg, n_members=len(matched_logs), minimum_required=COHORT_MIN_HARD)
 
-    # T2.2: clustered against the SAME already-covariate-matched cohort
-    # match_cohort just produced — a minority build finding must precede
-    # any timing analysis below.
-    build_divergence = analyze_build_divergence(player_log, matched_logs)
-
     # T3.1: same already-covariate-matched cohort, independent of CD timing.
     performance = analyze_performance_features(player_log, matched_logs, deps.catalog)
 
@@ -354,7 +347,6 @@ def run_analysis(
         buffs_relaxed=buffs_relaxed,
     )
     findings = build_findings(
-        build_divergence=build_divergence,
         dps_gap=dps_gap,
         n=num_positional,
         relaxed_covariates=match_report.relaxed,
@@ -414,7 +406,6 @@ def run_analysis(
         header=header,
         comparisons=tuple(comparisons),
         manifest=manifest,
-        build_divergence=build_divergence,
         performance=performance,
         dps_gap=dps_gap,
         top_actions=tuple(top_actions),

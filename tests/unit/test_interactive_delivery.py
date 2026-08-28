@@ -79,7 +79,6 @@ def _result() -> SimpleNamespace:
         header=ReportHeader("Zilbag", "Boss", "DeathKnight", "Unholy", 20, 300.0, 360.0),
         comparisons=(),
         manifest=None,
-        build_divergence=None,
         performance=None,
         dps_gap=None,
         top_actions=(),

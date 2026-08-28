@@ -15,7 +15,6 @@ from botgitgud.analysis.performance_features import (
     UptimeFinding,
     WasteFinding,
 )
-from botgitgud.analysis.talent_cluster import BuildDivergence, TalentDifference
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
 from botgitgud.report.html_report import render_html_report
@@ -143,17 +142,6 @@ def _performance() -> PerformanceFindings:
     )
 
 
-def _build_divergence() -> BuildDivergence:
-    return BuildDivergence(
-        player_cluster_n=2,
-        total_n=20,
-        dominant_cluster_n=15,
-        dominant_median_dps=100_000.0,
-        player_median_dps=80_000.0,
-        differences=(TalentDifference(node_id=1, dominant_rank=2, player_rank=1),),
-    )
-
-
 def _manifest() -> RunManifest:
     from datetime import UTC, datetime
 
@@ -188,7 +176,6 @@ def _full_html() -> str:
         _header(),
         [_comparison()],
         manifest=_manifest(),
-        build_divergence=_build_divergence(),
         performance=_performance(),
         dps_gap=_dps_gap(),
         top_actions=[_finding()],

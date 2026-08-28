@@ -96,7 +96,6 @@ def test_queue_and_hot_path_render_the_same_delivery_contract(
         result.header,
         result.comparisons,
         manifest=result.manifest,
-        build_divergence=result.build_divergence,
         performance=result.performance,
         dps_gap=result.dps_gap,
         top_actions=result.top_actions,

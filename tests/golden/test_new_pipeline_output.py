@@ -84,7 +84,6 @@ def _run_new_pipeline(tmp_path: Path) -> str:
         result.header,
         result.comparisons,
         None,
-        result.build_divergence,
         result.performance,
         result.dps_gap,
         result.top_actions,

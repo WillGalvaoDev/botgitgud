@@ -1350,3 +1350,42 @@ ser relaxado; a coorte de execução fica independente do setup do jogador.
   cenário de regressão obrigatório 10 BAD/40 GOOD; v2 continua relaxando as outras covariáveis
   normalmente; v2 é determinístico entre chamadas. Suíte completa (lotes) e goldens confirmados
   INALTERADOS — consistente com v1 permanecer o caminho ao vivo.
+
+## EC.4 — migração de BuildDivergence, removida da execution pipeline (2026-08-28)
+
+`BuildDivergence`/`analyze_build_divergence` (T2.2) removidos da execution pipeline por inteiro —
+opção (a) do ticket, escolhida sobre o "compatibility wrapper" (opção b) porque delegar de verdade ao
+Encounter Benchmark/Setup Analysis exigiria construir/ler um `EncounterBenchmark` dentro do pipeline
+de execução, que é literalmente o trabalho da RP.2 (ainda não feita) — fazer isso agora seria
+antecipar RP.2 fora de ordem. Removendo agora, sem substituto ainda, evita a MESMA coisa que o ticket
+pede para evitar: dois findings sobre o mesmo fato (prevalência de build) coexistindo, um causal
+(`estimated_gain_pct` derivado do delta de DPS mediano entre clusters) e um observacional (SA.2). A
+pergunta observacional já tem resposta correta em `analysis/setup_talents.py`'s `compare_talent_build`
+(SA.2) — só falta RP.1/RP.2 conectá-la ao relatório, que é a ordem já planejada do roadmap.
+
+- **`analysis/talent_cluster.py`**: removidos `BuildDivergence`, `analyze_build_divergence`,
+  `TalentCluster`, `cluster_builds`, `TalentDifference`, `diff_talent_pairs`, `MINORITY_THRESHOLD`.
+  Mantidos `jaccard_similarity`/`JACCARD_THRESHOLD` — `cohort_match.py`'s política v1 ainda os usa
+  para decidir se o build de um candidato está "perto o bastante" do alvo (matching pairwise, nunca
+  clustering de relatório — questão diferente da removida).
+- **`report/build_divergence_text.py` deletado por inteiro** — ficou sem nenhum chamador.
+- **Cadeia de remoção de parâmetro, ponta a ponta**: `analysis/findings.py`'s `build_findings`
+  (parâmetro `build_divergence` e o `Finding(kind="BUILD", ...)`; `"BUILD"` removido de `FindingKind`)
+  → `analysis/pipeline.py` (`AnalysisResult.build_divergence`, a chamada a
+  `analyze_build_divergence`) → `report/text.py`/`report/html_report.py` (parâmetro e seção
+  "BUILD DIVERGENTE"/"Build Divergente") → `bot/discord_bot.py`/`bot/worker.py`/`cli.py` (os 3 call
+  sites que repassavam `result.build_divergence`).
+- **Zero import quebrado, verificado**: `pyright src tests` limpo (0 erros) em todo o repositório
+  depois da remoção — confirma que nenhuma referência ficou pendurada.
+- **Testes atualizados, não só apagados**: `test_talent_cluster.py` reduzido a só
+  `jaccard_similarity` (funcionalidade que sobrevive); `test_findings.py`/`test_report_text.py`/
+  `test_report_text_performance.py`/`test_html_report.py`/`test_pipeline.py` tiveram os testes
+  ESPECÍFICOS de BuildDivergence removidos (documentando por quê, não silenciosamente) e os demais
+  testes tiveram só o parâmetro `build_divergence=`/`=None` retirado das chamadas, preservando a
+  cobertura de tudo que continua existindo. `test_discord_bot.py`/`test_interactive_delivery.py`/
+  `test_worker.py`/`tests/golden/test_new_pipeline_output.py` tiveram o mesmo ajuste de assinatura.
+- **Goldens: diff VAZIO** — a fixture golden nunca exercitava um cenário de build minoritária, então
+  a saída textual não mudou; a mudança de comportamento é real mas não visível NESSE fixture
+  específico. Suíte completa (lotes) confirmada verde.
+- Não implementado (fora de escopo, explícito no ticket): qualquer substituto de "BUILD DIVERGENTE" no
+  relatório — isso é RP.1/RP.2, que vão integrar SA.2's `compare_talent_build` observacional no lugar.

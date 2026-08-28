@@ -31,9 +31,7 @@ from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
 from botgitgud.analysis.findings import Finding
 from botgitgud.analysis.performance_features import PerformanceFindings
-from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
-from botgitgud.report.build_divergence_text import render_build_divergence
 from botgitgud.report.cd_sections_text import render_cd_sections
 from botgitgud.report.dps_gap_text import render_dps_gap_section
 from botgitgud.report.performance_text import (
@@ -164,19 +162,22 @@ def render_report(
     header: ReportHeader,
     comparisons: Sequence[SpellComparison],
     manifest: RunManifest | None = None,
-    build_divergence: BuildDivergence | None = None,
     performance: PerformanceFindings | None = None,
     dps_gap: DpsGapReport | None = None,
     top_actions: Sequence[Finding] = (),
 ) -> str:
     """T3.3's normative report structure: 1. Cabeçalho 2. Top 3 ações
     (`top_actions`) 3. De onde veio o gap de DPS (T3.2, `dps_gap`) 4.
-    Detalhamento por categoria, na ordem da T3.1 (Build first, then
-    Mortes/downtime, Active time, Uptimes, Waste de recurso, Usos
-    perdidos de CD, Timing de CD) 5. Desvios menores (bundled into
-    `render_cd_sections`, which already ends with that collapsed section)
-    6. Rodapé. Every section from Top 3 onward renders even with zero CD
-    comparisons — none of them are contingent on eligible cooldowns.
+    Detalhamento por categoria, na ordem da T3.1 (Mortes/downtime, Active
+    time, Uptimes, Waste de recurso, Usos perdidos de CD, Timing de CD)
+    5. Desvios menores (bundled into `render_cd_sections`, which already
+    ends with that collapsed section) 6. Rodapé. Every section from Top 3
+    onward renders even with zero CD comparisons — none of them are
+    contingent on eligible cooldowns.
+
+    EC.4: the "BUILD DIVERGENTE" section that used to render here was
+    removed along with `analysis/talent_cluster.py`'s `BuildDivergence` —
+    see that module's docstring for why.
     """
     lines: list[str] = list(_render_header(header))
     lines.extend(render_top_actions_section(top_actions))
@@ -184,9 +185,6 @@ def render_report(
     if dps_gap is not None:
         lines.extend(render_dps_gap_section(dps_gap))
 
-    if build_divergence is not None:
-        lines.append("")
-        lines.extend(render_build_divergence(build_divergence))
     if performance is not None:
         lines.extend(render_deaths_downtime_section(performance.deaths, performance.downtime))
         lines.extend(render_active_time_section(performance.active_time))

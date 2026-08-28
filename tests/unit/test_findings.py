@@ -7,20 +7,7 @@ from botgitgud.analysis.findings import (
     compute_confidence,
     select_top_actions,
 )
-from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.spells import SpellInfo
-
-
-def _empty_dps_gap() -> DpsGapReport:
-    return DpsGapReport(
-        player_dps=1000.0,
-        cohort_median_dps=1200.0,
-        gap_pct=-1 / 6,
-        duration_s=300.0,
-        abilities=(),
-        other_pct=0.0,
-        n_other=0,
-    )
 
 
 def _ability_gap(**overrides: object) -> AbilityGap:
@@ -44,19 +31,6 @@ def _ability_gap(**overrides: object) -> AbilityGap:
     }
     defaults.update(overrides)
     return AbilityGap(**defaults)  # type: ignore[arg-type]
-
-
-def _divergence(**overrides: object) -> BuildDivergence:
-    defaults: dict[str, object] = {
-        "player_cluster_n": 2,
-        "total_n": 34,
-        "dominant_cluster_n": 32,
-        "dominant_median_dps": 1_240_000.0,
-        "player_median_dps": 1_090_000.0,
-        "differences": (),
-    }
-    defaults.update(overrides)
-    return BuildDivergence(**defaults)  # type: ignore[arg-type]
 
 
 def _finding(**overrides: object) -> Finding:
@@ -100,17 +74,7 @@ def test_confidence_media_when_bh_not_survived() -> None:
     assert compute_confidence(n=100, any_covariate_relaxed=False, survives_bh=False) == "média"
 
 
-# -- build_findings: only BUILD and ABILITY_GAP get a real gain (D-31) --------
-
-
-def test_build_findings_includes_build_divergence_with_real_gain() -> None:
-    findings = build_findings(
-        build_divergence=_divergence(), dps_gap=_empty_dps_gap(), n=30, relaxed_covariates=()
-    )
-    build_findings_list = [f for f in findings if f.kind == "BUILD"]
-    assert len(build_findings_list) == 1
-    assert build_findings_list[0].estimated_gain_pct is not None
-    assert build_findings_list[0].estimated_gain_pct > 0
+# -- build_findings: only ABILITY_GAP gets a real gain (D-31; EC.4 removed BUILD) --
 
 
 def test_build_findings_skips_ability_gaps_already_ahead_of_cohort() -> None:
@@ -123,7 +87,7 @@ def test_build_findings_skips_ability_gaps_already_ahead_of_cohort() -> None:
         other_pct=0.0,
         n_other=0,
     )
-    findings = build_findings(build_divergence=None, dps_gap=dps_gap, n=30, relaxed_covariates=())
+    findings = build_findings(dps_gap=dps_gap, n=30, relaxed_covariates=())
     assert not any(f.kind == "ABILITY_GAP" for f in findings)
 
 
@@ -137,7 +101,7 @@ def test_build_findings_ability_gap_gain_is_the_negated_delta() -> None:
         other_pct=0.0,
         n_other=0,
     )
-    findings = build_findings(build_divergence=None, dps_gap=dps_gap, n=30, relaxed_covariates=())
+    findings = build_findings(dps_gap=dps_gap, n=30, relaxed_covariates=())
     ability_finding = next(f for f in findings if f.kind == "ABILITY_GAP")
     assert ability_finding.estimated_gain_pct == 6.3
 
@@ -152,7 +116,7 @@ def test_build_findings_ability_gap_low_confidence_propagates() -> None:
         other_pct=0.0,
         n_other=0,
     )
-    findings = build_findings(build_divergence=None, dps_gap=dps_gap, n=100, relaxed_covariates=())
+    findings = build_findings(dps_gap=dps_gap, n=100, relaxed_covariates=())
     ability_finding = next(f for f in findings if f.kind == "ABILITY_GAP")
     assert ability_finding.confidence == "baixa"
 

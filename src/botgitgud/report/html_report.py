@@ -22,7 +22,6 @@ from botgitgud.analysis.dps_gap import DIAGNOSIS_LABELS, DpsGapReport
 from botgitgud.analysis.findings import Finding
 from botgitgud.analysis.grading import Grade
 from botgitgud.analysis.performance_features import PerformanceFindings, ScalarFinding
-from botgitgud.analysis.talent_cluster import BuildDivergence
 from botgitgud.domain.models import RunManifest
 from botgitgud.report.svg_charts import (
     render_ability_timeline_svg,
@@ -146,7 +145,6 @@ def render_html_report(
     comparisons: Sequence[SpellComparison],
     *,
     manifest: RunManifest | None = None,
-    build_divergence: BuildDivergence | None = None,
     performance: PerformanceFindings | None = None,
     dps_gap: DpsGapReport | None = None,
     top_actions: Sequence[Finding] = (),
@@ -174,15 +172,6 @@ def render_html_report(
         _render_top_actions(top_actions),
         "</div>",
     ]
-
-    if build_divergence is not None:
-        parts.append('<div class="section">')
-        parts.append("<h2>🧬 Build Divergente</h2>")
-        parts.append(
-            f"<p>Sua build aparece em {build_divergence.player_pct * 100:.0f}% dos top "
-            f"parses ({build_divergence.player_cluster_n}/{build_divergence.total_n}).</p>"
-        )
-        parts.append("</div>")
 
     if dps_gap is not None:
         parts.append('<div class="section">')

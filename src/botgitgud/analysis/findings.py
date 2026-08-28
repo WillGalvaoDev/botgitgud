@@ -1,9 +1,9 @@
 """T3.3 — the unified `Finding` type, its priority score, and Top 3
 selection (docs/implementacao.md T3.3, "recomendação 6.6").
 
-docs/desvios.md D-31: only BUILD (T2.2) and ABILITY_GAP (T3.2) findings
-get a real `estimated_gain_pct` here — the document defines no formula
-for translating DEATH/ACTIVE_TIME/UPTIME/WASTE/MISSED_CD/CD_TIMING into a
+docs/desvios.md D-31: only ABILITY_GAP (T3.2) findings get a real
+`estimated_gain_pct` here — the document defines no formula for
+translating DEATH/ACTIVE_TIME/UPTIME/WASTE/MISSED_CD/CD_TIMING into a
 DPS-percentage gain, and this project's own established ethos (D-28: "não
 fabricar dados") refuses to invent a linear-scaling guess and present it
 as if it were a real quantity. Those categories still render their own
@@ -11,6 +11,12 @@ section (report/text.py's "detalhamento por categoria", unchanged from
 T3.1) with no gain estimate — they are correctly excluded from Top 3
 (`estimated_gain_pct=None` findings never compete, per the document's own
 acceptance criterion), not silently dropped.
+
+EC.4: BUILD (T2.2's `BuildDivergence`) was removed from this module — it
+attached a causal `estimated_gain_pct` derived from execution-cohort
+cluster membership, which is exactly the setup-prevalence-as-DPS-claim
+pattern the Setup Analysis milestone (SA.1-SA.6) exists to avoid. See
+`analysis/talent_cluster.py`'s module docstring for the full reasoning.
 """
 
 from __future__ import annotations
@@ -20,10 +26,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from botgitgud.analysis.dps_gap import DIAGNOSIS_LABELS, DpsGapReport
-from botgitgud.analysis.talent_cluster import BuildDivergence
 
 FindingKind = Literal[
-    "BUILD",
     "DEATH",
     "ACTIVE_TIME",
     "UPTIME",
@@ -76,7 +80,6 @@ def compute_confidence(
 
 def build_findings(
     *,
-    build_divergence: BuildDivergence | None,
     dps_gap: DpsGapReport,
     n: int,
     relaxed_covariates: Sequence[str],
@@ -87,21 +90,6 @@ def build_findings(
     """
     any_relaxed = bool(relaxed_covariates)
     findings: list[Finding] = []
-
-    if build_divergence is not None:
-        findings.append(
-            Finding(
-                kind="BUILD",
-                title="Build em cluster minoritário da coorte",
-                detail=(
-                    f"Sua build aparece em {build_divergence.player_pct * 100:.0f}% dos top "
-                    f"parses ({build_divergence.player_cluster_n}/{build_divergence.total_n})."
-                ),
-                estimated_gain_pct=build_divergence.estimated_gain_pct,
-                confidence=compute_confidence(n=n, any_covariate_relaxed=any_relaxed),
-                evidence={"differences": build_divergence.differences},
-            )
-        )
 
     for ability in dps_gap.abilities:
         if ability.delta_dps_pct >= 0:
