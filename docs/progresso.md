@@ -1389,3 +1389,35 @@ pergunta observacional já tem resposta correta em `analysis/setup_talents.py`'s
   específico. Suíte completa (lotes) confirmada verde.
 - Não implementado (fora de escopo, explícito no ticket): qualquer substituto de "BUILD DIVERGENTE" no
   relatório — isso é RP.1/RP.2, que vão integrar SA.2's `compare_talent_build` observacional no lugar.
+
+**Milestone Execution Cohort (EC.1-EC.4) fechado.**
+
+## RP.0 — contrato de dados do relatório, 5 seções explícitas (2026-08-28)
+
+`report/contract.py` (novo) — `ReportContract` com 5 campos nomeados: `resultado` (`ReportHeader`,
+inalterado), `setup` (`SetupAnalysis | None`, SA.6, NOVO), `execucao` (`ExecutionSection`, agrupa
+comparisons/performance/dps_gap), `top_actions` (`tuple[Finding, ...]`, execution-only), `confianca`
+(`ConfidenceSummary`, agrupa reference_pool_members/matched_cohort_members/cohort_warnings/
+matched_covariates/relaxed_covariates). `build_report_contract(result, *, setup=None)` ADAPTA um
+`AnalysisResult` já existente — nenhuma mudança em `analysis/pipeline.py`, `report/text.py` ou
+`report/html_report.py`.
+
+- **"Sem quebrar a geração atual mais do que necessário" satisfeito ao máximo**: zero mudança de
+  comportamento em qualquer lugar, porque nada consome este contrato ainda — é puramente aditivo.
+  Goldens confirmados INALTERADOS (diff vazio).
+- **`setup` sempre `None` por padrão** — `analyze_setup()` (SA.6) NÃO é chamado de lugar nenhum do
+  pipeline ao vivo ainda (verificado via AST, não substring — `test_pipeline_never_calls_analyze_
+  setup_yet`). Populá-lo de verdade é RP.2.
+- **"Top 3 é execution-only" garantido em DUAS camadas**: pelo TIPO (`top_actions: tuple[Finding,
+  ...]` — `SetupFinding` não compartilha base nenhuma com `Finding`, não tem `estimated_gain_pct`,
+  não type-checa nesse campo) e por uma checagem em TEMPO DE EXECUÇÃO em `build_report_contract`
+  (`ReportContractError` se qualquer item de `top_actions` não for uma instância real de `Finding`) —
+  defesa em profundidade, não só documentação. Testado explicitamente com um `SetupFinding` "vazado"
+  sozinho e misturado com `Finding`s reais.
+- **13 testes novos** (`test_report_contract.py`): as 5 seções existem e têm o conteúdo certo,
+  `setup` default `None` e aceita valor explícito, `analyze_setup` nunca chamado pelo pipeline ainda,
+  rejeição em runtime de `SetupFinding` em `top_actions` (sozinho e misturado), zero WCL/Discord/
+  Store/job. Suíte completa (lotes) e goldens confirmados INALTERADOS.
+- Não implementado (fora de escopo, explícito no ticket): renderização de verdade da seção SETUP
+  (RP.1), integração/wiring de `analyze_setup()` no pipeline ao vivo (RP.2), qualquer mudança em
+  `report/text.py`/`report/html_report.py`.

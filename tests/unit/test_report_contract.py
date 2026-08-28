@@ -1,0 +1,242 @@
+from __future__ import annotations
+
+import ast
+import inspect
+
+import pytest
+
+from botgitgud.analysis.dps_gap import DpsGapReport
+from botgitgud.analysis.findings import Finding
+from botgitgud.analysis.pipeline import AnalysisResult
+from botgitgud.analysis.setup_analysis import SetupAnalysis
+from botgitgud.analysis.setup_finding import (
+    BenchmarkSampleRef,
+    EvidenceLevel,
+    FindingSubject,
+    ObservationCode,
+    Publicability,
+    SetupFinding,
+)
+from botgitgud.domain.models import RunManifest
+from botgitgud.report import contract as contract_module
+from botgitgud.report.contract import (
+    ConfidenceSummary,
+    ExecutionSection,
+    ReportContract,
+    ReportContractError,
+    build_report_contract,
+)
+from botgitgud.report.text import ReportHeader
+
+_SAMPLE = BenchmarkSampleRef(benchmark_id="Warlock/Demonology/1/1/1/v1", band_name=None)
+
+
+def _header(**overrides: object) -> ReportHeader:
+    defaults: dict[str, object] = {
+        "char_name": "Zarad",
+        "boss_name": "Fallen-King Salhadaar",
+        "class_name": "Warlock",
+        "spec": "Demonology",
+        "reference_n": 20,
+        "duration_min_s": 300.0,
+        "duration_max_s": 360.0,
+    }
+    defaults.update(overrides)
+    return ReportHeader(**defaults)  # type: ignore[arg-type]
+
+
+def _finding(**overrides: object) -> Finding:
+    defaults: dict[str, object] = {
+        "kind": "ABILITY_GAP",
+        "title": "x",
+        "detail": "y",
+        "estimated_gain_pct": 5.0,
+        "confidence": "alta",
+    }
+    defaults.update(overrides)
+    return Finding(**defaults)  # type: ignore[arg-type]
+
+
+def _setup_finding() -> SetupFinding:
+    return SetupFinding(
+        subject=FindingSubject.talent_build("1:1"),
+        observation=ObservationCode.MATCHES_COMMON_PATTERN,
+        evidence_level=EvidenceLevel.STRONG,
+        publicability=Publicability.PUBLISHABLE,
+        sample=_SAMPLE,
+    )
+
+
+def _setup_analysis(**overrides: object) -> SetupAnalysis:
+    defaults: dict[str, object] = {
+        "benchmark_id": "Warlock/Demonology/1/1/1/v1",
+        "findings": (_setup_finding(),),
+        "player_setup_available": True,
+        "benchmark_available": True,
+    }
+    defaults.update(overrides)
+    return SetupAnalysis(**defaults)  # type: ignore[arg-type]
+
+
+def _result(**overrides: object) -> AnalysisResult:
+    defaults: dict[str, object] = {
+        "header": _header(),
+        "comparisons": (),
+        "manifest": None,
+    }
+    defaults.update(overrides)
+    return AnalysisResult(**defaults)  # type: ignore[arg-type]
+
+
+# -- 5-section structure ----------------------------------------------------------
+
+
+def test_contract_has_five_explicit_sections() -> None:
+    contract = build_report_contract(_result())
+    assert isinstance(contract, ReportContract)
+    assert hasattr(contract, "resultado")
+    assert hasattr(contract, "setup")
+    assert hasattr(contract, "execucao")
+    assert hasattr(contract, "top_actions")
+    assert hasattr(contract, "confianca")
+
+
+def test_resultado_section_is_the_report_header_unchanged() -> None:
+    header = _header(player_dps=108297.0, player_percentile=57.0)
+    contract = build_report_contract(_result(header=header))
+    assert contract.resultado is header
+
+
+def test_execucao_section_groups_comparisons_performance_dps_gap() -> None:
+    dps_gap = DpsGapReport(
+        player_dps=1000.0,
+        cohort_median_dps=1200.0,
+        gap_pct=-1 / 6,
+        duration_s=300.0,
+        abilities=(),
+        other_pct=0.0,
+        n_other=0,
+    )
+    result = _result(dps_gap=dps_gap)
+    contract = build_report_contract(result)
+    assert isinstance(contract.execucao, ExecutionSection)
+    assert contract.execucao.dps_gap is dps_gap
+    assert contract.execucao.comparisons == result.comparisons
+    assert contract.execucao.performance is result.performance
+
+
+def test_confianca_section_pulls_from_header_and_result() -> None:
+    header = _header(
+        cohort_warnings=("amostra pequena",),
+        matched_covariates=("item_level",),
+        relaxed_covariates=("talent_cluster",),
+    )
+    result = _result(header=header, reference_pool_members=50, matched_cohort_members=20)
+    contract = build_report_contract(result)
+    assert isinstance(contract.confianca, ConfidenceSummary)
+    assert contract.confianca.reference_pool_members == 50
+    assert contract.confianca.matched_cohort_members == 20
+    assert contract.confianca.cohort_warnings == ("amostra pequena",)
+    assert contract.confianca.matched_covariates == ("item_level",)
+    assert contract.confianca.relaxed_covariates == ("talent_cluster",)
+
+
+def test_manifest_carried_through() -> None:
+    from datetime import UTC, datetime
+
+    manifest = RunManifest(
+        cohort_id="abc",
+        code_version="dead",
+        generated_at=datetime(2026, 8, 28, tzinfo=UTC),
+        n_members=20,
+        wcl_partition=4,
+        settings_hash="hash",
+    )
+    contract = build_report_contract(_result(manifest=manifest))
+    assert contract.manifest is manifest
+
+
+# -- setup section: additive, optional, RP.2's job to populate for real -------------
+
+
+def test_setup_defaults_to_none() -> None:
+    contract = build_report_contract(_result())
+    assert contract.setup is None
+
+
+def test_setup_can_be_supplied_explicitly() -> None:
+    setup = _setup_analysis()
+    contract = build_report_contract(_result(), setup=setup)
+    assert contract.setup is setup
+
+
+def test_pipeline_never_calls_analyze_setup_yet() -> None:
+    """RP.0 only builds the contract slot — RP.2 wires it. `analysis/
+    pipeline.py` must not call `analyze_setup` yet (checked via AST, not
+    substring, since this file's own docstring discusses that boundary).
+    """
+    import botgitgud.analysis.pipeline as pipeline_module
+
+    tree = ast.parse(inspect.getsource(pipeline_module))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id != "analyze_setup"
+        if isinstance(node, ast.ImportFrom):
+            assert all(alias.name != "analyze_setup" for alias in node.names)
+
+
+# -- top_actions: execution-only, enforced structurally AND at runtime --------------
+
+
+def test_top_actions_passthrough_when_all_are_findings() -> None:
+    findings = (_finding(title="a"), _finding(title="b"))
+    contract = build_report_contract(_result(top_actions=findings))
+    assert contract.top_actions == findings
+
+
+def test_top_actions_rejects_a_setup_finding_at_runtime() -> None:
+    bad = _result(top_actions=(_setup_finding(),))
+    with pytest.raises(ReportContractError):
+        build_report_contract(bad)
+
+
+def test_top_actions_rejects_setup_finding_mixed_with_real_findings() -> None:
+    mixed = _result(top_actions=(_finding(), _setup_finding()))
+    with pytest.raises(ReportContractError):
+        build_report_contract(mixed)
+
+
+def test_setup_finding_has_no_estimated_gain_pct_structurally() -> None:
+    """The type-level guarantee `top_actions: tuple[Finding, ...]` relies
+    on: SetupFinding simply has no such field to select on."""
+    sf = _setup_finding()
+    assert not hasattr(sf, "estimated_gain_pct")
+
+
+# -- zero WCL / Discord / Store / job -------------------------------------------------
+
+
+def test_zero_wcl_discord_store_job_imports() -> None:
+    tree = ast.parse(inspect.getsource(contract_module))
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+
+    forbidden_prefixes = (
+        "discord",
+        "duckdb",
+        "httpx",
+        "aiohttp",
+        "botgitgud.ingest.store",
+        "botgitgud.wcl",
+        "botgitgud.bot",
+    )
+    for name in imported:
+        assert not any(name == p or name.startswith(p + ".") for p in forbidden_prefixes)
+
+    source = inspect.getsource(contract_module)
+    assert "open(" not in source
+    assert "Path(" not in source
