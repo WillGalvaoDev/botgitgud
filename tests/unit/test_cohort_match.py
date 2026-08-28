@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from botgitgud.analysis.cohort_match import DEGRADATION_ORDER, match_cohort
+from botgitgud.analysis.cohort_match import DEGRADATION_ORDER, DEGRADATION_ORDER_V2, match_cohort
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 
 _DEFAULT_TALENTS: frozenset[tuple[int, int]] = frozenset({(1, 1), (2, 1), (3, 2)})
@@ -191,3 +191,72 @@ def test_returns_fewer_than_min_n_when_every_relaxation_is_exhausted() -> None:
     assert len(filtered) == 0
     assert report.n_members == 0
     assert "duration±20%" in report.matched  # widened all the way, still not enough
+
+
+# -- EC.3: matching_policy_version="v2" removes talent_cluster ------------------------
+
+
+def test_default_matching_policy_version_is_v1_unchanged() -> None:
+    """Sem passar `matching_policy_version`, o comportamento é EXATAMENTE
+    o de antes do EC.3 existir — mesmo teste de `test_strict_match_when_
+    everyone_qualifies`, confirmando que o parâmetro novo não alterou o
+    default."""
+    candidates = [_log() for _ in range(10)]
+    filtered, report = match_cohort(_target(), candidates, min_n=8)
+    assert len(filtered) == 10
+    assert "talent_cluster" in report.matched
+
+
+def test_v2_never_includes_talent_cluster_as_matched_or_relaxed() -> None:
+    candidates = [_log(talent_pairs=_OTHER_TALENTS) for _ in range(10)]
+    filtered, report = match_cohort(_target(), candidates, min_n=8, matching_policy_version="v2")
+    assert len(filtered) == 10  # nunca filtrado por talent — builds diferentes, sem problema
+    assert "talent_cluster" not in report.matched
+    assert "talent_cluster" not in report.relaxed
+
+
+def test_v2_degradation_order_excludes_talent_cluster() -> None:
+    assert "talent_cluster" not in DEGRADATION_ORDER_V2
+    assert set(DEGRADATION_ORDER_V2) == set(DEGRADATION_ORDER) - {"talent_cluster"}
+
+
+def test_mandatory_regression_10_bad_40_good_builds_v1_collapses_v2_does_not() -> None:
+    """Cenário de regressão OBRIGATÓRIO (EC.3): 50 refs, 10 com build BAD,
+    40 com build GOOD; jogador alvo usa BAD. Sob v1, o matching por
+    talent_cluster colapsa a coorte para os 10 BAD (mesmo cluster do
+    alvo). Sob v2, talent_cluster NUNCA participa do matching — a coorte
+    inteira de 50 permanece, independente do build do jogador.
+    """
+    good_talents = frozenset({(1, 1), (2, 2), (3, 3)})
+    bad_talents = frozenset({(9, 1), (8, 2)})
+
+    target = _log(talent_pairs=bad_talents, name="Target")
+    refs = [_log(talent_pairs=bad_talents, name=f"Bad{i}") for i in range(10)] + [
+        _log(talent_pairs=good_talents, name=f"Good{i}") for i in range(40)
+    ]
+
+    matched_v1, report_v1 = match_cohort(target, refs, min_n=8, matching_policy_version="v1")
+    assert len(matched_v1) == 10  # v1: colapsa para o mesmo cluster do alvo (comportamento antigo)
+    assert "talent_cluster" in report_v1.matched
+
+    matched_v2, report_v2 = match_cohort(target, refs, min_n=8, matching_policy_version="v2")
+    assert len(matched_v2) == 50  # v2: NUNCA colapsa para os 10 BAD por causa de talents
+    assert "talent_cluster" not in report_v2.matched
+    assert "talent_cluster" not in report_v2.relaxed
+
+
+def test_v2_still_relaxes_other_covariates_normally() -> None:
+    """EC.3 só remove talent_cluster — as outras covariáveis (e sua ordem
+    de degradação) continuam funcionando normalmente sob v2."""
+    candidates = [_log(item_level=None) for _ in range(10)]
+    filtered, report = match_cohort(_target(), candidates, min_n=8, matching_policy_version="v2")
+    assert len(filtered) == 10
+    assert "item_level" in report.relaxed
+
+
+def test_v2_reproduces_the_same_result_deterministically() -> None:
+    candidates = [_log(talent_pairs=_OTHER_TALENTS, name=f"Ref{i}") for i in range(10)]
+    a = match_cohort(_target(), candidates, min_n=8, matching_policy_version="v2")
+    b = match_cohort(_target(), candidates, min_n=8, matching_policy_version="v2")
+    assert [c.build.character_name for c in a[0]] == [c.build.character_name for c in b[0]]
+    assert a[1] == b[1]

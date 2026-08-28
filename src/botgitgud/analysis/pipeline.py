@@ -309,7 +309,16 @@ def run_analysis(
             max_workers=deps.settings.max_workers,
             expected_partition=partition,
         )
-    matched_logs, match_report = match_cohort(player_log, reference_logs, min_n=COHORT_MIN_HARD)
+    # EC.3: mesma matching_policy_version que já decidiu a identidade/cache
+    # do candidate pool (EC.2) — nunca duas flags de versão que possam
+    # divergir. `criteria` continua v1 por default (nenhum call site passa
+    # outra coisa), então isto não muda comportamento nenhum hoje.
+    matched_logs, match_report = match_cohort(
+        player_log,
+        reference_logs,
+        min_n=COHORT_MIN_HARD,
+        matching_policy_version=criteria.matching_policy_version,
+    )
     if len(matched_logs) < COHORT_MIN_HARD:
         msg = (
             f"apenas {len(matched_logs)} logs de referência após matching de "

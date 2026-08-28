@@ -1321,3 +1321,32 @@ sendo o default.
   Suíte completa (todos os arquivos de `tests/unit` + `tests/golden`, validados em lotes devido a
   instabilidade do ambiente de execução nesta sessão) e goldens confirmados INALTERADOS — consistente
   com a garantia de compatibilidade byte-a-byte acima (nenhum comportamento observável mudou).
+
+## EC.3 — política de matching v2, sem talent_cluster (2026-08-28)
+
+Só depois de EC.1+EC.2. `analysis/cohort_match.py`'s `match_cohort` ganhou `matching_policy_version:
+str = "v1"` (mesmo default de EC.2's `CohortCriteria`). `"v1"` é exatamente o comportamento de antes
+— `talent_cluster` continua um dos 5 covariáveis, tentado estrito primeiro, relaxado por último antes
+de duration. `"v2"` usa `_ALL_COVARIATES_V2`/`DEGRADATION_ORDER_V2` (as mesmas listas menos
+`"talent_cluster"`) — o covariável NUNCA entra em `active`, então nunca é tentado estrito nem precisa
+ser relaxado; a coorte de execução fica independente do setup do jogador.
+
+- **Compatibilidade por spell de EC.1 preservada, sem alteração**: `n_with_spell`/a distribuição de
+  uptime corrigida operam sobre QUALQUER `matched_logs` que `match_cohort` devolva, independente de
+  quais covariáveis produziram esse resultado — nenhuma mudança necessária ali.
+- **`analysis/pipeline.py` conectado, mas ainda v1 ao vivo**: `match_cohort(...,
+  matching_policy_version=criteria.matching_policy_version)` — a MESMA versão que já decide a
+  identidade/cache do candidate pool (EC.2), nunca duas flags de versão que possam divergir. Nenhum
+  call site de `CohortCriteria(...)` passa `matching_policy_version="v2"` ainda, então o pipeline ao
+  vivo continua produzindo exatamente o mesmo cohort de antes — "Preserve v1 path para
+  reprodutibilidade" (pedido explícito do ticket). Ativar v2 de fato é decisão de produto fora deste
+  ticket, que só constrói a capacidade.
+- **Cenário de regressão OBRIGATÓRIO, confirmado**: 50 refs (10 build BAD, 40 build GOOD), jogador
+  alvo com build BAD. v1: matching por `talent_cluster` colapsa a coorte para os 10 BAD (mesmo cluster
+  do alvo) — comportamento antigo preservado exatamente. v2: a coorte inteira de 50 permanece —
+  `talent_cluster` nunca filtra nada, nunca aparece em `matched` nem em `relaxed`.
+- **9 testes novos** (`test_cohort_match.py`): default v1 inalterado; v2 nunca inclui talent_cluster
+  em matched/relaxed; `DEGRADATION_ORDER_V2` é exatamente `DEGRADATION_ORDER` menos talent_cluster; o
+  cenário de regressão obrigatório 10 BAD/40 GOOD; v2 continua relaxando as outras covariáveis
+  normalmente; v2 é determinístico entre chamadas. Suíte completa (lotes) e goldens confirmados
+  INALTERADOS — consistente com v1 permanecer o caminho ao vivo.
