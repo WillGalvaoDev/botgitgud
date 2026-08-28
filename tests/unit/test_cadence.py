@@ -26,6 +26,47 @@ def test_single_usage_unknown_base_cooldown_classified_major_and_eligible() -> N
     assert is_eligible(999, presence=0.85, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST) is True
 
 
+def test_ec1_low_ratio_presence_becomes_eligible_with_a_large_enough_subgroup() -> None:
+    """EC.1: uma vez que o cohort deixar de ser homogêneo por build (EC.3),
+    um spell de build minoritário teria `presence` baixa (razão sobre o
+    cohort MISTURADO) mesmo sendo consistente entre quem o tem —
+    `n_with_spell` (contagem absoluta) evita que ele desapareça.
+    """
+    cadence = compute_cadence([10.0, 40.0, 70.0], n_usages_median=3.0)
+    assert is_eligible(999, presence=0.20, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST) is False
+    assert (
+        is_eligible(
+            999, presence=0.20, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST, n_with_spell=10
+        )
+        is True
+    )
+
+
+def test_ec1_subgroup_floor_still_applies() -> None:
+    """`n_with_spell` abaixo do piso não relaxa a elegibilidade — não é um
+    escape hatch incondicional."""
+    cadence = compute_cadence([10.0, 40.0, 70.0], n_usages_median=3.0)
+    assert (
+        is_eligible(
+            999, presence=0.20, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST, n_with_spell=5
+        )
+        is False
+    )
+
+
+def test_ec1_never_makes_an_already_eligible_spell_ineligible() -> None:
+    """A mudança é estritamente aditiva: um spell que já passava no piso de
+    razão continua elegível independente de `n_with_spell`."""
+    cadence = compute_cadence([10.0, 40.0, 70.0], n_usages_median=3.0)
+    assert is_eligible(999, presence=0.80, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST) is True
+    assert (
+        is_eligible(
+            999, presence=0.80, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST, n_with_spell=0
+        )
+        is True
+    )
+
+
 def test_ring_of_peace_is_not_filtered_by_name() -> None:
     """achado 3.12: 'ring' era um substring banido; agora a blacklist é só por ID."""
     ring_of_peace_spell_id = (

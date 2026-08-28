@@ -29,6 +29,11 @@ _MAJOR_THRESHOLD_S = 90.0
 _MIN_ELIGIBLE_INTERVAL_S = 15.0
 _MIN_ELIGIBLE_PRESENCE = 0.70
 _SINGLE_USE_N_THRESHOLD = 1.5
+# EC.1: piso ABSOLUTO alternativo ao piso de RAZÃO (`_MIN_ELIGIBLE_PRESENCE`)
+# — mesmo valor de `analysis/cohort.py`'s `COHORT_MIN_HARD`/
+# `POSITIONAL_MIN_N` (não importado aqui para não acoplar cadence.py, um
+# módulo mais fundacional, a cohort.py). Ver `is_eligible`'s docstring.
+_MIN_ELIGIBLE_SUBGROUP_N = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +99,7 @@ def is_eligible(
     cadence: SpellCadence,
     *,
     blacklist: frozenset[int],
+    n_with_spell: int | None = None,
 ) -> bool:
     """Eligibility filter, replacing legacy/bot.py's discover_clean_major_cds.
 
@@ -101,8 +107,21 @@ def is_eligible(
     single-usage ability (interval median = None) is never excluded on that
     basis alone — the legacy filter did exactly that, discarding the
     longest, most important cooldowns just because they were used once.
+
+    EC.1: `n_with_spell` (optional, the absolute size of the cohort
+    subgroup that actually cast this spell — SpellProfile.n_with_spell)
+    gives presence a second, additive path. Once the execution cohort
+    stops being filtered to a single build (EC.3), a build-minority
+    spell's ratio-based `presence` can be low across the mixed cohort even
+    though everyone WITH that spell uses it consistently — without this,
+    such a spell disappears entirely rather than being graded against the
+    subgroup that actually has it. This only ever makes eligibility MORE
+    permissive than before (never stricter): a spell that already cleared
+    the ratio gate is unaffected, so today's single-build cohort (where
+    `n_with_spell` is rarely even needed) sees no behavior change.
     """
-    if presence < _MIN_ELIGIBLE_PRESENCE:
+    subgroup_too_small = n_with_spell is None or n_with_spell < _MIN_ELIGIBLE_SUBGROUP_N
+    if presence < _MIN_ELIGIBLE_PRESENCE and subgroup_too_small:
         return False
     if cadence.base_cooldown is not None and cadence.base_cooldown < _MIN_ELIGIBLE_INTERVAL_S:
         return False

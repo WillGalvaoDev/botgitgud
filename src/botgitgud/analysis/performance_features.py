@@ -111,7 +111,18 @@ def _build_uptime_findings(
         presence = sum(1 for rl in matched_logs if spell_id in rl.uptimes) / n
         if presence < UPTIME_PRESENCE_THRESHOLD:
             continue
-        ref_values = [rl.uptimes.get(spell_id, 0.0) for rl in matched_logs]
+        # EC.1: a distribuição de referência usa só quem REALMENTE tem
+        # este buff/debuff (subgroup-with-spell) — nunca `.get(spell_id,
+        # 0.0)` preenchendo com zero quem não tem o mecanismo. Diferente
+        # de casts (profile.py, situacional mesmo dentro do mesmo build),
+        # ausência de uptime geralmente significa ausência do MECANISMO em
+        # si — uma vez que o cohort deixar de ser homogêneo por build
+        # (EC.3), preencher com zero contaminaria a distribuição com
+        # referências que nunca poderiam ter o buff, distorcendo o grade
+        # de quem o mantém de verdade. `presence` (acima, cohort inteiro)
+        # continua controlando só SE o achado é relevante o bastante para
+        # reportar (T3.1); a distribuição de comparação é outra decisão.
+        ref_values = [rl.uptimes[spell_id] for rl in matched_logs if spell_id in rl.uptimes]
         user_value = player_log.uptimes.get(spell_id, 0.0)
         findings.append(
             UptimeFinding(

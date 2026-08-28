@@ -109,6 +109,15 @@ def build_cd_reference_profile(
             # Spells the positional subset never cast still contribute an
             # explicit rate of 0.0 — otherwise the median would silently
             # skip them instead of reflecting "basically never used here".
+            # EC.1 audit (deliberately left as-is): this zero-padding is
+            # about SITUATIONAL usage within a cohort that already shares
+            # this spell (e.g. a defensive CD skipped on an easy pull) —
+            # WCL cast data cannot distinguish "chose not to cast" from
+            # "doesn't have this spell in their build" either way, so
+            # removing the padding wouldn't specifically fix build
+            # heterogeneity, only trade one honest interpretation for
+            # another. The actual "minority-build spell disappears" bug
+            # lives in eligibility (see `n_with_spell` below), not here.
             rates = rates_by_spell.get(spell_id, []) + [0.0] * (
                 num_positional - len(rates_by_spell.get(spell_id, []))
             )
@@ -124,6 +133,10 @@ def build_cd_reference_profile(
             slot_ref_times=slot_ref_times,
             phase_ref_times=phase_ref_times,
             phase_slot_ref_times=phase_slot_ref_times,
+            # EC.1: subgrupo ABSOLUTO que realmente lançou este spell —
+            # `presence_count[spell_id]` já É essa contagem (o numerador
+            # de `presence`), só exposta separadamente para `is_eligible`.
+            n_with_spell=presence_count[spell_id],
         )
 
     return profile, num_positional
@@ -142,7 +155,13 @@ def discover_eligible_spell_ids(profile: Mapping[int, SpellProfile]) -> list[int
             n_usages_median=sp.n_usages_median,
             base_cooldown=get_base_cooldown(spell_id),
         )
-        if is_eligible(spell_id, sp.presence, cadence, blacklist=MAJOR_CD_BLACKLIST):
+        if is_eligible(
+            spell_id,
+            sp.presence,
+            cadence,
+            blacklist=MAJOR_CD_BLACKLIST,
+            n_with_spell=sp.n_with_spell,
+        ):
             eligible.append((spell_id, sp.presence))
 
     eligible.sort(key=lambda x: x[1], reverse=True)

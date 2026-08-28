@@ -1244,3 +1244,52 @@ SetupAnalysis`, camada pura que chama as quatro comparações (SA.2-SA.5) e comb
 
 **Milestone Setup Analysis (SA.1-SA.6) fechado.** Não implementado (fora de escopo, próximos
 milestones): EC.1-EC.4 (Execution Cohort), RP.0-RP.2 (relatório), HTML/Discord/`!analisar`, Phase 4.
+
+## EC.1 — distribuições de referência compatíveis por spell (2026-08-28)
+
+Pré-requisito obrigatório antes de EC.3 (remover `talent_cluster` do matching). `talent_cluster` HOJE
+mantém o cohort homogêneo por build, então o bug abaixo está LATENTE — este ticket corrige a
+matemática das features spell-dependentes ANTES de o cohort poder ficar heterogêneo, para que EC.3 não
+introduza uma regressão silenciosa.
+
+- **Problema auditado**: se um spell é específico de build (ex.: só uma escolha de talent dá acesso a
+  ele) e o cohort passa a misturar builds, uma distribuição/elegibilidade calculada contra o COHORT
+  INTEIRO fica contaminada por referências que nunca tiveram o spell — seja fazendo-o desaparecer
+  (elegibilidade por razão baixa) ou distorcendo a distribuição de comparação (padding com zero de
+  quem não tem o mecanismo).
+- **Fix 1 — elegibilidade (`cadence.py`'s `is_eligible`)**: piso ABSOLUTO alternativo,
+  `_MIN_ELIGIBLE_SUBGROUP_N=8` (mesmo valor de `cohort.py`'s `COHORT_MIN_HARD`/`POSITIONAL_MIN_N`),
+  ADITIVO ao piso de razão existente (`_MIN_ELIGIBLE_PRESENCE=0.70`) — um spell só falha se AMBOS os
+  critérios falharem. `SpellProfile` (domain/models.py) ganhou `n_with_spell: int = 0` (o numerador de
+  `presence`, exposto separadamente; default preserva construções existentes). Nunca torna
+  ineligível algo que já era eligible — só evita que um spell de build minoritária DESAPAREÇA por
+  causa da razão diluída pelo cohort misturado, contanto que o subgrupo absoluto seja robusto.
+- **Fix 2 — distribuição de uptime (`performance_features.py`'s `_build_uptime_findings`)**: a
+  distribuição de referência para grading agora usa só refs que REALMENTE têm o buff/debuff
+  (`spell_id in rl.uptimes`), nunca `.get(spell_id, 0.0)` preenchendo com zero quem não tem o
+  mecanismo. O gate de relevância para reportar (`presence >= 70% do cohort inteiro`, T3.1, inalterado)
+  continua controlando SE o achado aparece; a correção é só na distribuição usada para GRADUAR.
+- **Decisão explícita, documentada: `n_usages_median` (cooldown profiling, `profile.py`) NÃO foi
+  alterado.** Seu zero-padding (refs do subgrupo posicional que nunca lançaram o spell contribuem
+  0.0 explícito) é uma escolha DIFERENTE e já correta: dados de cast do WCL não distinguem "escolheu
+  não usar" de "não tem o spell no build" — remover o padding trocaria uma interpretação honesta por
+  outra, sem resolver especificamente heterogeneidade de build. O bug real de "spell desaparece" mora
+  na elegibilidade (Fix 1), não aqui. `resource_waste` (`_build_waste_findings`) também não foi
+  tocado — é por TIPO DE RECURSO de classe/spec (Mana/Fúria), não por spell, e o cohort já é
+  homogêneo por spec (matching sempre exige mesma classe/spec).
+- **`talent_cluster` matching NÃO foi tocado** (fora de escopo desta tarefa, por definição — vem em
+  EC.3).
+- **Golden atualizado, auditado**: `test_new_pipeline_output.py`'s snapshot mudou — SÓ na seção
+  UPTIMES, SÓ em linhas onde nem todo o cohort tinha o buff (denominador `n` caiu de 10 para o
+  tamanho real do subgrupo, ex. n=7/8/9; medianas recalculadas sem os zeros de quem não tinha o
+  buff). Confirmado via diff completo linha-a-linha: nenhum grade mudou (todas já eram "amostra
+  insuficiente"), nenhuma outra seção do relatório (Top 3, DPS gap, cooldown timing, waste) foi
+  afetada. Mudança esperada e correta — consequência direta e documentada do Fix 2, não um efeito
+  colateral acidental.
+- **7 testes novos** (`test_cadence.py` x3, `test_profile.py` x3, `test_performance_features.py` x1):
+  spell de build minoritária com razão baixa mas subgrupo absoluto robusto continua eligible; piso
+  absoluto ainda se aplica quando o subgrupo é pequeno demais; mudança é estritamente aditiva (nunca
+  torna algo já eligible em ineligible); `n_with_spell` é exatamente o numerador de `presence`;
+  distribuição de uptime exclui corretamente refs sem o buff. Todos os testes PRÉ-EXISTENTES
+  (incluindo o que documenta o padding de `n_usages_median` como comportamento intencional)
+  continuam passando sem modificação.

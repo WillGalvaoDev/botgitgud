@@ -138,6 +138,27 @@ def test_uptime_omitted_when_cohort_presence_below_threshold(tmp_path: Path) -> 
     assert 999 not in spell_ids
 
 
+def test_ec1_uptime_reference_distribution_excludes_refs_without_the_buff(tmp_path: Path) -> None:
+    """EC.1 regression: once the cohort mixes builds, refs that structurally
+    never have access to a buff must never be padded into its reference
+    distribution as 0.0 uptime — that would drag the comparison basis
+    toward players who couldn't have the buff at all, contaminating the
+    grade of players who reliably maintain it.
+    """
+    n = 20
+    n_present = int(n * UPTIME_PRESENCE_THRESHOLD) + 1  # clears the reporting-relevance gate
+    matched = [_log(name=f"Ref{i}", uptimes={999: 0.90} if i < n_present else {}) for i in range(n)]
+    player = _log(uptimes={999: 0.85})  # genuinely close to the real (uncontaminated) median
+    result = analyze_performance_features(player, matched, _catalog(tmp_path))
+    finding = next(uf for uf in result.uptimes if uf.spell.spell_id == 999).finding
+    # com a distribuição correta (só quem tem o buff), 0.85 fica logo abaixo
+    # de um grupo uniforme em 0.90 — nunca um outlier "green" fabricado por
+    # uma mediana artificialmente puxada para baixo pelos zeros de quem não
+    # tem o mecanismo.
+    assert finding.stats.p50 == 0.90
+    assert finding.grade != "green"
+
+
 def test_uptime_finding_included_even_when_player_never_had_the_buff(tmp_path: Path) -> None:
     """A buff the cohort commonly maintains but the player never had at
     all (0% uptime, absent from player_log.uptimes) must still surface —

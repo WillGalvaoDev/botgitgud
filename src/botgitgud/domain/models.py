@@ -257,6 +257,17 @@ class SpellProfile:
     phase_slot_ref_times: Mapping[PhaseKey, tuple[tuple[float, ...], ...]] = field(
         default_factory=dict
     )
+    # EC.1: tamanho ABSOLUTO do subgrupo do cohort que realmente lançou
+    # este spell (o numerador de `presence`, exposto separadamente) —
+    # nunca o cohort inteiro. Uma vez que o cohort deixar de ser
+    # homogêneo por build (EC.3), `presence` (uma razão sobre o cohort
+    # MISTURADO) pode ficar baixa para um spell de build minoritário
+    # mesmo sendo usado de forma consistente por quem tem acesso a ele —
+    # `n_with_spell` permite `cadence.is_eligible` reconhecer essa
+    # evidência absoluta em vez de deixar o spell desaparecer só pela
+    # razão global. Default 0 preserva o comportamento de qualquer
+    # `SpellProfile` construído sem este campo (testes existentes, etc.).
+    n_with_spell: int = 0
 
 
 @dataclass(frozen=True, slots=True)

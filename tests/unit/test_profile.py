@@ -193,6 +193,40 @@ def test_low_presence_spell_is_excluded() -> None:
     assert discover_eligible_spell_ids(profile) == []
 
 
+# -- EC.1: n_with_spell (absolute subgroup size, presence's numerator) ------------
+
+
+def test_n_with_spell_is_presence_count_the_numerator_of_presence() -> None:
+    logs = [_log(300.0, {1: (10.0,)}), _log(300.0, {1: (10.0,)}), _log(300.0, {}), _log(300.0, {})]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].n_with_spell == 2
+    assert profile[1].presence == 0.5
+
+
+def test_low_ratio_presence_with_large_absolute_subgroup_is_still_eligible() -> None:
+    """EC.1 regression: a minority-build spell (low ratio across a large,
+    mixed cohort) must not disappear when the absolute subgroup that casts
+    it is large enough to be real evidence — this is exactly what protects
+    against the bug once EC.3 removes talent_cluster from matching.
+    """
+    logs = [_log(300.0, {1: (10.0, 40.0, 70.0)}) for _ in range(10)] + [
+        _log(300.0, {}) for _ in range(90)
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].presence == pytest.approx(0.10)  # abaixo do piso de razão (0.70)
+    assert profile[1].n_with_spell == 10  # mas acima do piso absoluto (8)
+    assert 1 in discover_eligible_spell_ids(profile)
+
+
+def test_low_ratio_presence_with_small_absolute_subgroup_is_still_excluded() -> None:
+    logs = [_log(300.0, {1: (10.0, 40.0, 70.0)}) for _ in range(3)] + [
+        _log(300.0, {}) for _ in range(97)
+    ]
+    profile, _n = build_cd_reference_profile(logs, target_duration_s=300.0)
+    assert profile[1].n_with_spell == 3  # abaixo do piso absoluto também
+    assert 1 not in discover_eligible_spell_ids(profile)
+
+
 def test_blacklisted_spell_is_excluded_even_with_high_presence() -> None:
     blacklisted_id = next(iter(MAJOR_CD_BLACKLIST))
     profile = {
