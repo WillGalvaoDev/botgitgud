@@ -1144,3 +1144,34 @@ par (menos de 2 trinkets equipados) nunca impede a comparação individual do tr
   construção, honestidade (0% prevalência nunca vira "bad item"/"upgrade"), zero Execution Cohort/
   WCL/Discord. Não implementado (fora de escopo): set bonus, secondary stats, HTML/Discord/
   `!analisar`, Execution Cohort, Phase 4.
+
+## SA.4 — comparação de set bonus contra o Encounter Benchmark (2026-08-28)
+
+`analysis/setup_setbonus.py` (novo) — `compare_set_bonus(*, target, policy, player_setup,
+benchmark) -> tuple[SetupFinding, ...]`, um finding por `set_id` distinto que o jogador tem >=1 peça
+equipada (normalmente 0 ou 1).
+
+- **Auditoria do bug legado obrigatória, feita**: `count_tier_pieces` (`ingest/wcl_parsing.py`) soma
+  peças de setIDs distintos numa contagem única — afeta `PlayerBuild.tier_pieces` (campo legado da
+  Execution Cohort/T1.2). **SA.4 nunca lê `count_tier_pieces`/`tier_pieces`** (guardado por teste via
+  AST, checando ausência de `Name`/`Attribute`/import reais, não substring — a palavra aparece só na
+  prosa do docstring explicando por que o bug não se aplica). `EncounterBenchmark.bands[].set_summary`
+  (EB.2's `_set_summary`) já era CORRETO desde EB.2 — cada `SetPieceEntry` é por `set_id` distinto,
+  nunca somado com outro. **Nenhuma correção em EB.2 foi necessária.**
+- **Limite de dado documentado, não inventado**: `SetSummary`/`SetPieceEntry` dá presença (`n_players`
+  com >=1 peça) e uma soma bruta (`total_pieces`), mas NUNCA uma distribuição de "quantos jogadores
+  têm exatamente N peças" — não há dado para afirmar normativamente bônus de 2pc/4pc (exigiria um
+  catálogo de itens cruzando quais peças específicas compõem qual threshold). SA.4 portanto compara
+  SÓ presença/prevalência de `set_id` — a mesma forma observacional de SA.2/SA.3, nunca uma taxonomia
+  de bônus inventada. Guardado por teste (`test_no_invented_2pc_4pc_bonus_claims`).
+- **Denominador/agregação**: mesma regra de SA.2/SA.3 — `set_summary.n_available` (nunca
+  `band.sample_size`), soma de count/n_available entre bandas (nunca média).
+- **1 finding por `set_id` distinto equipado**: jogador com peças de 2 sets diferentes gera 2 findings
+  INDEPENDENTES, cada um com sua própria prevalência — nunca uma contagem combinada (mesma proteção
+  arquitetural do bug legado, testada explicitamente com `test_never_sums_distinct_set_ids_together`).
+- **24 testes novos** (`test_setup_setbonus.py`): common/uncommon/não-observado, dois
+  sets distintos no mesmo jogador, denominador correto, agregação correta, missing data (player/
+  benchmark/categoria/zero peças equipadas), partial coverage, bandas customizadas, tie-break
+  determinístico, honestidade, zero causal/BIS language, zero SetupScore/estimated_gain_pct, zero
+  Execution Cohort/WCL/Discord. Não implementado (fora de escopo): secondary stats, orchestration,
+  HTML/Discord/`!analisar`, Execution Cohort, Phase 4.
