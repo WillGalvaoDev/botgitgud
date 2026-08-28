@@ -144,6 +144,65 @@ def test_cohort_id_is_a_16_char_hex_string() -> None:
     int(cid, 16)  # raises ValueError if not valid hex
 
 
+# -- EC.2: matching_policy_version --------------------------------------------------
+
+
+def test_matching_policy_version_defaults_to_v1() -> None:
+    assert _criteria().matching_policy_version == "v1"
+
+
+def test_v1_cohort_id_is_byte_identical_to_before_ec2() -> None:
+    """Regressão CRÍTICA: `cohort_id()` de uma criteria v1 precisa ser
+    EXATAMENTE o mesmo hash que este método produzia antes de
+    `matching_policy_version` existir — senão todo cache/pool v1
+    existente fica órfão silenciosamente. Valores capturados ANTES do
+    EC.2 ser implementado, como oráculo de regressão.
+    """
+    criteria_a = CohortCriteria(
+        encounter_id=3009,
+        difficulty=5,
+        partition=34,
+        class_name="Warlock",
+        spec_name="Demonology",
+        metric="dps",
+        duration_min_s=240.0,
+        duration_max_s=360.0,
+        ilvl_min=280.0,
+        ilvl_max=None,
+        talent_cluster="abc123",
+    )
+    assert criteria_a.cohort_id() == "218423c4e7bcf385"
+
+    criteria_b = CohortCriteria(
+        encounter_id=3009,
+        difficulty=5,
+        partition=34,
+        class_name="Warlock",
+        spec_name="Demonology",
+        metric="dps",
+        duration_min_s=240.0,
+        duration_max_s=360.0,
+    )
+    assert criteria_b.cohort_id() == "2f5ae39c68eb3e11"
+
+
+def test_v1_and_v2_produce_different_cohort_ids_for_the_same_fields() -> None:
+    v1 = _criteria(matching_policy_version="v1")
+    v2 = _criteria(matching_policy_version="v2")
+    assert v1.cohort_id() != v2.cohort_id()
+
+
+def test_v2_cohort_id_is_deterministic() -> None:
+    a = _criteria(matching_policy_version="v2")
+    b = _criteria(matching_policy_version="v2")
+    assert a.cohort_id() == b.cohort_id()
+
+
+def test_cohort_id_changes_when_matching_policy_version_changes() -> None:
+    base = _criteria().cohort_id()
+    assert _criteria(matching_policy_version="v2").cohort_id() != base
+
+
 def test_cohort_bundles_criteria_and_members() -> None:
     criteria = _criteria()
     log = PlayerLog(fight=_fight(), build=_build(), dps=100000.0, percentile=50.0, cast_timeline={})

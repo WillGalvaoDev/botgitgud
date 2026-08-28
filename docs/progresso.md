@@ -1293,3 +1293,31 @@ introduza uma regressão silenciosa.
   distribuição de uptime exclui corretamente refs sem o buff. Todos os testes PRÉ-EXISTENTES
   (incluindo o que documenta o padding de `n_usages_median` como comportamento intencional)
   continuam passando sem modificação.
+
+## EC.2 — matching_policy_version explícita (2026-08-28)
+
+Pré-requisito para EC.3 (nova política de matching v2, removendo `talent_cluster`). `CohortCriteria`
+(domain/models.py) ganhou `matching_policy_version: str = "v1"` — a política que já existia continua
+sendo o default.
+
+- **Compatibilidade retroativa BYTE-A-BYTE, verificada empiricamente**: `cohort_id()` para
+  `matching_policy_version == "v1"` remove o campo do payload ANTES de hashear — o hash de uma
+  criteria v1 é EXATAMENTE igual ao que o método produzia antes deste campo existir (capturei os
+  hashes de dois casos como oráculo ANTES de editar `cohort_id()`, e confirmei que continuam idênticos
+  depois: `218423c4e7bcf385`/`2f5ae39c68eb3e11`). Nenhum cache/pool `cohort_candidates` v1 existente
+  fica órfão — a mesma criteria v1 continua resolvendo para o mesmo `cohort_id`, sem reinterpretação
+  silenciosa. `PlayerLog` Parquets (auditado): NUNCA foram keyed por `cohort_id` (são endereçados por
+  `report_code`/`fight_id`/`player`/`encounter_id`/`difficulty`/`partition`), então não há risco ali de
+  qualquer forma.
+- **v1 e v2 divergem, deterministicamente**: para `matching_policy_version != "v1"` (ex.: `"v2"`), o
+  campo ENTRA no payload hasheado — a mesma combinação de outros campos sob uma versão de política
+  diferente produz um `cohort_id` genuinamente distinto. Duas construções idênticas com a mesma versão
+  produzem o mesmo id (determinístico).
+- **Nenhum call site de `CohortCriteria(...)` foi alterado** (`cohort_builder.py`, `pipeline.py`) —
+  ambos continuam construindo sem passar `matching_policy_version` explicitamente, então continuam
+  v1 por default. A política v2 REAL (excluir `talent_cluster` do matching) é EC.3, fora de escopo aqui.
+- **6 testes novos** (`test_models.py`): default é "v1"; hash v1 byte-idêntico ao oráculo pré-EC.2;
+  v1/v2 produzem ids diferentes para os mesmos campos; v2 é determinístico; mudar a versão muda o id.
+  Suíte completa (todos os arquivos de `tests/unit` + `tests/golden`, validados em lotes devido a
+  instabilidade do ambiente de execução nesta sessão) e goldens confirmados INALTERADOS — consistente
+  com a garantia de compatibilidade byte-a-byte acima (nenhum comportamento observável mudou).

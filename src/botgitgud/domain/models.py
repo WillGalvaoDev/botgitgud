@@ -186,10 +186,22 @@ class PlayerLog:
     )
 
 
+# EC.2: a política de matching v1 (talent_cluster como critério de
+# inclusão) é a única que já existia antes desta versão explícita. Uma v2
+# (EC.3: remove talent_cluster do matching) coexiste sem invalidar caches
+# v1 — ver `CohortCriteria.cohort_id()`.
+DEFAULT_MATCHING_POLICY_VERSION = "v1"
+
+
 @dataclass(frozen=True, slots=True)
 class CohortCriteria:
     """T1.5: deterministic identity for a cohort — every field that defines
     "what counts as comparable" for a reference-log query.
+
+    `matching_policy_version` (EC.2): versiona a POLÍTICA de matching em
+    si (quais campos contam como critério de inclusão), separado de
+    qualquer campo individual mudar de valor. Default `"v1"` — a política
+    que já existia.
     """
 
     encounter_id: int
@@ -203,10 +215,26 @@ class CohortCriteria:
     ilvl_min: float | None = None
     ilvl_max: float | None = None
     talent_cluster: str | None = None
+    matching_policy_version: str = DEFAULT_MATCHING_POLICY_VERSION
 
     def cohort_id(self) -> str:
-        payload = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
-        return hashlib.sha256(payload.encode()).hexdigest()[:16]
+        """`sha256`, 16 hex chars — mesmo formato de antes do EC.2.
+
+        Compatibilidade retroativa DELIBERADA: para `matching_policy_version
+        == DEFAULT_MATCHING_POLICY_VERSION` ("v1"), o campo é removido do
+        payload ANTES de hashear, então o `cohort_id()` de uma criteria v1
+        é BYTE-A-BYTE idêntico ao que este método produzia antes deste
+        campo existir — nenhum cache/pool/parquet v1 existente fica
+        órfão, nenhuma reinterpretação silenciosa. Qualquer OUTRA versão
+        (v2+) inclui o campo no payload, então a MESMA combinação de
+        outros campos sob uma política diferente produz um `cohort_id`
+        genuinely diferente — v1 e v2 nunca colidem nem se confundem.
+        """
+        payload = asdict(self)
+        if self.matching_policy_version == DEFAULT_MATCHING_POLICY_VERSION:
+            del payload["matching_policy_version"]
+        payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload_json.encode()).hexdigest()[:16]
 
 
 @dataclass(frozen=True, slots=True)
