@@ -1175,3 +1175,40 @@ equipada (normalmente 0 ou 1).
   determinístico, honestidade, zero causal/BIS language, zero SetupScore/estimated_gain_pct, zero
   Execution Cohort/WCL/Discord. Não implementado (fora de escopo): secondary stats, orchestration,
   HTML/Discord/`!analisar`, Execution Cohort, Phase 4.
+
+## SA.5 — comparação de secondary stats contra o Encounter Benchmark (2026-08-28)
+
+`analysis/setup_stats.py` (novo) — `compare_secondary_stats(*, target, policy, player_setup,
+benchmark) -> tuple[SetupFinding, ...]`, SEMPRE exatamente `len(CANONICAL_SECONDARY_STATS)` findings
+(hoje 4: Crit/Haste/Mastery/Versatility) — vocabulário fixo e conhecido de antemão, diferente de
+SA.2-SA.4 cujo subject só existe quando há dado.
+
+- **Raw ratings sempre**: nenhuma conversão para porcentagem, nenhum cap inventado, nenhum stat
+  weight, nenhuma recomendação de reforge/gem/enchant — `CaveatCode.RAW_RATING_ONLY` em todo finding
+  substantivo. Guardado por teste (símbolos ausentes + `"/ 100"`/`"* 100"` ausentes do código).
+- **Diferença estrutural das categorias anteriores, documentada explicitamente**: SA.2-SA.4 comparam
+  PREVALÊNCIA (agregável entre bandas por soma). Secondary stats comparam uma DISTRIBUIÇÃO CONTÍNUA
+  (`DescriptiveStats`: n/median/p25/p75) — medianas/quartis de bandas diferentes NÃO podem ser
+  combinados por soma nem média sem os valores brutos (que este módulo não tem, só o já agregado por
+  EB.2). **Decisão de design explícita** (autonomous fix policy — escolha determinística documentada):
+  usa a banda de percentil MAIS ALTO com `n>0` para aquele stat como referência ÚNICA — nunca combina
+  bandas — porque é literalmente o propósito do Encounter Benchmark ("o que é observado entre strong
+  performers"). Fallback determinístico para a próxima banda mais alta com dado se a banda de topo
+  estiver vazia. Testado explicitamente (`test_no_cross_band_averaging_or_summing_of_medians`).
+  `sample.band_name` registra qual banda foi usada (diferente de SA.2-SA.4, que usam `band_name=None`
+  por agregarem todas as bandas).
+- **Observação sem posição normalizada inventada**: `MATCHES_COMMON_PATTERN` = valor dentro do
+  intervalo interquartil `[p25, p75]` observado; `DIFFERS_FROM_COMMON_PATTERN` = fora dele (para
+  qualquer lado — nunca "alto" vs "baixo" como julgamento). `HIGH_PREVALENCE`/`LOW_PREVALENCE`
+  (vocabulário de prevalência categórica) deliberadamente NÃO usados aqui — misturariam vocabulário de
+  categoria com o de distribuição contínua. Nenhum campo `normalized_position`/score foi criado.
+- **Categoria ausente não afeta as demais**: jogador sem 1 dos 4 stats (`SetupProfile.stats` sem a
+  chave) gera `CATEGORY_UNAVAILABLE` só para AQUELE stat — os outros 3 continuam comparados
+  normalmente na MESMA chamada.
+- **23 testes novos** (`test_setup_stats.py`): dentro/fora do IQR (incluindo limites inclusivos),
+  raw ratings preservados, seleção de banda de referência (topo, fallback, nunca combinação),
+  missing data (player/benchmark/stat individual/benchmark sem dado para o stat), partial coverage,
+  evidência insuficiente nunca actionable, bandas customizadas, determinismo, honestidade, zero
+  SetupScore/estimated_gain_pct/normalized_position, zero Execution Cohort/WCL/Discord. Não
+  implementado (fora de escopo): orchestration (SA.6), HTML/Discord/`!analisar`, Execution Cohort,
+  Phase 4.
