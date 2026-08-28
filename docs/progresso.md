@@ -1052,3 +1052,60 @@ do jogador se compara ao que aparece no Encounter Benchmark?" — nunca "esse se
   Não implementado (fora de escopo, explícito no ticket): comparação real player-vs-benchmark,
   geração de finding real de talent/trinket/set/stats, seção de relatório HTML, Top 3, Execution
   Cohort, Phase 4 F3.
+
+## SA.2 — comparação de talent build contra o Encounter Benchmark (2026-08-28)
+
+**Talent comparison usa o Encounter Benchmark, nunca a Execution Cohort.** `analysis/setup_talents.py`
+(novo) compara `SetupProfile.talents` do jogador contra `EncounterBenchmark` (EB.2) — não importa
+`cohort.py`/`cohort_match.py`/findings da Execution Cohort/DPS gap, e nunca filtra
+`EncounterBenchmark.bands` pelo build do próprio jogador. **O talent build do jogador NÃO participa
+do matching da Execution Cohort e o matching da Execution Cohort não participa desta comparação** —
+são dois eixos independentes por desenho; misturá-los reintroduziria a circularidade que o Encounter
+Benchmark existe para remover (docs/production-readiness-cold-build.md).
+
+- **`compare_talent_build(*, target, policy, player_setup, benchmark) -> tuple[SetupFinding, ...]`**:
+  sempre exatamente 1 finding (nunca um por banda — banda é só `PrevalenceSummary.bands` dentro dele).
+  `target` é sempre exigido (identidade estável mesmo com `benchmark=None`); se `benchmark` é dado,
+  precisa pertencer a `target` (`SetupTalentComparisonError` senão — nunca compara contra o benchmark
+  errado silenciosamente).
+- **Identidade de build reutilizada sem reimplementação**: `benchmark_aggregate.talent_build_key`
+  (EB.2, já pública) — `(node_id, rank)` ordenados; `spell_id` nunca participa. Nenhuma segunda
+  implementação divergente foi criada.
+- **Denominador correto**: usa `talent_build_prevalence.n_available` de cada banda, NUNCA
+  `band.sample_size` — testado explicitamente (sample_size=100, talent available=72, prevalência
+  correta 36/72=50%, nunca 36/100=36%).
+- **Agregação entre bandas pondera por count/n_available, nunca média simples**: soma `count` e
+  `n_available` de todas as bandas antes de dividir — `(8/10 + 10/40)/2` daria 52,5%; a soma correta
+  `18/50` dá 36%. Testado com os dois números literalmente distintos.
+- **Padrão mais comum determinístico**: contagem agregada por build (nunca ordem de chegada/dict/set/
+  `hash()`); empate resolvido pela MENOR `talent_build_key` (string) — `min(counts, key=lambda k:
+  (-counts[k], k))`, mesmo resultado não importa a ordem de construção de `counts`.
+- **Ausência/baixa prevalência é observacional, nunca causal**: "0 ocorrências" vira
+  `LOW_PREVALENCE` ("not observed in this benchmark sample"), nunca "bad build"/"wrong build" — um
+  build presente mas minoritário vira `DIFFERS_FROM_COMMON_PATTERN` mesmo com prevalência baixa (a
+  distinção não é o número, é "foi observado ao menos uma vez"). `HIGH_PREVALENCE` deliberadamente
+  não é usado (nenhuma regra observacional clara pedia por ele — não forçado só porque o enum existe).
+- **Evidência insuficiente vira `INSUFFICIENT_EVIDENCE`, não uma alegação de match/diferença**:
+  `EvidenceLevel.INSUFFICIENT`/`WEAK` (via `compute_evidence_level`, reutilizado sem fórmula nova, com
+  o denominador de TALENT, nunca `band.sample_size`) barra a comparação antes de qualquer alegação de
+  padrão; denominador zero (categoria sem nenhum dado) vira `CATEGORY_UNAVAILABLE`, nunca
+  `LOW_PREVALENCE` — "zero disponível" != "zero observado".
+- **`actionable`**: `True` só quando há evidência suficiente E o build difere do padrão comum ou é
+  pouco observado; sempre `False` com evidência insuficiente ou quando o build já bate com o padrão.
+  Nenhum campo de ganho de DPS existe para transformar "actionable" em recomendação causal.
+- **Nenhum novo campo/vocabulário paralelo**: reason codes são o `reason_code` que SA.1 já deriva
+  (`"talent_build.{observation}"`); caveats são só `CaveatCode` existentes, aplicados factualmente
+  (`PARTIAL_SETUP_COVERAGE` quando algum `n_available` de talent é menor que o `sample_size` da banda
+  correspondente; `TALENT_NAMES_UNRESOLVED`/`OBSERVATIONAL_ONLY` sempre presentes em comparações reais).
+- **Prova de não-circularidade obrigatória, testada**: cenário 10 BAD/40 GOOD — comparar o jogador BAD
+  e o jogador GOOD contra o MESMO benchmark produz o MESMO denominador (`n_available=50` para os
+  dois); o jogador BAD nunca vira "100% BAD" por o benchmark ter sido reduzido aos 10 BAD. Cenário
+  multi-banda (20 BAD/60 total, 3 bandas) confirma a mesma agregação, com band breakdown exato.
+- **44 testes novos** (`test_setup_talents.py`), incluindo determinismo sob ordens de construção
+  diferentes (dict de bandas, entries de prevalência), tie-break de empate, e o teste de honestidade
+  obrigatório (prevalência 0% nunca vira "bad build"/"replace this build", só "not observed").
+  Talent names continuam NÃO resolvidos (D-26) — `setup_talents.py` trabalha só com
+  `talent_build_key`/`node_id`/`rank`, nunca nome de talent. Não implementado (fora de escopo,
+  explícito no ticket): trinkets, set bonus, secondary stats, resolução de nomes de talent,
+  recomendação de talents individuais, comparação nó-a-nó, HTML/Discord/`!analisar`, Execution
+  Cohort, Phase 4.
