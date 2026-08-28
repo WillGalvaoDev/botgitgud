@@ -64,11 +64,15 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     a quinta: `analysis/setup_finding.py` define `FindingCategory.TRINKET`/
     `TRINKET_PAIR` (nomes de categoria de domínio) e um `FindingSubject`
     identificado por `item_id` (inteiro), nunca por nome — mesmo padrão da
-    segunda exceção. Não existe sequer um campo de nome de item em
-    `GearPiece`/`TalentNode` (domain/models.py) para filtrar por ele. O
-    intento do guard (nada de decisão lexical sobre spells) continua
-    valendo em todo o resto de `src/`, incluindo `analysis/` fora dessas
-    cinco exceções, onde elegibilidade é decidida.
+    segunda exceção. SA.3 introduziu a sexta: `analysis/setup_trinkets.py`
+    compara trinkets equipados contra o benchmark, também só por `item_id`
+    (via `FindingSubject.trinket`/`trinket_pair` e a chave crua
+    `str(item_id)`/`"{a}+{b}"`, o mesmo formato de
+    `benchmark_aggregate.trinket_pair_key`). Não existe sequer um campo de
+    nome de item em `GearPiece`/`TalentNode` (domain/models.py) para
+    filtrar por ele. O intento do guard (nada de decisão lexical sobre
+    spells) continua valendo em todo o resto de `src/`, incluindo
+    `analysis/` fora dessas seis exceções, onde elegibilidade é decidida.
     """
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
@@ -78,6 +82,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "analysis" / "benchmark_store_models.py",
         src_root / "botgitgud" / "ingest" / "benchmark_fetch.py",
         src_root / "botgitgud" / "analysis" / "setup_finding.py",
+        src_root / "botgitgud" / "analysis" / "setup_trinkets.py",
     }
 
     offenders = []
@@ -190,6 +195,21 @@ def test_the_reviewed_setup_finding_exception_keys_trinkets_by_item_id() -> None
     # elegibilidade de spell/item por nome, então não é banida nesta
     # exceção (mesma distinção da terceira exceção, benchmark_store_models.py).
     assert ".item_id.lower()" not in text
+    assert "item_name" not in text.lower()
+
+
+def test_the_reviewed_setup_trinkets_exception_keys_trinkets_by_item_id() -> None:
+    """Sexta exceção (SA.3): `setup_trinkets.py` compara trinkets equipados
+    contra o benchmark só por `item_id` (inteiro), nunca por nome — mesmo
+    padrão da segunda e quinta exceções.
+    """
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "analysis" / "setup_trinkets.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert "g.item_id" in text
+    assert "spell" not in text.lower()
     assert "item_name" not in text.lower()
 
 

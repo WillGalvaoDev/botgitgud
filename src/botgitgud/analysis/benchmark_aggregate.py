@@ -151,7 +151,7 @@ def talent_build_key(setup: SetupProfile) -> str | None:
     return "|".join(f"{n}:{r}" for n, r in pairs)
 
 
-def _trinket_pair_key(setup: SetupProfile) -> str | None:
+def trinket_pair_key(setup: SetupProfile) -> str | None:
     """Canonicalizado por `item_id`, nunca por slot — o mesmo par em 12/13
     ou 13/12 é o mesmo par. `None` a menos que EXATAMENTE 2 trinkets estejam
     presentes (um par precisa de dois lados; 0 ou 1 não formam par).
@@ -244,7 +244,7 @@ def _trinket_keys(log: PlayerLog) -> frozenset[str]:
 def _trinket_pair_keys(log: PlayerLog) -> frozenset[str]:
     if log.build.setup is None:
         return frozenset()
-    key = _trinket_pair_key(log.build.setup)
+    key = trinket_pair_key(log.build.setup)
     return frozenset({key}) if key else frozenset()
 
 

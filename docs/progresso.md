@@ -1109,3 +1109,38 @@ Benchmark existe para remover (docs/production-readiness-cold-build.md).
   explícito no ticket): trinkets, set bonus, secondary stats, resolução de nomes de talent,
   recomendação de talents individuais, comparação nó-a-nó, HTML/Discord/`!analisar`, Execution
   Cohort, Phase 4.
+
+## SA.3 — comparação de trinkets (individual + par) contra o Encounter Benchmark (2026-08-28)
+
+`analysis/setup_trinkets.py` (novo) — `compare_trinkets(*, target, policy, player_setup, benchmark)
+-> tuple[SetupFinding, ...]`, mesma regra arquitetural de SA.2 (o(s) trinket(s) do jogador nunca
+filtram a população do benchmark; zero import de `cohort`/`cohort_match`/findings da Execution
+Cohort). Duas categorias independentes (`TRINKET`, `TRINKET_PAIR`) degradam separadamente: perder o
+par (menos de 2 trinkets equipados) nunca impede a comparação individual do trinket presente.
+
+- **Identidade**: `item_id` (inteiro) — nunca nome. Par canônico via
+  `benchmark_aggregate.trinket_pair_key` (EB.2), tornado PÚBLICO nesta tarefa (rename puro de
+  `_trinket_pair_key`, zero mudança de semântica — 1 call site interno + 1 teste atualizados) em vez
+  de reimplementar a canonicalização `min(a,b)+"+"+max(a,b)` uma segunda vez. Slot trocado (12↔13)
+  produz o MESMO `finding_id` — testado explicitamente.
+- **Núcleo genérico interno** (`_compare_prevalence_subject`, privado a este módulo): mesma forma do
+  corpo de `compare_talent_build` (SA.2), parametrizado por qual `PrevalenceDistribution` da banda ler
+  (`trinket_prevalence` vs `trinket_pair_prevalence`) — evita duplicar agregação/evidence/caveats
+  entre as duas categorias DENTRO deste arquivo. Não compartilhado com `setup_talents.py` (duplicação
+  de ~15 linhas entre os dois módulos, aceita deliberadamente em vez de acoplar dois módulos já
+  commitados/testados por uma abstração cross-module).
+- **Denominadores/agregação**: idênticos em regra a SA.2 — `n_available` da distribuição específica
+  da categoria (nunca `band.sample_size`), soma de `count`/`n_available` entre bandas (nunca média).
+- **0-2 findings TRINKET + exatamente 1 TRINKET_PAIR**: um finding por trinket REALMENTE equipado; 0
+  equipados vira 1 finding `CATEGORY_UNAVAILABLE` sentinela (nunca inventa um segundo slot vazio como
+  item). Par: `CATEGORY_UNAVAILABLE` quando <2 trinkets equipados — nunca tenta comparar um par que
+  não existe.
+- Guard do achado 3.12 ganhou uma 6ª exceção revisada (`setup_trinkets.py`, `item_id` sempre,
+  companion test).
+- **23 testes novos** (`test_setup_trinkets.py`): individual comum/incomum, os dois trinkets do
+  jogador comparando independentemente (um comum, outro não, na MESMA chamada), par comum/incomum,
+  slot trocado = mesma identidade, 1 trinket ausente (par degrada, individual continua), 0 trinkets,
+  partial coverage, bandas customizadas, tie-break determinístico independente de ordem de
+  construção, honestidade (0% prevalência nunca vira "bad item"/"upgrade"), zero Execution Cohort/
+  WCL/Discord. Não implementado (fora de escopo): set bonus, secondary stats, HTML/Discord/
+  `!analisar`, Execution Cohort, Phase 4.

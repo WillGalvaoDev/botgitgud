@@ -219,9 +219,9 @@ def test_individual_trinket_prevalence() -> None:
 def test_trinket_pair_is_canonical_regardless_of_slot_order() -> None:
     a = _trinket_setup(111, 222)  # slot 12=111, slot 13=222
     b = _setup(gear=(GearPiece(12, 222, 298.0, None), GearPiece(13, 111, 298.0, None)))
-    from botgitgud.analysis.benchmark_aggregate import _trinket_pair_key
+    from botgitgud.analysis.benchmark_aggregate import trinket_pair_key
 
-    assert _trinket_pair_key(a) == _trinket_pair_key(b)
+    assert trinket_pair_key(a) == trinket_pair_key(b)
 
 
 def test_trinket_pair_prevalence_requires_exactly_two_trinkets() -> None:
