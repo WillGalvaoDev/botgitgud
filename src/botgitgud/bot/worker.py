@@ -24,8 +24,7 @@ from botgitgud.bot.job_models import Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.report_store import ReportPersistenceError, persist_report
 from botgitgud.errors import BotGitGudError, CohortDeferredBudget, RateLimitBudgetExceeded
-from botgitgud.report.html_report import render_html_report
-from botgitgud.report.text import render_header_and_top3
+from botgitgud.report.render import render_analysis
 
 log = structlog.get_logger(__name__)
 
@@ -165,18 +164,12 @@ def _run_analyze(job: Job, deps: Deps) -> tuple[str, str, AnalysisResult]:
         run.cold_build_state = "ready" if run.cold_build_started else None
         run.hot_path = not run.cold_build_started
         record_analysis_result(run, result)
-        summary = render_header_and_top3(result.header, result.top_actions)
-        html = render_html_report(
-            result.header,
-            result.comparisons,
-            manifest=result.manifest,
-            performance=result.performance,
-            dps_gap=result.dps_gap,
-            top_actions=result.top_actions,
-            duration_s=result.header.duration_max_s,
-            setup=result.setup_analysis,
-        )
-        return summary, html, result
+        # RP.3: nunca renderiza a partir do `AnalysisResult` cru — o
+        # `ReportContract` (RP.0) e seu guarda execution-only são
+        # obrigatórios, e `render_analysis` é o único jeito de chegar aos
+        # renderizadores por este caminho.
+        rendered = render_analysis(result)
+        return rendered.summary, rendered.html, result
 
 
 def _run_build_cohort(job: Job, deps: Deps) -> str:

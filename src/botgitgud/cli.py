@@ -46,7 +46,7 @@ from botgitgud.logging_setup import (
 )
 from botgitgud.phase4.registry import Phase4ModelRegistry
 from botgitgud.phase4.resolver import Phase4ModelResolver
-from botgitgud.report.text import render_report
+from botgitgud.report.render import render_text_report
 from botgitgud.wcl.client import WclClient, WclClientConfig
 
 log = structlog.get_logger(__name__)
@@ -119,15 +119,9 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
         deps.store.close()
         deps.client.close()
 
-    report_text = render_report(
-        result.header,
-        result.comparisons,
-        result.manifest,
-        result.performance,
-        result.dps_gap,
-        result.top_actions,
-        setup=result.setup_analysis,
-    )
+    # RP.3: o CLI também passa pelo `ReportContract` — mesmo guarda de
+    # Top 3 execution-only que os caminhos do Discord.
+    report_text = render_text_report(result)
     sys.stdout.write(report_text + "\n")
     return 0
 

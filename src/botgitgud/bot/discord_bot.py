@@ -55,8 +55,7 @@ from botgitgud.errors import (
     ScopeRejected,
 )
 from botgitgud.ops.control import stop_request_path_for
-from botgitgud.report.html_report import render_html_report
-from botgitgud.report.text import render_header_and_top3
+from botgitgud.report.render import render_analysis
 
 log = structlog.get_logger(__name__)
 
@@ -473,17 +472,11 @@ def build_bot(deps: Deps) -> commands.Bot:
             record_analysis_result(run, result)
 
             # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
-            summary_text = render_header_and_top3(result.header, result.top_actions)
-            html_report = render_html_report(
-                result.header,
-                result.comparisons,
-                manifest=result.manifest,
-                performance=result.performance,
-                dps_gap=result.dps_gap,
-                top_actions=result.top_actions,
-                duration_s=result.header.duration_max_s,
-                setup=result.setup_analysis,
-            )
+            # RP.3: os dois saem do MESMO `ReportContract` validado — este
+            # caminho não tem acesso aos renderizadores por fora dele.
+            rendered = render_analysis(result)
+            summary_text = rendered.summary
+            html_report = rendered.html
             # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
             # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
             # relatorio num 403 e ainda dizendo ao usuario que o preservara.

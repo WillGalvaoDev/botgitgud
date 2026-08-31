@@ -41,7 +41,7 @@ def test_completed_analysis_always_has_a_persisted_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        worker_module, "_run_analyze", lambda *_a: ("resumo", "<html>relatorio</html>")
+        worker_module, "_run_analyze", lambda *_a: ("resumo", "<html>relatorio</html>", None)
     )
     with Store(tmp_path) as store:
         queue = JobQueue(store)
@@ -64,7 +64,7 @@ def test_report_is_persisted_before_any_delivery_attempt(
     """O outcome so existe depois que o arquivo esta no disco: quem entrega
     nunca recebe um artefato que ainda nao foi gravado.
     """
-    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>"))
+    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>", None))
     with Store(tmp_path) as store:
         queue = JobQueue(store)
         job = _claim(queue)
@@ -82,7 +82,7 @@ def test_report_is_persisted_before_any_delivery_attempt(
 def test_report_write_failure_fails_the_job_and_never_offers_a_missing_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>"))
+    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>", None))
 
     def boom(*_a: object, **_k: object) -> None:
         raise ReportPersistenceError("disco cheio")
@@ -107,7 +107,7 @@ def test_report_write_failure_fails_the_job_and_never_offers_a_missing_file(
 def test_next_job_still_runs_after_a_report_write_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>"))
+    monkeypatch.setattr(worker_module, "_run_analyze", lambda *_a: ("resumo", "<html/>", None))
     calls = {"n": 0}
     real = worker_module.persist_report
 

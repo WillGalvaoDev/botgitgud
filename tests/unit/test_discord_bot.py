@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 import botgitgud.bot.discord_bot as discord_module
+from botgitgud.analysis.pipeline import AnalysisResult
 from botgitgud.bot.discord_bot import _enqueue_message, _notify_outcome, parse_report_input
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
@@ -247,10 +248,10 @@ def test_analisar_happy_path_sends_summary_and_attachment(
     command = bot.get_command("analisar")
     assert command is not None
     callback: Any = command.callback
-    result = SimpleNamespace(
+    result = AnalysisResult(
         header=ReportHeader("Zarad", "Boss", "Warlock", "Demonology", 20, 300.0, 360.0),
         comparisons=(),
-        manifest=None,
+        manifest=None,  # type: ignore[arg-type]
         setup_analysis=None,
         # EB.6: um `AnalysisResult` sem identidade de benchmark é um no-op
         # explícito para o gatilho — este duplo não exercita o benchmark.

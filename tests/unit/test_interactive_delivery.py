@@ -22,6 +22,7 @@ import pytest
 import structlog
 
 import botgitgud.bot.discord_bot as discord_module
+from botgitgud.analysis.pipeline import AnalysisResult
 from botgitgud.bot.delivery import (
     NOT_PRESERVED_NOTICE,
     PRESERVED_NOTICE,
@@ -74,11 +75,14 @@ class _ImmediateLoop:
         return call(*args)
 
 
-def _result() -> SimpleNamespace:
-    return SimpleNamespace(
+def _result() -> AnalysisResult:
+    # RP.3: o caminho real constrói um `ReportContract` a partir deste
+    # objeto, então o duplo precisa ser o tipo de produção, não um
+    # SimpleNamespace parcial.
+    return AnalysisResult(
         header=ReportHeader("Zilbag", "Boss", "DeathKnight", "Unholy", 20, 300.0, 360.0),
         comparisons=(),
-        manifest=None,
+        manifest=None,  # type: ignore[arg-type]
         setup_analysis=None,
         # EB.6: um `AnalysisResult` sem identidade de benchmark é um no-op
         # explícito para o gatilho — este duplo não exercita o benchmark.
