@@ -28,6 +28,36 @@ from botgitgud.report.render import render_analysis
 
 log = structlog.get_logger(__name__)
 
+# CL.0 — teto persistente de defers para cold cohort (`CohortDeferredBudget`,
+# analyze e build_cohort — os dois únicos job_types que passam por
+# `_defer_job`). Sem isto, um cold cohort com candidatos permanentemente
+# inatingíveis (a "Anonymous" que a WCL às vezes anonimiza) deferia para
+# sempre: `deferred_until` vence, `Job.is_claimable()` já garante a retomada
+# (B2), o worker reclama o MESMO job, tenta de novo, bate no MESMO
+# NO_PROGRESS estrutural, defere de novo — sem nunca virar READY nem
+# `failed`. Incidente real: job `2b3a1091d00c...` chegou a `defer_count=2`
+# reproduzindo exatamente isso.
+#
+# Deliberadamente MENOR que `bot/benchmark_job.py`'s `_MAX_CONSECUTIVE_
+# DEFERS` (50) — as duas semânticas não são a mesma. Um benchmark_build
+# retoma de um checkpoint por-candidato (`benchmark_build_progress`,
+# EB.4): cada defer é barato, e um candidato permanentemente ruim vira
+# `failed` sozinho depois de `MAX_CANDIDATE_ATTEMPTS`, encolhendo `pending`
+# até o build progredir de verdade. Um cold cohort não tem checkpoint
+# persistido até ficar READY (parcial nunca é READY, T1.6/B1) — cada defer
+# aqui refaz a descoberta do leaderboard inteira do zero
+# (`fetch_ranking_candidates`, dentro de `_advance_cold_cohort`/
+# `build_cohorts`), e uma retomada real já gastou ~1700 pontos WCL só
+# reconstruindo esse progresso. 50 defers deste tipo poderiam custar dezenas
+# de milhares de pontos e semanas de janelas `deferred_until` perseguindo
+# uma coorte que, por ter candidatos estruturalmente inalcançáveis, nunca
+# vai completar. O job real citado acima já esgotou 2 defers — ambos por
+# NO_PROGRESS, nunca budget puro — e o cold build da MESMA coorte, quando o
+# orçamento coopera, historicamente completou 99/100 candidatos numa única
+# janela: poucas tentativas bastam para o caso genuinamente transitório de
+# escassez de orçamento, e cortam um loop estrutural em horas, não semanas.
+MAX_COLD_COHORT_DEFERS = 3
+
 
 def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
     """`job` must already be 'running' (i.e. returned by
@@ -101,7 +131,40 @@ def _defer_job(queue: JobQueue, job: Job, error: CohortDeferredBudget, deps: Dep
     saber a hora certa nao custa chamada extra. Sem esse dado a espera cai no
     padrao conservador — nunca um retry apertado, porque o orcamento so melhora
     com o reset da janela.
+
+    CL.0: `defer_count` já persistido do próprio `job` (sobrevive restart —
+    é a mesma coluna que B2 já usa) é o teto. `CohortDeferredBudget` não
+    distingue estruturalmente budget puro de NO_PROGRESS estrutural (as
+    duas mensagens de `analysis/pipeline.py`/`analysis/cold_build.py`
+    falam só de "orçamento", mesmo quando a causa real — visível nos logs
+    estruturados de `cohort_increment.py` — foi NO_PROGRESS); mesma
+    simplificação que `bot/benchmark_job.py`'s `_defer` já adota
+    deliberadamente para o mesmo par de causas. O teto trata os dois iguais
+    de propósito — não transforma escassez transitória em falha prematura
+    (o cap é generoso o bastante para o caso real de budget: a MESMA
+    coorte completou 99/100 numa única janela quando o orçamento
+    cooperou), e corta um bloqueio estrutural antes que ele vire um loop
+    sem fim.
     """
+    if job.defer_count + 1 >= MAX_COLD_COHORT_DEFERS:
+        message = (
+            f"cold cohort {error.cohort_id} excedeu {MAX_COLD_COHORT_DEFERS} adiamentos "
+            f"consecutivos (última causa: {error})"
+        )
+        queue.mark_failed(job.job_id, error=message)
+        log.error(
+            "worker.cold_cohort_retry_exhausted",
+            job_id=job.job_id,
+            job_type=job.job_type,
+            cohort_id=error.cohort_id,
+            defer_count=job.defer_count,
+            max_defers=MAX_COLD_COHORT_DEFERS,
+            planned=error.planned,
+            completed=error.completed,
+            reason="cold_cohort_retry_exhausted",
+        )
+        return JobOutcome(job=job, ok=False, message=message)
+
     retry_after = error.retry_after_s
     if retry_after is None or retry_after <= 0:
         retry_after = deps.settings.cold_build_defer_retry_s
