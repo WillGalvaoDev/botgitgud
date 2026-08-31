@@ -29,6 +29,14 @@ class FakePlayer:
     spec_name: str = "Demonology"
     talents: tuple[tuple[int, int], ...] = ((1, 1),)
     trinket_id: int | None = 5000
+    # Campos ADITIVOS (defaults preservam byte-a-byte o que EB.4/EB.5 já
+    # observavam): um segundo trinket habilita TRINKET_PAIR, `set_ids`
+    # habilita SET_BONUS, `stats` permite variar SECONDARY_STATS por
+    # jogador. Nada disto muda a resposta de um `FakePlayer` construído
+    # como antes.
+    trinket_id_2: int | None = None
+    set_ids: tuple[int, ...] = ()
+    stats: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass
@@ -127,6 +135,16 @@ class FakeWclBackend:
                 if p.trinket_id is not None
                 else []
             )
+            if p.trinket_id_2 is not None:
+                gear.append(
+                    {"slot": 13, "id": p.trinket_id_2, "itemLevel": p.item_level, "setID": None}
+                )
+            gear.extend(
+                {"slot": 100 + n, "id": 9000 + n, "itemLevel": p.item_level, "setID": set_id}
+                for n, set_id in enumerate(p.set_ids)
+            )
+            stats: dict[str, object] = {"Haste": {"min": 1000.0 + i}}
+            stats.update({name: {"min": value} for name, value in p.stats})
             details.append(
                 {
                     "id": i + 1,
@@ -137,7 +155,7 @@ class FakeWclBackend:
                     "combatantInfo": {
                         "talentTree": [{"nodeID": n, "rank": r, "id": None} for n, r in p.talents],
                         "gear": gear,
-                        "stats": {"Haste": {"min": 1000.0 + i}},
+                        "stats": stats,
                     },
                 }
             )

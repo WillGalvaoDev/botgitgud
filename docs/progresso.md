@@ -1553,3 +1553,109 @@ sem custo extra). `AnalysisResult` ganhou `setup_analysis: SetupAnalysis | None 
 - **READY_FOR_FINAL_SOAK**: sim. Nenhum soak de 24h com serviço real (WCL/Discord) foi iniciado
   automaticamente — por regra explícita do mandato desta sessão, isso requer início manual do
   operador humano.
+
+## EB.6 + RP.3 + Complete Analysis Integration Proof
+
+A FINAL READINESS REVIEW anterior concluiu **NOT_READY_FOR_SOAK** com dois gaps: `ensure_benchmark_job`
+(EB.5) e `build_report_contract` (RP.0) existiam mas tinham **zero call sites de produção** — o soak
+exercitaria o sistema pré-SA/EC/RP, não a arquitetura que se pretende colocar em produção. Esta rodada
+fecha os dois.
+
+### EB.6 — Production Benchmark Trigger (`c7acc7a`)
+
+- **Trigger location**: `bot/benchmark_trigger.py`, chamado pelos DOIS caminhos reais —
+  `discord_bot.cmd_analisar` (depois de `send_report`) e `worker.run_claimed_job` (depois de
+  `mark_done`). Vive em `bot/` porque `Deps` não tem `JobQueue` e não pode ter: `bot/` importa
+  `analysis/`, então uma fila dentro do pipeline inverteria a dependência. Há um teste (AST) que
+  falha se `analysis/pipeline.py` passar a importar qualquer coisa de `bot/`.
+- **Identidade**: `AnalysisResult` ganhou `benchmark_target`/`benchmark_policy` — o pipeline devolve
+  como DADO a identidade que ele mesmo resolveu, então o gatilho nunca a reconstrói e nunca diverge do
+  benchmark que `read_benchmark` acabou de consultar.
+- **Candidatos**: `deps.store.read_candidate_pool(result.manifest.cohort_id)` — o MESMO pool que a
+  análise acabou de usar. **Zero WCL**: zero discovery, zero rankings, zero setup fetch (provado por um
+  cliente que conta toda query e é assertado vazio).
+- **Freshness/population**: `source_observation_count` persistido é `total_input_observations`, que
+  `benchmark_builder._finalize` alimenta só com linhas `fetched`. Passar `len(candidates)` cru como lado
+  "atual" contaria candidatos com falha PERMANENTE (`MAX_CANDIDATE_ATTEMPTS`, EB.4), que por construção
+  nunca entram — um pool de 40 com 10 mortos leria 33% de crescimento em TODA análise: stale permanente,
+  um job inútil por `!analisar`. `resolve_current_population_size` mede o mesmo universo dos dois lados
+  ("observações utilizáveis"): união das linhas já registradas com os candidatos novos, menos as falhas
+  permanentes. A união importa porque o pool é por `cohort_id` (inclui bucket de duração) e o benchmark
+  não — sem ela, um pool disjunto do mesmo tamanho leria "crescimento zero" trazendo 100% de população
+  nova. **Não é BLOCKED**: os dois lados passam a medir a mesma coisa, e o crescimento converge para
+  `fresh` em vez de virar loop.
+- **Dedup**: reusa o single-flight atômico de EB.5 (`dedup_key = benchmark:<benchmark_id>`) — análises
+  repetidas e gatilhos concorrentes (4 threads) produzem **um único job**.
+- **Failure isolation**: o gatilho não levanta; falha vira `benchmark_trigger.failed` em nível `error`
+  com a exceção. O relatório já está persistido e entregue quando ele roda.
+- **Prioridade/orçamento**: intocados — `analyze` > `build_cohort` > `benchmark_build` continua valendo,
+  e EB.6 não duplica modelo de custo nenhum.
+- **21 testes** em `test_benchmark_trigger.py` (missing/stale/fresh, dedup, single-flight concorrente,
+  identidade do payload, população, isolamento de falha, prioridade, os dois caminhos reais).
+
+### RP.3 — Production ReportContract Wiring (`536c372`)
+
+- `report/render.py` é o wrapper canônico. `contract_for` é o único ponto onde um `AnalysisResult` vira
+  `ReportContract` em produção, e SEMPRE tira SETUP de `result.setup_analysis` — nunca de um argumento
+  que um chamador pudesse esquecer (que era exatamente como a seção podia sumir em silêncio).
+- **Call sites**: `render_analysis` (Discord direto + worker) e `render_text_report` (CLI). Um teste
+  varre todo módulo fora de `report/` e falha se algum importar um renderizador direto — **nenhum
+  bypass**. O reenvio de relatório persistido lê um artefato que já nasceu do contrato.
+- **Top 3 guard em runtime**: um `SetupFinding` em `top_actions` levanta `ReportContractError` ANTES de
+  qualquer renderização, nos dois caminhos.
+- **HTML/texto**: preservado e agora assertado — `summary` é texto plano (estruturalmente incapaz de
+  receber SETUP), `html` só existe como `discord.File`, e um teste parseia `bot/delivery.py` para
+  confirmar que `html` nunca é passado como `content`.
+
+### Bug real encontrado e corrigido: `compare_set_bonus` derrubava a análise
+
+O Cenário D (categoria parcial) expôs um `assert common_key is not None` alcançável em produção:
+o denominador de SET_BONUS é "observações com setup disponível", não "observações com peça de set"
+(`benchmark_aggregate._set_summary`, de propósito — 0 peças é estado real, não dado ausente). Uma
+população inteira sem nenhuma peça de set (tier recente, off-season, encontro onde ninguém equipou
+ainda) dá `n_available > 0` com `entries` vazio, `counts` vazio, `common_key is None` — e o
+`AssertionError` subia por `analyze_setup` -> `run_analysis` sem ninguém capturar, matando o
+`!analisar` inteiro. Sem padrão comum não há com o que comparar: cai na regra de contagem já
+existente, `total_count == 0` -> `LOW_PREVALENCE`, literalmente verdade e sem veredito causal.
+As outras categorias não são alcançáveis por esse caminho (o denominador delas conta observações que
+TÊM a coisa), então a correção é local ao set bonus.
+
+### Complete Analysis Integration Proof (12 testes, `test_complete_analysis_integration.py`)
+
+Categoria por categoria, pelo caminho equivalente ao `!analisar` real (`run_analysis` +
+`render_analysis`), tudo offline:
+
+- **Cenário A (benchmark READY)**: as CINCO categorias presentes E publicáveis — `TALENT_BUILD`,
+  `TRINKET`, `TRINKET_PAIR`, `SET_BONUS`, `SECONDARY_STATS` — na MESMA análise em que Execution roda
+  (comparisons, performance, dps_gap, coorte casada). O `ReportContract` carrega as 5 seções
+  simultaneamente; Top 3 é execution-only; a mensagem inline não tem SETUP.
+- **Cenário B (benchmark ausente)**: Execution completa, relatório entregável, Setup degrada
+  honestamente (tudo `MISSING_DATA`/`HIDDEN`, seção simplesmente não aparece — sem placeholder, sem
+  score, sem ganho), e um `benchmark_build` fica `queued` sem a análise ter esperado nada.
+- **Cenário C (build -> READY -> próxima análise)**: sem NENHUMA ação manual intermediária — análise 1
+  sem benchmark, job enfileirado, worker REAL (`run_claimed_job`) constrói contra um backend offline,
+  benchmark persistido, análise 2 encontra sozinha e devolve as 5 categorias + Execution no contrato.
+- **Cenário D (categoria parcial)**: com o bug acima corrigido, uma categoria sem dado não destrói as
+  outras nem a Execution.
+- **Cenário E (honestidade)**: com setup pouco observado, o texto renderizado não contém `bad`/`wrong`/
+  `worse`/`optimal`/`best`/`replace`/`upgrade`/`% dps`/`ganho`; nenhum `SetupScore`, nenhum
+  `estimated_gain_pct` em finding de setup.
+- **Separação Setup/Execution**: a MESMA análise com e sem benchmark produz coorte, covariáveis,
+  comparisons, top_actions e dps_gap **idênticos** — setup entra no relatório sem tocar em coorte nem
+  em nota. `build_encounter_benchmark` não recebe jogador algum (assinatura assertada), então talent
+  build não filtra o benchmark.
+
+### Estado final
+
+- **Suíte offline completa**: 105 arquivos em `tests/unit/` (9 lotes) + `tests/golden/` — todos verdes,
+  zero falhas. Goldens: 2 snapshots, diff vazio.
+- **ruff check**: All checks passed. **ruff format --check**: 242 arquivos já formatados.
+  **pyright**: 0 errors, 0 warnings, 0 informations.
+- **Zero WCL real, zero Discord real**: nenhum bot iniciado, nenhuma chamada de rede — só
+  `_DispatchTransport` (fake httpx) e `FakeWclBackend` (in-memory).
+- **Matching**: produção continua **v1**; `talent_cluster` continua participando do matching v1. v2
+  permanece dormant/opt-in — **ACCEPTED SOAK LIMITATION**, com teste que falha se alguém ativar sem
+  passar por essa decisão. Nenhuma identidade de cache de coorte foi alterada; nenhum cache apagado.
+- **Phase 4: PARTIAL CONTINUE**, inalterada — nenhum treino, nenhum SHAP, nenhuma promoção, nenhuma
+  coleta nova.
+- **READY_FOR_FINAL_SOAK**: sim. O soak em si continua exigindo início manual do operador.

@@ -162,9 +162,22 @@ def _compare_one_set(
     else:
         counts = _aggregate_counts(benchmark, bands)
         common_key = _common_pattern_key(counts)
-        assert common_key is not None
-
-        if set_id == common_key:
+        # `common_key is None` é possível AQUI e só aqui (as outras
+        # categorias não têm como chegar nisto, porque o denominador
+        # delas conta observações que TÊM a coisa): o de SET_BONUS é
+        # "observações com setup disponível", não "observações com peça de
+        # set" — 0 peças é um estado real do jogador, não dado ausente
+        # (`benchmark_aggregate._set_summary`). Então uma população inteira
+        # sem NENHUMA peça de set tem `n_available > 0` e `entries` vazio,
+        # e `counts` sai vazio. Isso não é um estado impossível: acontece
+        # em tier recente/off-season, ou num encontro onde ninguém equipou
+        # o set ainda. Um `assert` aqui derrubava a análise INTEIRA por
+        # AssertionError (nem `run_analysis` nem o worker capturam isso).
+        # Sem padrão comum não há com o que comparar, então cai direto na
+        # regra de contagem abaixo: `total_count == 0` -> LOW_PREVALENCE,
+        # que é literalmente verdade (0 entre N setups examinados usam este
+        # set) e continua sem nenhum veredito causal.
+        if common_key is not None and set_id == common_key:
             observation = ObservationCode.MATCHES_COMMON_PATTERN
             actionable = False
         elif total_count > 0:
