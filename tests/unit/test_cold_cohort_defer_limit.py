@@ -36,6 +36,7 @@ from botgitgud.bot.benchmark_job import _MAX_CONSECUTIVE_DEFERS
 from botgitgud.bot.job_models import BudgetStatus, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.worker import MAX_COLD_COHORT_DEFERS, run_claimed_job
+from botgitgud.errors import COLD_COHORT_BUDGET, COLD_COHORT_NO_PROGRESS, CohortDeferredBudget
 from botgitgud.ingest.store import Store
 
 ANALYZE_DEDUP_KEY = "ABCDEFGHIJKLMNOP:1:Zarad"
@@ -62,6 +63,63 @@ def _always_defers(monkeypatch: pytest.MonkeyPatch, **error_kwargs: object) -> N
         "run_analysis",
         lambda *_a, **_k: (_ for _ in ()).throw(_deferred_error(**error_kwargs)),  # type: ignore[arg-type]
     )
+
+
+def _cohort_deferred_error(
+    *,
+    defer_reason: str | None = None,
+    planned: int = 100,
+    completed: int = 30,
+    retry_after_s: float | None = None,
+) -> CohortDeferredBudget:
+    """Como `test_worker.py::_deferred_error`, mas com `defer_reason`
+    estruturado — `_deferred_error` não tem esse parâmetro (era anterior a
+    este hardening), então este é um duplo local em vez de estendê-lo.
+    """
+    return CohortDeferredBudget(
+        "orçamento temporariamente reservado",
+        cohort_id="cohort-x",
+        estimated_api_points=3000,
+        available_api_points=1200,
+        protected_floor=1000,
+        safety_margin=250,
+        planned=planned,
+        completed=completed,
+        retry_after_s=retry_after_s,
+        defer_reason=defer_reason,
+    )
+
+
+def _always_defers_with_reason(
+    monkeypatch: pytest.MonkeyPatch, *, defer_reason: str | None
+) -> None:
+    monkeypatch.setattr(
+        worker_module,
+        "run_analysis",
+        lambda *_a, **_k: (_ for _ in ()).throw(  # type: ignore[arg-type]
+            _cohort_deferred_error(defer_reason=defer_reason)
+        ),
+    )
+
+
+def _seed_deferred_job(
+    queue: JobQueue, *, defer_count: int, reason: str | None, dedup_key: str = ANALYZE_DEDUP_KEY
+) -> str:
+    """Um job `deferred_budget` com exatamente o `defer_count`/
+    `defer_reason` desejado, construído via a API pública de `JobQueue`
+    (nunca `UPDATE` direto no warehouse) — para testar o guard de
+    pré-terminação em estados de fronteira sem precisar rodar o pipeline
+    `defer_count` vezes. Só o ÚLTIMO `defer()` decide o `defer_reason`
+    persistido (a coluna é sobrescrita a cada chamada, nunca um histórico),
+    então passar o MESMO `reason` em todas as N chamadas reproduz
+    fielmente "o defer mais recente foi X".
+    """
+    job_id = _enqueue_analyze(queue, dedup_key=dedup_key)
+    for _ in range(defer_count):
+        claimed = queue.claim_next(BUDGET)
+        assert claimed is not None
+        queue.defer(claimed.job_id, retry_after_s=0.0, reason=reason or "")
+    return job_id
 
 
 # ==================================================================================
@@ -547,3 +605,260 @@ def test_regression_good_candidates_are_cached_and_never_refetched(tmp_path: Pat
     # Só os 2 Anonymous (nunca cacheados) sao retentados na segunda janela.
     assert meta_calls_after_second_window == 2
     store.close()
+
+
+# ==================================================================================
+# GRUPO C — CL.0-hardening: causa estruturada e pré-terminação
+# ==================================================================================
+#
+# Risco fechado nesta rodada: o teto de CL.0 provou terminalidade, mas
+# ainda permitia UMA última execução cara (~1700 pontos WCL reais,
+# observados) antes de perceber que o defer_count excedia o limite — a
+# decisão só acontecia DEPOIS de rodar `run_analysis`/o cold build inteiro
+# de novo. Este grupo prova que, quando o ÚLTIMO defer persistido já foi
+# NO_PROGRESS estrutural e o job está na borda do teto, o worker termina
+# SEM executar o pipeline — zero WCL possível, não só zero WCL observado.
+
+
+def test_budget_reason_never_pre_terminates_even_near_the_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1/2: BUDGET repetido, mesmo bem perto do teto, nunca dispara o
+    guard de pré-terminação — o job é reclamado normalmente e o pipeline
+    RODA de verdade; só o teto pós-execução de CL.0 (inalterado) decide o
+    desfecho.
+    """
+    deps = _build_deps(tmp_path, _DispatchTransport({}), cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    job_id = _seed_deferred_job(
+        queue, defer_count=MAX_COLD_COHORT_DEFERS - 1, reason=COLD_COHORT_BUDGET
+    )
+
+    _always_defers_with_reason(monkeypatch, defer_reason=COLD_COHORT_BUDGET)
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None  # NÃO pré-terminado: o guard nunca olha para BUDGET
+    assert claimed.defer_reason == COLD_COHORT_BUDGET
+    assert claimed.defer_count == MAX_COLD_COHORT_DEFERS - 1
+
+    outcome = run_claimed_job(queue, claimed, deps)
+
+    # No teto pós-execução (CL.0, inalterado): termina, mas só DEPOIS de
+    # ter rodado — nunca pré-terminado por causa de BUDGET.
+    assert outcome.deferred is False
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.status == "failed"
+    store.close()
+
+
+def test_no_progress_reason_is_persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """3: um defer por NO_PROGRESS estrutural persiste o código curto
+    estruturado (`COLD_COHORT_NO_PROGRESS`) em `defer_reason` — nunca a
+    mensagem livre em português que o usuário vê.
+    """
+    _always_defers_with_reason(monkeypatch, defer_reason=COLD_COHORT_NO_PROGRESS)
+    deps = _build_deps(tmp_path, _DispatchTransport({}))
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    job_id = _enqueue_analyze(queue)
+
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None
+    run_claimed_job(queue, claimed, deps)
+
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.defer_reason == COLD_COHORT_NO_PROGRESS
+    store.close()
+
+
+def test_restart_preserves_no_progress_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """4: reabrir Store/JobQueue no MESMO arquivo ("restart") preserva o
+    `defer_reason` estruturado, não só o `defer_count` — CL.0 já provou o
+    segundo; este hardening depende do primeiro sobreviver junto.
+    """
+    _always_defers_with_reason(monkeypatch, defer_reason=COLD_COHORT_NO_PROGRESS)
+    deps = _build_deps(tmp_path, _DispatchTransport({}))
+    db_path = tmp_path / "queue_data"
+
+    store1 = Store(db_path)
+    queue1 = JobQueue(store1)
+    job_id = _enqueue_analyze(queue1)
+    claimed = queue1.claim_next(BUDGET)
+    assert claimed is not None
+    run_claimed_job(queue1, claimed, deps)
+    store1.close()
+
+    store2 = Store(db_path)
+    queue2 = JobQueue(store2)
+    job = queue2.get(job_id)
+    assert job is not None
+    assert job.defer_reason == COLD_COHORT_NO_PROGRESS
+    store2.close()
+
+
+def test_regression_no_progress_job_near_cap_pre_terminates_without_execution(
+    tmp_path: Path,
+) -> None:
+    """PROVA PRINCIPAL exigida por esta rodada de hardening (5/6/7/8): um
+    job persistido `deferred_budget`, `defer_count` na borda do teto, cujo
+    ÚLTIMO `defer_reason` estruturado é `COLD_COHORT_NO_PROGRESS` — o
+    próximo wakeup do worker NUNCA chama `run_analysis`/o pipeline de cold
+    cohort, e portanto NUNCA pode fazer uma chamada WCL.
+
+    Usa `deps` REAIS com um transporte fake SEM NENHUMA resposta
+    cadastrada (`_DispatchTransport({})`) — não mockado, não interceptado:
+    se o pipeline chegasse a rodar, a PRIMEIRA query dispararia
+    `pytest.fail` dentro do próprio transporte. A ausência de qualquer
+    falha, combinada com `transport.calls == []`, é a prova de que o
+    pipeline nunca foi invocado — não apenas que ele "não fez nada".
+    """
+    transport = _DispatchTransport({})
+    deps = _build_deps(tmp_path, transport, cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    job_id = _seed_deferred_job(
+        queue, defer_count=MAX_COLD_COHORT_DEFERS - 1, reason=COLD_COHORT_NO_PROGRESS
+    )
+
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None
+    assert claimed.defer_reason == COLD_COHORT_NO_PROGRESS
+    assert claimed.defer_count == MAX_COLD_COHORT_DEFERS - 1
+
+    outcome = run_claimed_job(queue, claimed, deps)
+
+    # 6: terminal, nunca deferido de novo.
+    assert outcome.deferred is False
+    assert outcome.ok is False
+    # 7: zero chamada WCL — o pipeline nunca rodou.
+    assert transport.calls == []
+
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.status == "failed"
+    # defer_count nunca incrementado de novo — nenhum defer() foi chamado,
+    # só mark_failed().
+    assert job.defer_count == MAX_COLD_COHORT_DEFERS - 1
+
+    # 8: novo wakeup do worker — o job terminal não é reclamado.
+    assert queue.claim_next(BUDGET) is None
+    store.close()
+
+
+def test_transition_from_budget_to_no_progress_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """9: um job cujo PRIMEIRO defer foi BUDGET e o SEGUNDO foi
+    NO_PROGRESS termina refletindo a causa MAIS RECENTE — a única que a
+    coluna `defer_reason` persiste (nunca um histórico) — e o guard passa
+    a valer a partir daí.
+    """
+    deps = _build_deps(tmp_path, _DispatchTransport({}), cold_build_defer_retry_s=0.0)
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    job_id = _seed_deferred_job(queue, defer_count=1, reason=COLD_COHORT_BUDGET)
+
+    _always_defers_with_reason(monkeypatch, defer_reason=COLD_COHORT_NO_PROGRESS)
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None
+    assert claimed.defer_reason == COLD_COHORT_BUDGET  # ainda o anterior, antes desta rodada
+    run_claimed_job(queue, claimed, deps)
+
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.defer_reason == COLD_COHORT_NO_PROGRESS  # sobrescrito pelo mais recente
+    assert job.defer_count == 2
+    store.close()
+
+
+def test_transition_from_no_progress_to_eventual_success_is_still_possible_below_cap(
+    tmp_path: Path,
+) -> None:
+    """10: um job com apenas UM defer NO_PROGRESS anterior (abaixo da
+    borda do teto: `1+1 < MAX_COLD_COHORT_DEFERS`) continua tendo direito
+    a uma nova execução real — a política escolhida só pula a execução
+    quando o job já está no MESMO ponto em que o teto pós-execução
+    terminaria de qualquer forma. Se essa execução progride de verdade
+    (ex.: a WCL passou a servir os candidatos que faltavam), o job conclui
+    normalmente — NO_PROGRESS não é uma sentença permanente antes da
+    borda do teto.
+    """
+    from test_pipeline import _happy_path_responses
+
+    deps = _build_deps(
+        tmp_path, _DispatchTransport(_happy_path_responses()), cold_build_defer_retry_s=0.0
+    )
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    job_id = _seed_deferred_job(queue, defer_count=1, reason=COLD_COHORT_NO_PROGRESS)
+
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None  # NÃO pré-terminado: 1+1 < MAX_COLD_COHORT_DEFERS
+    outcome = run_claimed_job(queue, claimed, deps)
+
+    assert outcome.ok is True  # progresso real desta vez
+    job = queue.get(job_id)
+    assert job is not None
+    assert job.status == "done"
+    store.close()
+
+
+def test_benchmark_build_job_bypasses_the_cold_cohort_pre_terminate_guard_entirely(
+    tmp_path: Path,
+) -> None:
+    """11: `job_type == "benchmark_build"` retorna cedo em
+    `run_claimed_job`, ANTES do guard novo de cold cohort. Empurra
+    `defer_count`/`defer_reason` para IMITAR (artificialmente, só para
+    provar o isolamento) o estado exato que dispararia o guard para
+    analyze/build_cohort — o caminho de benchmark_build nunca o alcança,
+    e falha pelo seu próprio motivo real (payload ausente), nunca pela
+    mensagem/evento do guard de cold cohort.
+    """
+    deps = _build_deps(tmp_path, _DispatchTransport({}))
+    store = Store(tmp_path / "queue_data")
+    queue = JobQueue(store)
+    result = queue.enqueue(
+        job_type="benchmark_build",
+        dedup_key="benchmark:Warlock/Demonology/9999/5/3/v1",
+        discord_user_id="system:benchmark_build",
+        discord_channel_id="system:benchmark_build",
+        payload_json=None,
+    )
+    assert result.job is not None
+    job_id = result.job.job_id
+
+    for _ in range(MAX_COLD_COHORT_DEFERS - 1):
+        claimed = queue.claim_next(BUDGET)
+        assert claimed is not None
+        queue.defer(claimed.job_id, retry_after_s=0.0, reason=COLD_COHORT_NO_PROGRESS)
+
+    claimed = queue.claim_next(BUDGET)
+    assert claimed is not None
+    assert claimed.job_type == "benchmark_build"
+    assert claimed.defer_reason == COLD_COHORT_NO_PROGRESS  # rótulo emprestado, de propósito
+    run_claimed_job(queue, claimed, deps)
+
+    job = queue.get(job_id)
+    assert job is not None
+    # Falhou pelo payload ausente — o caminho REAL de benchmark_build —
+    # nunca pelo evento "worker.cold_cohort_pre_terminated".
+    assert "payload_json" in (job.error or "")
+    store.close()
+
+
+def test_benchmark_defer_reason_vocabulary_never_collides_with_cold_cohort() -> None:
+    """11 (complemento): os códigos reais que `bot/benchmark_job.py`
+    persiste (`benchmark_deferred_budget`/`benchmark_no_progress`) nunca
+    colidem lexicalmente com `COLD_COHORT_BUDGET`/`COLD_COHORT_NO_
+    PROGRESS` — mesmo que um operador algum dia leia a coluna
+    `defer_reason` de todos os job_types junta, os dois vocabulários
+    continuam distinguíveis.
+    """
+    assert {COLD_COHORT_BUDGET, COLD_COHORT_NO_PROGRESS}.isdisjoint(
+        {"benchmark_deferred_budget", "benchmark_no_progress"}
+    )
+    assert _MAX_CONSECUTIVE_DEFERS == 50  # a política do benchmark segue intocada

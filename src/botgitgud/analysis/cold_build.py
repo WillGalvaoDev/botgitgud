@@ -13,7 +13,7 @@ from typing import Protocol
 import structlog
 
 from botgitgud.config import Settings
-from botgitgud.errors import CohortDeferredBudget
+from botgitgud.errors import COLD_COHORT_BUDGET, CohortDeferredBudget
 
 log = structlog.get_logger(__name__)
 
@@ -307,6 +307,9 @@ def preflight_cold_build(
             protected_floor=cost.protected_floor,
             safety_margin=cost.safety_margin,
             retry_after_s=budget_reset_in(client),
+            # CL.0-hardening: preflight nunca tentou candidato nenhum — por
+            # construção, a única causa possível aqui é orçamento.
+            defer_reason=COLD_COHORT_BUDGET,
         )
     record_cold_lifecycle(
         "allowed",

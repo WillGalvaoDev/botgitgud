@@ -103,6 +103,21 @@ class CohortNotReady(AnalysisError):
     """
 
 
+# CL.0-hardening: os dois únicos valores válidos de `CohortDeferredBudget.
+# defer_reason` — códigos curtos e estruturados, nunca texto livre, mesma
+# convenção que `bot/benchmark_job.py` já usa para `benchmark_build`
+# ("benchmark_deferred_budget"/"benchmark_no_progress"). Vivem aqui (não
+# como o `DeferReason` de `analysis/cohort_increment.py`, importado) porque
+# `errors.py` é folha por desenho — zero import interno — e importar
+# `cohort_increment` criaria um ciclo (`cohort_increment` importa de
+# `analysis/cold_build.py`, que já importa `CohortDeferredBudget` daqui).
+# Os dois vocabulários descrevem o mesmo par de causas por construção; quem
+# constrói a exceção (analysis/pipeline.py, analysis/cold_build.py) já tem
+# `DeferReason` em escopo e converte.
+COLD_COHORT_BUDGET = "cold_cohort_budget"
+COLD_COHORT_NO_PROGRESS = "cold_cohort_no_progress"
+
+
 class CohortDeferredBudget(AnalysisError):
     """Trabalho VALIDO aguardando orcamento — nunca uma falha de analise.
 
@@ -114,6 +129,13 @@ class CohortDeferredBudget(AnalysisError):
 
     `planned`/`completed` carregam o progresso ja persistido no cache de logs,
     para que a telemetria prove quanto avancou antes do adiamento.
+
+    CL.0-hardening: `defer_reason` (um de `COLD_COHORT_BUDGET`/
+    `COLD_COHORT_NO_PROGRESS`, ou `None` para um chamador que ainda não foi
+    atualizado) é a causa ESTRUTURAL — nunca inferida de `message`, que
+    continua livre para descrever o adiamento ao usuário. `None` é o
+    default seguro: um consumidor que não sabe a causa trata como se fosse
+    orçamento, nunca presume NO_PROGRESS sem essa informação vir explícita.
     """
 
     def __init__(
@@ -128,6 +150,7 @@ class CohortDeferredBudget(AnalysisError):
         planned: int | None = None,
         completed: int | None = None,
         retry_after_s: float | None = None,
+        defer_reason: str | None = None,
     ) -> None:
         super().__init__(message)
         self.cohort_id = cohort_id
@@ -138,6 +161,7 @@ class CohortDeferredBudget(AnalysisError):
         self.planned = planned
         self.completed = completed
         self.retry_after_s = retry_after_s
+        self.defer_reason = defer_reason
 
     @property
     def remaining(self) -> int | None:

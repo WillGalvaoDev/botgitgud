@@ -42,7 +42,7 @@ from botgitgud.analysis.cohort import (
     duration_bucket_bounds,
     duration_bucket_id,
 )
-from botgitgud.analysis.cohort_increment import CohortState, advance_cohort_build
+from botgitgud.analysis.cohort_increment import CohortState, DeferReason, advance_cohort_build
 from botgitgud.analysis.cohort_match import match_cohort
 from botgitgud.analysis.cold_build import (
     ColdBuildExecution,
@@ -66,6 +66,8 @@ from botgitgud.domain.models import CohortCriteria, RankingCandidate, RunManifes
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec, rejection_message
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import (
+    COLD_COHORT_BUDGET,
+    COLD_COHORT_NO_PROGRESS,
     CohortDeferredBudget,
     CohortNotReady,
     InsufficientCohort,
@@ -146,6 +148,7 @@ def _deferred(
     message: str,
     planned: int | None = None,
     completed: int | None = None,
+    defer_reason: str | None = None,
 ) -> CohortDeferredBudget:
     remaining = 0 if planned is None or completed is None else planned - completed
     cost = estimate_cold_build(
@@ -164,6 +167,7 @@ def _deferred(
         planned=planned,
         completed=completed,
         retry_after_s=budget_reset_in(deps.client),
+        defer_reason=defer_reason,
     )
 
 
@@ -214,6 +218,15 @@ def _advance_cold_cohort(
         job_id=job_id,
     )
     if increment.state is not CohortState.READY:
+        # CL.0-hardening: `increment.defer_reason` (analysis/cohort_increment.py's
+        # DeferReason, já tipado) é a causa estrutural real — convertida para o
+        # código curto que `errors.py` define, nunca perdida na mensagem livre
+        # abaixo (que continua igual para o usuário nos dois casos).
+        structured_reason = (
+            COLD_COHORT_NO_PROGRESS
+            if increment.defer_reason is DeferReason.NO_PROGRESS
+            else COLD_COHORT_BUDGET
+        )
         raise _deferred(
             deps,
             cohort_id,
@@ -224,6 +237,7 @@ def _advance_cold_cohort(
             ),
             planned=increment.planned,
             completed=increment.completed,
+            defer_reason=structured_reason,
         )
     ready = deps.store.read_candidate_pool(cohort_id)
     if ready is None:  # pragma: no cover - READY implica pool escrito

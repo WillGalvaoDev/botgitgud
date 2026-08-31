@@ -23,7 +23,12 @@ from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.job_models import Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.report_store import ReportPersistenceError, persist_report
-from botgitgud.errors import BotGitGudError, CohortDeferredBudget, RateLimitBudgetExceeded
+from botgitgud.errors import (
+    COLD_COHORT_NO_PROGRESS,
+    BotGitGudError,
+    CohortDeferredBudget,
+    RateLimitBudgetExceeded,
+)
 from botgitgud.report.render import render_analysis
 
 log = structlog.get_logger(__name__)
@@ -75,6 +80,44 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         # bot/benchmark_job.py, não misturado no try/except abaixo, que é
         # específico do par analyze/build_cohort.
         return run_benchmark_build_job(queue, job, deps)
+
+    # CL.0-hardening: um cold cohort cujo ÚLTIMO defer persistido já foi
+    # NO_PROGRESS estrutural, E que está na borda do teto (a PRÓXIMA
+    # execução seria justamente a que `_defer_job` terminaria de qualquer
+    # forma), não precisa reexecutar o pipeline inteiro só para redescobrir
+    # a MESMA coisa — especialmente caro para cold cohort, que não tem
+    # checkpoint persistido até READY (cada retomada refaz a descoberta do
+    # leaderboard do zero; uma retomada real chegou a gastar ~1700 pontos
+    # WCL só para reconfirmar NO_PROGRESS). Zero chamada ao pipeline, zero
+    # WCL — o job vai direto a `failed`, sem passar por `claim` de novo.
+    #
+    # Deliberadamente conservador: só dispara quando o sinal persistido é o
+    # código estruturado exato (nunca a mensagem livre de um chamador
+    # antigo, nunca inferido) E o job já está no MESMO ponto em que
+    # `_defer_job` terminaria de qualquer forma — o guard nunca antecipa a
+    # terminação para mais cedo do que o teto já definiria, só evita
+    # reexecutar quando o resultado já é conhecido. Um job cujo último
+    # defer foi orçamento (`defer_reason` ausente ou diferente) continua
+    # tendo direito a toda a janela de retries normalmente.
+    if (
+        job.defer_reason == COLD_COHORT_NO_PROGRESS
+        and job.defer_count + 1 >= MAX_COLD_COHORT_DEFERS
+    ):
+        message = (
+            f"cold cohort pré-terminado: {job.defer_count} adiamento(s) consecutivo(s) já "
+            "demonstraram NO_PROGRESS estrutural — nenhuma nova execução foi necessária "
+            "para confirmar."
+        )
+        queue.mark_failed(job.job_id, error=message)
+        log.error(
+            "worker.cold_cohort_pre_terminated",
+            job_id=job.job_id,
+            job_type=job.job_type,
+            defer_count=job.defer_count,
+            max_defers=MAX_COLD_COHORT_DEFERS,
+            reason="cold_cohort_no_progress_pre_terminated",
+        )
+        return JobOutcome(job=job, ok=False, message=message)
 
     report_path: str | None = None
     analysis: AnalysisResult | None = None
@@ -133,18 +176,21 @@ def _defer_job(queue: JobQueue, job: Job, error: CohortDeferredBudget, deps: Dep
     com o reset da janela.
 
     CL.0: `defer_count` já persistido do próprio `job` (sobrevive restart —
-    é a mesma coluna que B2 já usa) é o teto. `CohortDeferredBudget` não
-    distingue estruturalmente budget puro de NO_PROGRESS estrutural (as
-    duas mensagens de `analysis/pipeline.py`/`analysis/cold_build.py`
-    falam só de "orçamento", mesmo quando a causa real — visível nos logs
-    estruturados de `cohort_increment.py` — foi NO_PROGRESS); mesma
-    simplificação que `bot/benchmark_job.py`'s `_defer` já adota
-    deliberadamente para o mesmo par de causas. O teto trata os dois iguais
-    de propósito — não transforma escassez transitória em falha prematura
-    (o cap é generoso o bastante para o caso real de budget: a MESMA
-    coorte completou 99/100 numa única janela quando o orçamento
-    cooperou), e corta um bloqueio estrutural antes que ele vire um loop
-    sem fim.
+    é a mesma coluna que B2 já usa) é o teto de EXECUÇÕES. Trata budget
+    puro e NO_PROGRESS estrutural igual para efeito de QUANTAS vezes um
+    job pode deferir — mesma simplificação que `bot/benchmark_job.py`'s
+    `_defer` já adota deliberadamente para o mesmo par de causas — não
+    transforma escassez transitória em falha prematura (o cap é generoso
+    o bastante para o caso real de budget: a MESMA coorte completou 99/100
+    numa única janela quando o orçamento cooperou), e corta um bloqueio
+    estrutural antes que ele vire um loop sem fim.
+
+    CL.0-hardening: `error.defer_reason` (COLD_COHORT_BUDGET/
+    COLD_COHORT_NO_PROGRESS, `errors.py`) é persistido em vez da mensagem
+    livre — é esse código estruturado que o guard de pré-terminação no
+    topo de `run_claimed_job` lê depois, nunca a string humana. Um
+    `defer_reason=None` (chamador que ainda não popula a causa) cai no
+    texto legado — nunca falso-negativo, só perde o atalho.
     """
     if job.defer_count + 1 >= MAX_COLD_COHORT_DEFERS:
         message = (
@@ -168,13 +214,16 @@ def _defer_job(queue: JobQueue, job: Job, error: CohortDeferredBudget, deps: Dep
     retry_after = error.retry_after_s
     if retry_after is None or retry_after <= 0:
         retry_after = deps.settings.cold_build_defer_retry_s
-    until = queue.defer(job.job_id, retry_after_s=retry_after, reason=str(error))
+    until = queue.defer(
+        job.job_id, retry_after_s=retry_after, reason=error.defer_reason or str(error)
+    )
     log.info(
         "worker.job_deferred_budget",
         job_id=job.job_id,
         cohort_id=error.cohort_id,
         planned=error.planned,
         completed=error.completed,
+        defer_reason=error.defer_reason,
         retry_after_s=round(retry_after, 1),
         deferred_until=until.isoformat(),
     )
