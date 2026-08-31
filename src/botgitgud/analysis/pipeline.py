@@ -114,6 +114,15 @@ class AnalysisResult:
     # target — ver `run_analysis`. `None` só quando `analyze_setup` nunca
     # chegou a rodar (não deveria acontecer no caminho normal).
     setup_analysis: SetupAnalysis | None = None
+    # EB.6: a identidade/política de benchmark que ESTA análise já resolveu
+    # (spec/encounter/difficulty/partition). Carregadas como DADO para que a
+    # camada `bot/` possa decidir enfileirar um `benchmark_build` sem
+    # reconstruir a identidade por conta própria — e sem que `Deps` precise
+    # de uma `JobQueue`, o que inverteria a direção analysis -> bot. `None`
+    # só quando o resultado foi construído à mão (testes), nunca por
+    # `run_analysis`.
+    benchmark_target: EncounterBenchmarkTarget | None = None
+    benchmark_policy: BenchmarkPolicy | None = None
     performance: PerformanceFindings | None = None
     dps_gap: DpsGapReport | None = None
     top_actions: tuple[Finding, ...] = ()
@@ -264,12 +273,14 @@ def run_analysis(
 
     # RP.2: Setup Analysis é INDEPENDENTE do Execution Cohort por desenho —
     # nunca usa `matched_logs`/`criteria` abaixo, nunca bloqueia a análise
-    # de execução. Leitura best-effort, read-only: nenhum cold build de
-    # benchmark é disparado por aqui (isso é o job de baixa prioridade de
-    # EB.5 — `ensure_benchmark_job`, deliberadamente não chamado neste
-    # caminho interativo). Benchmark ausente/corrompido -> `benchmark=None`
-    # -> `analyze_setup` (SA.6) já degrada sozinho para findings
-    # `MISSING_DATA`/`HIDDEN`, nunca uma exceção.
+    # de execução. Leitura best-effort, read-only: nenhum build de benchmark
+    # é disparado DAQUI, nem síncrona nem assincronamente — este módulo não
+    # conhece `JobQueue` e não vai passar a conhecer. EB.6 enfileira o
+    # `benchmark_build` na camada `bot/` (bot/benchmark_trigger.py), DEPOIS
+    # desta análise ter terminado, usando `benchmark_target`/
+    # `benchmark_policy` devolvidos no `AnalysisResult`. Benchmark ausente/
+    # corrompido -> `benchmark=None` -> `analyze_setup` (SA.6) já degrada
+    # sozinho para findings `MISSING_DATA`/`HIDDEN`, nunca uma exceção.
     benchmark_target = EncounterBenchmarkTarget(
         spec=spec_id,
         encounter_id=player_log.fight.encounter_id,
@@ -444,6 +455,8 @@ def run_analysis(
         comparisons=tuple(comparisons),
         manifest=manifest,
         setup_analysis=setup_analysis,
+        benchmark_target=benchmark_target,
+        benchmark_policy=benchmark_policy,
         performance=performance,
         dps_gap=dps_gap,
         top_actions=tuple(top_actions),

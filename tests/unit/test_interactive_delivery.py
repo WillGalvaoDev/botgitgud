@@ -80,6 +80,10 @@ def _result() -> SimpleNamespace:
         comparisons=(),
         manifest=None,
         setup_analysis=None,
+        # EB.6: um `AnalysisResult` sem identidade de benchmark é um no-op
+        # explícito para o gatilho — este duplo não exercita o benchmark.
+        benchmark_target=None,
+        benchmark_policy=None,
         performance=None,
         dps_gap=None,
         top_actions=(),

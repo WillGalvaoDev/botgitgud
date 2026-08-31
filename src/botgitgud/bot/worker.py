@@ -16,9 +16,10 @@ from __future__ import annotations
 import structlog
 
 from botgitgud.analysis.cohort_builder import build_cohorts
-from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
+from botgitgud.analysis.pipeline import AnalysisRequest, AnalysisResult, Deps, run_analysis
 from botgitgud.bot.analysis_runs import record_analysis_result, track_analysis
 from botgitgud.bot.benchmark_job import run_benchmark_build_job
+from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.job_models import Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.report_store import ReportPersistenceError, persist_report
@@ -47,9 +48,10 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         return run_benchmark_build_job(queue, job, deps)
 
     report_path: str | None = None
+    analysis: AnalysisResult | None = None
     try:
         if job.job_type == "analyze":
-            message, html_report = _run_analyze(job, deps)
+            message, html_report, analysis = _run_analyze(job, deps)
             # RC.1/RC.11: o artefato vira arquivo ANTES de qualquer tentativa de
             # entrega. Se isto falhar, o job falha como erro de producao do
             # artifact — nunca seguimos para o Discord com um anexo inexistente.
@@ -79,6 +81,11 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
 
     queue.mark_done(job.job_id, report_path=report_path)
     log.info("worker.analysis_completed", job_id=job.job_id, job_type=job.job_type)
+    if analysis is not None:
+        # EB.6: só DEPOIS de o artefato estar persistido e o job marcado
+        # `done` — o relatório nunca espera por isto, e uma falha aqui não
+        # pode reverter nada (o job já está concluído).
+        maybe_enqueue_benchmark_build(deps=deps, queue=queue, result=analysis, source="worker")
     return JobOutcome(
         job=job,
         ok=True,
@@ -128,7 +135,7 @@ def _record_cold_progress(run: object, error: CohortDeferredBudget) -> None:
     run.final_status = "deferred_budget"  # type: ignore[attr-defined]
 
 
-def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
+def _run_analyze(job: Job, deps: Deps) -> tuple[str, str, AnalysisResult]:
     report_code, fight_id_s, character_name = job.dedup_key.split(":", 2)
     req = AnalysisRequest(
         report_code=report_code, fight_id=int(fight_id_s), character_name=character_name
@@ -169,7 +176,7 @@ def _run_analyze(job: Job, deps: Deps) -> tuple[str, str]:
             duration_s=result.header.duration_max_s,
             setup=result.setup_analysis,
         )
-        return summary, html
+        return summary, html, result
 
 
 def _run_build_cohort(job: Job, deps: Deps) -> str:

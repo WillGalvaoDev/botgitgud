@@ -29,6 +29,7 @@ from discord.ext import commands
 from botgitgud.analysis.cold_build import cold_lifecycle_snapshot
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.bot.analysis_runs import now_iso, record_analysis_result, track_analysis
+from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.delivery import (
     ChannelResolver,
     DeliveryContext,
@@ -530,6 +531,15 @@ def build_bot(deps: Deps) -> commands.Bot:
             )
             run.delivery_finished_at = now_iso()
             run.delivery_status = str(outcome.status)
+
+            # EB.6: só DEPOIS da entrega. O caminho interativo nunca espera
+            # um benchmark ficar pronto — enfileira um `benchmark_build` de
+            # prioridade mais baixa (EB.5) e devolve o controle. Esta análise
+            # já degradou Setup honestamente; a PRÓXIMA, quando o build tiver
+            # terminado, encontra o benchmark sozinha.
+            maybe_enqueue_benchmark_build(
+                deps=deps, queue=queue, result=result, source="discord_direct"
+            )
 
     @bot.command(name="status")
     async def cmd_status(ctx: commands.Context) -> None:

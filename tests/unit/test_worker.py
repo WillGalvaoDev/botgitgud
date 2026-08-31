@@ -90,7 +90,11 @@ def test_queue_and_hot_path_render_the_same_delivery_contract(
         allow_cold_build=True,
     )
     monkeypatch.setattr(worker_module, "run_analysis", lambda *_args, **_kwargs: result)
-    summary, html = worker_module._run_analyze(_claimed_analyze_job(), deps)
+    summary, html, returned = worker_module._run_analyze(_claimed_analyze_job(), deps)
+    # EB.6: `_run_analyze` tambem devolve o `AnalysisResult`, para
+    # `run_claimed_job` poder decidir sobre o benchmark DEPOIS de concluir o
+    # job — mesmo objeto, nunca um recalculo.
+    assert returned is result
     assert summary == render_header_and_top3(result.header, result.top_actions)
     assert html == render_html_report(
         result.header,
@@ -100,6 +104,7 @@ def test_queue_and_hot_path_render_the_same_delivery_contract(
         dps_gap=result.dps_gap,
         top_actions=result.top_actions,
         duration_s=result.header.duration_max_s,
+        setup=result.setup_analysis,
     )
 
 
@@ -484,12 +489,25 @@ def test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop(
     assert final.defer_count == 1  # incrementado uma vez, nunca resetado
     assert final.report_path is not None
 
-    resumed_events = [e for e in events if e.get("event") == "job.resumed"]
+    # EB.6: o loop real agora tambem executa o `benchmark_build` que a
+    # analise concluida enfileirou — filtrar por job_type mantem esta
+    # asercao sobre o job `analyze`, que e o que ela sempre mediu.
+    resumed_events = [
+        e for e in events if e.get("event") == "job.resumed" and e.get("job_type") == "analyze"
+    ]
     assert len(resumed_events) == 1
     assert resumed_events[0]["job_id"] == original_job_id
     assert resumed_events[0]["defer_count"] == 1
-    started_events = [e for e in events if e.get("event") == "job.started"]
+    started_events = [
+        e for e in events if e.get("event") == "job.started" and e.get("job_type") == "analyze"
+    ]
     assert len(started_events) == 1  # a primeira tentativa foi "started", nao "resumed"
+
+    # EB.6 fim-a-fim pelo loop REAL do worker: a analise bem-sucedida deixou
+    # exatamente um `benchmark_build` na fila, de prioridade mais baixa, sem
+    # nunca ter atrasado o relatorio (o job `analyze` ja estava `done` acima).
+    benchmark_jobs = [j for j in queue.list_recent() if j.job_type == "benchmark_build"]
+    assert len(benchmark_jobs) == 1
 
     store.close()
 
