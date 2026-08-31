@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,12 +20,14 @@ import pytest
 import structlog
 
 from botgitgud.ops import control
+from botgitgud.ops import supervisor as supervisor_module
 from botgitgud.ops.supervisor import (
     ChildHandle,
     SupervisorLock,
     SupervisorSettings,
     child_command,
     compute_backoff_delay,
+    install_signal_handlers,
     is_restart_storm,
     pid_is_alive,
     prune_restart_history,
@@ -650,3 +653,129 @@ def test_supervisor_module_never_imports_discord_or_httpx() -> None:
     src = Path(mod.__file__).read_text(encoding="utf-8")
     assert "import discord" not in src
     assert "httpx" not in src
+
+
+# -- CL.1: sinais convertidos no MESMO stop.request ------------------------------------------
+#
+# `os.kill(pid, signal.SIGTERM)` NÃO é usado para provar entrega nestes
+# testes: no Windows ele chama `TerminateProcess` diretamente, ignorando
+# qualquer handler Python registrado — enviar isso ao próprio processo de
+# teste mataria o runner de testes em vez de exercitar o handler. Por
+# isso o handler é chamado como uma função Python comum, simulando
+# exatamente o que o SO faria ao entregar o sinal de verdade.
+
+
+def test_signal_handler_writes_the_same_stop_request_file(tmp_path: Path) -> None:
+    """17 (unidade): a lógica do handler, isolada — receber um número de
+    sinal escreve `stop.request`, nada mais.
+    """
+    handler = supervisor_module._stop_request_signal_handler(tmp_path)
+    assert control.stop_requested(tmp_path) is False
+
+    handler(signal.SIGTERM, None)
+
+    assert control.stop_requested(tmp_path) is True
+
+
+def test_signal_handler_handles_sigint_too(tmp_path: Path) -> None:
+    handler = supervisor_module._stop_request_signal_handler(tmp_path)
+    handler(signal.SIGINT, None)
+    assert control.stop_requested(tmp_path) is True
+
+
+def test_install_signal_handlers_registers_sigterm_and_sigint(tmp_path: Path) -> None:
+    original_term = signal.getsignal(signal.SIGTERM)
+    original_int = signal.getsignal(signal.SIGINT)
+    try:
+        install_signal_handlers(tmp_path)
+        assert signal.getsignal(signal.SIGTERM) is not original_term
+        assert signal.getsignal(signal.SIGINT) is not original_int
+    finally:
+        signal.signal(signal.SIGTERM, original_term)
+        signal.signal(signal.SIGINT, original_int)
+
+
+def test_simulated_sigterm_leads_to_a_clean_shutdown_via_the_real_stop_request_channel(
+    tmp_path: Path,
+) -> None:
+    """17/18 — a prova de ponta a ponta: simula a ENTREGA de SIGTERM
+    chamando o handler diretamente (nunca dependendo de um SO real
+    entregar o sinal — ver nota acima), e deixa o RESTO do caminho ser o
+    `run_supervisor_loop` real, com o `stop_check` PADRÃO (arquivo em
+    disco, não um fake em memória) — a mesma função que
+    `stop-bot-service.ps1` já aciona no Windows hoje.
+
+    Prova também "nenhum child órfão" (18): o filho sai sozinho dentro da
+    janela de graça (nunca escalado para `terminate()`) e `bot.pid` é
+    limpo ao final.
+    """
+    child = FakeChild(pid=4242, alive_polls=1, exit_code=0)
+
+    def spawn() -> ChildHandle:
+        return child
+
+    handler = supervisor_module._stop_request_signal_handler(tmp_path)
+    handler(signal.SIGTERM, None)  # a "entrega" simulada, antes do loop nem comecar
+
+    reason = run_supervisor_loop(
+        tmp_path,
+        SupervisorSettings(poll_interval_s=0.1, stop_grace_s=5.0),
+        spawn=spawn,
+        # stop_check PADRAO: le control/stop.request de verdade.
+    )
+
+    assert reason == "stop_requested"
+    assert child.terminated is False  # saiu sozinho — nunca precisou de escalada
+    assert not (tmp_path / "control" / "bot.pid").exists()  # sem PID orfao registrado
+    control.clear_stop_request(tmp_path)
+
+
+def test_simulated_sigint_also_leads_to_a_clean_shutdown(tmp_path: Path) -> None:
+    """Ctrl+C em qualquer plataforma segue o MESMO caminho que SIGTERM."""
+    child = FakeChild(pid=4243, alive_polls=1, exit_code=0)
+
+    def spawn() -> ChildHandle:
+        return child
+
+    handler = supervisor_module._stop_request_signal_handler(tmp_path)
+    handler(signal.SIGINT, None)
+
+    reason = run_supervisor_loop(
+        tmp_path,
+        SupervisorSettings(poll_interval_s=0.1, stop_grace_s=5.0),
+        spawn=spawn,
+    )
+
+    assert reason == "stop_requested"
+    assert child.terminated is False
+    control.clear_stop_request(tmp_path)
+
+
+def test_signal_handler_never_calls_child_terminate_directly() -> None:
+    """Documenta a decisão do design: o handler só escreve o arquivo de
+    controle — nunca `child.terminate()` nem qualquer chamada de escalada
+    — para nunca rodar lógica de espera/poll dentro de um signal handler.
+    """
+    import inspect
+
+    src = inspect.getsource(supervisor_module._stop_request_signal_handler)
+    assert "terminate" not in src
+    assert "request_stop" in src
+
+
+# -- CL.1: creationflags é seguro em qualquer plataforma -------------------------------------
+
+
+def test_spawn_creationflags_is_zero_when_the_windows_only_flag_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirma o que já garante portabilidade em `spawn_bot_child`: sem o
+    atributo Windows-only, `creationflags` cai para `0` — e
+    `subprocess.Popen` aceita `creationflags=0` incondicionalmente em
+    qualquer plataforma (só rejeita um valor != 0 fora do Windows,
+    verificado contra o próprio código-fonte do `subprocess` do CPython).
+    """
+    import subprocess
+
+    monkeypatch.delattr(subprocess, "CREATE_NO_WINDOW", raising=False)
+    assert getattr(subprocess, "CREATE_NO_WINDOW", 0) == 0

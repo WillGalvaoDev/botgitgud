@@ -6,86 +6,81 @@ the whole Python process dies. This module answers the question one level up:
 "is `python -m botgitgud.cli serve` itself alive, and if not, why, and should
 it come back?"
 
-Design, matched to Windows and to this project's existing conventions:
+Design, portable across Windows and Linux (CL.1) and matched to this
+project's existing conventions:
 
 - **spawn**: `[sys.executable, "-m", "botgitgud.cli", "serve"]` with an
   explicit `cwd` — never relies on PATH or on the supervisor's own working
-  directory happening to be right (verified empirically, see the two
-  functions below: `os.kill(pid, 0)` does NOT detect death on Windows, so PID
-  liveness uses `ctypes`/`OpenProcess` instead).
-- **clean stop**: no OS signal at all. `ops/control.py`'s `stop.request` file
-  is the channel — the supervisor writes it, the bot process polls it and
-  calls `bot.close()` from inside its own event loop (graceful, from where
-  DuckDB and the websocket are actually owned), and the supervisor just waits
-  for the PID to disappear. `ChildHandle.terminate()` exists only as the
-  escalation path if that grace period expires — never the normal path.
+  directory happening to be right. `creationflags` only ever carries the
+  Windows-only `CREATE_NO_WINDOW` flag when it actually exists (`getattr`
+  fallback to `0`); `subprocess.Popen` rejects a non-zero `creationflags` on
+  POSIX, so this stays `0`-and-therefore-silently-accepted there — verified
+  against CPython's own `subprocess.py`, not assumed.
+- **PID liveness / singleton lock**: the two genuinely platform-specific
+  primitives (`os.kill(pid, 0)` does NOT detect death on Windows, so PID
+  liveness uses `ctypes`/`OpenProcess` there instead; the exclusive lock is
+  `msvcrt.locking` on Windows, `fcntl.flock` on POSIX) live in
+  `ops/platform_process.py`, imported here — see that module's docstring for
+  why they're split out (import safety on both platforms) and how tests
+  exercise the POSIX path without a real POSIX machine.
+- **clean stop**: no OS signal REQUIRED. `ops/control.py`'s `stop.request`
+  file is the channel — the supervisor writes it (or a signal handler does,
+  see below), the bot process polls it and calls `bot.close()` from inside
+  its own event loop (graceful, from where DuckDB and the websocket are
+  actually owned), and the supervisor just waits for the PID to disappear.
+  `ChildHandle.terminate()` exists only as the escalation path if that grace
+  period expires — never the normal path.
+- **signals (CL.1)**: `install_signal_handlers` converts a delivered
+  `SIGTERM`/`SIGINT` into the SAME `stop.request` file — never a second stop
+  mechanism, never a direct `child.terminate()`. This exists for systemd
+  (`systemctl stop` sends `SIGTERM` by default) and for an operator's Ctrl+C
+  on either platform; the existing polling loop below picks it up on its very
+  next iteration through the exact same code path `stop-bot-service.ps1`
+  already exercises today, unchanged.
 - **restart policy**: any exit while `stop.request` is absent is treated as
   unexpected (this process is meant to run forever; even an exit(0) nobody
   asked for is an anomaly for a long-running service) and triggers a restart,
   with exponential backoff and a storm breaker so a crash-loop can't spin the
   CPU or restart hundreds of times in a few minutes.
-- **duplicate protection**: an OS-level byte-range lock
-  (`msvcrt.locking`, verified empirically to reject a second acquisition —
-  see docs/v1-process-supervision.md) stops a second supervisor from ever
-  starting, and a PID-liveness check against `control/bot.pid` stops a
-  restart from ever launching a second child even if two supervisors somehow
-  raced past the lock.
+- **duplicate protection**: the OS-level lock (see above) stops a second
+  supervisor from ever starting, and a PID-liveness check against
+  `control/bot.pid` stops a restart from ever launching a second child even
+  if two supervisors somehow raced past the lock.
 """
 
 from __future__ import annotations
 
-import contextlib
-import ctypes
-import msvcrt
+import signal
 import subprocess
 import sys
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Protocol
+from typing import Protocol
 
 import structlog
 
 from botgitgud.ops.control import (
     clear_pid,
     control_dir_for,
-    lock_path_for,
     read_pid,
+    request_stop,
     stop_requested,
     write_pid,
 )
+from botgitgud.ops.platform_process import SupervisorLock, pid_is_alive
 
 log = structlog.get_logger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-_STILL_ACTIVE = 259
-
-
-def pid_is_alive(pid: int) -> bool:
-    """`os.kill(pid, 0)` does NOT raise for a dead PID on Windows (verified
-    empirically) — it only works as a liveness probe on POSIX. `OpenProcess` +
-    `GetExitCodeProcess` is the real check.
-    """
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
-        return False
-    try:
-        exit_code = ctypes.c_ulong()
-        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-            return False
-        return exit_code.value == _STILL_ACTIVE
-    finally:
-        kernel32.CloseHandle(handle)
-
 
 def child_command(python_executable: str | None = None) -> list[str]:
     """`sys.executable` (not a hardcoded path, not PATH lookup): whatever
     interpreter is running the supervisor IS the venv interpreter, since the
-    supervisor itself is only ever launched via `.venv\\Scripts\\python.exe`.
+    supervisor itself is only ever launched via the venv's own `python`
+    (`.venv\\Scripts\\python.exe` on Windows, `.venv/bin/python` on Linux).
     """
     return [python_executable or sys.executable, "-m", "botgitgud.cli", "serve"]
 
@@ -152,42 +147,6 @@ def prune_restart_history(history: Sequence[float], *, now: float, window_s: flo
 
 def is_restart_storm(history: Sequence[float], *, threshold: int) -> bool:
     return len(history) >= threshold
-
-
-# -- singleton lock ---------------------------------------------------------------------
-
-
-@dataclass
-class SupervisorLock:
-    """OS-level byte-range lock on `control/supervisor.lock`. Verified
-    empirically: a second `locking()` call on the same byte range — even from
-    the same process re-opening the file — raises `PermissionError`, which is
-    exactly the "someone else already holds this" signal we want.
-    """
-
-    _handle: IO[bytes] | None = None
-
-    def acquire(self, data_dir: Path) -> bool:
-        path = lock_path_for(data_dir)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.touch(exist_ok=True)
-        handle = path.open("r+b")
-        try:
-            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-        except OSError:
-            handle.close()
-            return False
-        self._handle = handle
-        return True
-
-    def release(self) -> None:
-        if self._handle is None:
-            return
-        handle = self._handle
-        with contextlib.suppress(OSError):
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-        handle.close()
-        self._handle = None
 
 
 # -- the loop -----------------------------------------------------------------------------
@@ -324,6 +283,51 @@ def _stop_child_gracefully(
     clear_pid(data_dir)
 
 
+# -- signals (CL.1) -------------------------------------------------------------------
+
+
+def _stop_request_signal_handler(data_dir: Path) -> Callable[[int, object], None]:
+    """The handler `install_signal_handlers` registers — split out as its
+    own factory so a test can call it directly with a fabricated signal
+    number, never depending on real OS signal delivery (which differs too
+    much between platforms to be safe inside a test: `os.kill(pid,
+    SIGTERM)` on Windows calls `TerminateProcess` directly, bypassing any
+    registered Python handler entirely, so a test that tried to prove this
+    via a real delivered signal would just kill itself instead of
+    exercising the handler).
+    """
+
+    def _handle(signum: int, _frame: object) -> None:
+        log.info("supervisor.signal_received", signum=signum)
+        request_stop(data_dir)
+
+    return _handle
+
+
+def install_signal_handlers(data_dir: Path) -> None:
+    """CL.1: converts a delivered `SIGTERM`/`SIGINT` into the SAME
+    `stop.request` file the operator's own scripts already write — never a
+    second stop mechanism, never a direct `child.terminate()` from a
+    handler (signal handlers should do as little as possible; a
+    filesystem write is safe, `_stop_child_gracefully` is not — it sleeps
+    and polls, and running that inside a signal handler would be fragile
+    at best). `run_supervisor_loop`'s existing polling (already tested,
+    unchanged) picks the file up on its very next iteration and follows
+    the exact graceful path it always has.
+
+    Exists for systemd (`systemctl stop` sends `SIGTERM` by default — the
+    unit itself is CL.6, not built here) and for an operator's Ctrl+C on
+    either platform. Registering unconditionally is safe on Windows too:
+    `signal.SIGTERM`/`signal.SIGINT` are valid names there, nothing in
+    practice sends a real `SIGTERM` to this process outside of it, and the
+    existing Windows path (`stop-bot-service.ps1` -> `stop.request`)
+    stays byte-for-byte the same either way.
+    """
+    handler = _stop_request_signal_handler(data_dir)
+    signal.signal(signal.SIGTERM, handler)
+    signal.signal(signal.SIGINT, handler)
+
+
 def recover_stale_pid(data_dir: Path) -> None:
     """Boot-time symmetry with `JobQueue.recover_from_crash()`: a PID file left
     over from an unclean previous shutdown (machine power loss, forced kill)
@@ -365,6 +369,7 @@ def main(
         return 1
 
     try:
+        install_signal_handlers(data_dir)
         recover_stale_pid(data_dir)
         run_supervisor_loop(data_dir, resolved, spawn=spawn_bot_child)
     finally:
