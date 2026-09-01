@@ -684,7 +684,7 @@ de um projeto pessoal/comunidade pequena).
   (fidelidade de coorte vs. tamanho de repositório) para uma coorte inteiramente pet-heavy — um
   valor "razoável" hoje ainda seria arbitrário e ficaria obsoleto assim que outro fixture de spec
   diferente for gravado. Quando a T3.2/T3.3 precisarem de um relatório real colado em
-  `docs/progresso.md` com um Top 3 crível (portão de saída da Fase 3), a extração deve rodar contra
+  `docs/archive/progresso.md` com um Top 3 crível (portão de saída da Fase 3), a extração deve rodar contra
   a API ao vivo (como já foi feito para os relatórios reais colados nos portões de saída da Fase 0
   e Fase 1), não contra este fixture truncado.
 - **Impacto:** nenhum teste trava por causa disso — o snapshot dourado captura o que quer que o

@@ -32,7 +32,7 @@ from botgitgud.ops.preflight import CheckStatus, exit_code_for
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_PATH = REPO_ROOT / "deploy" / "caddy" / "Caddyfile.template"
 SCRIPT_PATH = REPO_ROOT / "deploy" / "activation-readiness.sh"
-RUNBOOK_PATH = REPO_ROOT / "docs" / "cl9b-activation-runbook.md"
+RUNBOOK_PATH = REPO_ROOT / "docs" / "activation-runbook.md"
 
 _VALID_ENV = {
     "DISCORD_TOKEN": "test-discord-value",
@@ -437,7 +437,7 @@ def test_activation_script_contains_no_secret_literal() -> None:
         assert marker not in text
 
 
-# -- docs/cl9b-activation-runbook.md ---------------------------------------------
+# -- docs/activation-runbook.md ---------------------------------------------
 
 
 def _runbook_text() -> str:

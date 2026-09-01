@@ -1,7 +1,7 @@
 """CL.9B — activation readiness: offline gates that a future VM, once
 provisioned, is coherently configured to go from "prepared host" (CL.8) +
 "Caddy template ready" (CL.9A) to an actual public HTTPS endpoint. See
-`docs/cl9b-activation-runbook.md` for the full manual sequence this module
+`docs/activation-runbook.md` for the full manual sequence this module
 gates against — this file only implements the checks explicitly listed as
 safe to run offline there.
 
@@ -25,7 +25,7 @@ mandatory, and no custom port is allowed.
 given a path) and returns a verdict — no subprocess, no socket connect
 beyond what `ops/preflight.py::check_report_server_bind` already does
 (bind-and-immediately-close on loopback), no DNS resolution, no HTTP
-request, no `systemctl`, no firewall command. `docs/cl9b-activation-runbook.md`
+request, no `systemctl`, no firewall command. `docs/activation-runbook.md`
 is the place all of those *mutable* steps live, as an operator's manual
 sequence — deliberately not automated by this module.
 """

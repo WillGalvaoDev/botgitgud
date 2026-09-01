@@ -638,7 +638,7 @@ condições adicionais que impedem um PASS tecnicamente verdadeiro e cientificam
 ## 11. Mudanças de código necessárias — tarefas pequenas e ordenadas
 
 Nenhuma inicia sem aprovação. Cada uma segue o §0.5 (ruff + pyright limpos, suite verde,
-`docs/progresso.md` atualizado, 1 commit por tarefa) e o limite de 300 linhas por arquivo.
+`docs/archive/progresso.md` atualizado, 1 commit por tarefa) e o limite de 300 linhas por arquivo.
 
 | # | Tarefa | Arquivos | Custo API |
 |---|---|---|---|
@@ -714,7 +714,7 @@ separada, sob controle explícito do usuário.
 - Teste: `BudgetStatus.allows("backfill")` é `False` enquanto `allows("analyze")` é `True` na
   faixa entre 25% e 50% — a reserva interativa é comprovadamente preservada.
 - Execução real limitada (`--max-points 500`) ingere ≥ 10 logs válidos e é registrada em
-  `docs/progresso.md` com pontos gastos medidos.
+  `docs/archive/progresso.md` com pontos gastos medidos.
 
 **T-DG.8 — avaliação do gate**
 - Emite literalmente `FASE 4 DATA GATE: PASS` **somente** com P1 ∧ P2 ∧ P3 (§10.3);

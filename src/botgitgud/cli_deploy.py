@@ -130,7 +130,7 @@ def _cmd_deploy_activation_readiness(args: argparse.Namespace) -> int:
     """CL.9B — agrega os gates offline de ativação (CL.8 + CL.9A + a nova
     checagem de coerência domínio↔`REPORT_PUBLIC_BASE_URL`) num único
     relatório. Nunca muta nada, nunca fala com a rede — ver
-    `ops/activation.py` e `docs/cl9b-activation-runbook.md`.
+    `ops/activation.py` e `docs/activation-runbook.md`.
     """
     env_values = parse_env_file(args.env_file) if args.env_file.is_file() else {}
     base_url = env_values.get("REPORT_PUBLIC_BASE_URL", "")

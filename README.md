@@ -91,8 +91,8 @@ tests/
   golden/       snapshots de regressão
   fixtures/     cassettes HTTP gravadas + helpers
 deploy/         systemd unit, Caddy template, scripts de bootstrap/backup/ativação
-docs/           decisões, contratos técnicos, runbooks, relatórios de fase
-legacy/         bot.py original, congelado como referência de comportamento
+docs/           índice em docs/README.md; contratos, runbooks, experimentos, archive/
+legacy/         bot.py original congelado — oracle executável da suíte golden, nunca produção
 ```
 
 ## Execução local
@@ -166,7 +166,7 @@ concorrentes tentando reiniciar o mesmo processo.
 
 Estão prontos e testados offline: bootstrap do host, template de `.env` de produção, preflight,
 unit systemd, backup/restore, template do Caddy e o gate de ativação
-(`docs/cl9b-activation-runbook.md`).
+(`docs/activation-runbook.md`).
 
 **Nada disso está ativo.** Não há VM provisionada, domínio, registro DNS nem certificado TLS
 emitido. O primeiro start de produção está deliberadamente bloqueado por código enquanto
@@ -206,10 +206,14 @@ estatístico; o registry de modelos não é consultado por nenhum caminho de pro
 
 ## Documentação
 
-`docs/` reúne as decisões e contratos técnicos do projeto — entre eles `runbook.md` (operação e
-incidentes), `linux-deployment.md` (deploy Linux/systemd/Caddy), `warehouse-policy.md`,
-`v1-process-supervision.md` e `desvios.md` (registro de desvios em relação ao plano original, com
-a justificativa de cada um).
+**[`docs/README.md`](docs/README.md) é o índice** — ele separa explicitamente a documentação
+operacional vigente dos contratos técnicos, dos experimentos da Fase 4 e dos registros históricos
+(`docs/archive/`), para ninguém executar um procedimento a partir de um documento antigo.
+
+Atalhos: [`runbook.md`](docs/runbook.md) (operação e incidentes),
+[`linux-deployment.md`](docs/linux-deployment.md) (deploy Linux/systemd/Caddy),
+[`activation-runbook.md`](docs/activation-runbook.md) (ativação do endpoint público),
+[`desvios.md`](docs/desvios.md) (registro de desvios, com a justificativa de cada um).
 
 ## Licença
 

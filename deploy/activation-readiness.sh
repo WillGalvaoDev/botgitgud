@@ -9,7 +9,7 @@
 #
 # NUNCA muta nada: nenhum systemctl, nenhuma chamada de rede, nenhum DNS,
 # nenhuma alteração de firewall, nenhuma emissão de capability real. Ver
-# docs/cl9b-activation-runbook.md para a sequência MANUAL completa (que
+# docs/activation-runbook.md para a sequência MANUAL completa (que
 # inclui passos mutáveis) -- este script cobre só a fatia validável offline
 # dela.
 #

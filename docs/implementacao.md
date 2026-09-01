@@ -33,7 +33,7 @@ faça **exatamente isto**:
 1. **Pare a tarefa.**
 2. Adicione uma entrada em `docs/desvios.md` (crie o arquivo se não existir) usando o template do §0.3.
 3. Se existir um caminho alternativo **óbvio e equivalente** (ex.: o campo se chama `fightID` em vez de `fight_id`), aplique-o, documente no desvio e continue.
-4. Se **não** existir caminho óbvio, marque a tarefa como `BLOQUEADA` em `docs/progresso.md` e **pergunte ao usuário**. Enquanto isso, siga para a próxima tarefa que não dependa da bloqueada.
+4. Se **não** existir caminho óbvio, marque a tarefa como `BLOQUEADA` em `docs/archive/progresso.md` e **pergunte ao usuário**. Enquanto isso, siga para a próxima tarefa que não dependa da bloqueada.
 
 ### 0.3 Template de desvio
 
@@ -48,7 +48,7 @@ faça **exatamente isto**:
 
 ### 0.4 Rastreamento de progresso
 
-Crie e mantenha `docs/progresso.md`:
+Crie e mantenha `docs/archive/progresso.md`:
 
 ```markdown
 | Tarefa | Status | Commit | Notas |
@@ -71,7 +71,7 @@ Uma tarefa só está pronta quando **todos** estes itens passam:
 - [ ] `pyright` sem erros nos módulos tocados.
 - [ ] `pytest` verde (todos os testes, não só os novos).
 - [ ] Nenhum segredo novo em arquivo versionado.
-- [ ] `docs/progresso.md` atualizado.
+- [ ] `docs/archive/progresso.md` atualizado.
 - [ ] Commit criado com a mensagem no formato correto.
 
 ---
@@ -303,7 +303,7 @@ markers = ["network: requer acesso real à API (desabilitado por padrão)"]
 
 6. Crie o ambiente e instale: `uv venv && uv pip install -e ".[data,dev]"`.
 
-**⚠️ Ação para o usuário (não é sua):** as credenciais em `.env` estavam em texto claro numa pasta sincronizada com OneDrive. Registre em `docs/progresso.md` a recomendação de **rotacionar as 5 chaves** (Discord, WCL client id/secret, Blizzard client id/secret). Não tente rotacionar você mesmo.
+**⚠️ Ação para o usuário (não é sua):** as credenciais em `.env` estavam em texto claro numa pasta sincronizada com OneDrive. Registre em `docs/archive/progresso.md` a recomendação de **rotacionar as 5 chaves** (Discord, WCL client id/secret, Blizzard client id/secret). Não tente rotacionar você mesmo.
 
 **Critério de aceite:**
 - `git status --porcelain` não lista `.env`.
@@ -835,7 +835,7 @@ Não avance para a Fase 1 sem:
 
 - [ ] Todas as tarefas T0.0–T0.9 com status ✅.
 - [ ] `pytest --cov=src -q` com cobertura ≥ 70% em `src/botgitgud/analysis/`.
-- [ ] Uma execução real de `!analisar` contra um log verdadeiro, com o relatório colado em `docs/progresso.md`.
+- [ ] Uma execução real de `!analisar` contra um log verdadeiro, com o relatório colado em `docs/archive/progresso.md`.
 - [ ] `docs/desvios.md` revisado — nenhum desvio em estado `BLOQUEADO`.
 
 ---
@@ -1042,7 +1042,7 @@ class LogFetcher:
 
 **Critério de aceite:**
 - Teste: chamar `fetch()` duas vezes para o mesmo log → o transporte HTTP mockado registra requisições apenas na primeira.
-- **Teste de aceitação medido:** rodar a mesma análise duas vezes. A segunda execução deve consumir **0 requisições** de log de referência. Registre os números em `docs/progresso.md`.
+- **Teste de aceitação medido:** rodar a mesma análise duas vezes. A segunda execução deve consumir **0 requisições** de log de referência. Registre os números em `docs/archive/progresso.md`.
 
 ---
 
@@ -1129,7 +1129,7 @@ def run_analysis(req: AnalysisRequest, deps: Deps) -> Report: ...
 **Caminho interativo passa a ser:** 1 fetch do log do usuário + 1 lookup de perfil. Se o perfil não existir, o bot informa que a coorte está sendo construída e enfileira o job — **nunca** baixa 100 logs de forma síncrona.
 
 **Critério de aceite:**
-- **Teste de aceitação medido:** com o perfil pré-computado, `!analisar` completa em **< 10 segundos**. Registre o tempo medido em `docs/progresso.md`.
+- **Teste de aceitação medido:** com o perfil pré-computado, `!analisar` completa em **< 10 segundos**. Registre o tempo medido em `docs/archive/progresso.md`.
 - Teste: rodar `build-cohort` duas vezes não altera a contagem de linhas em `logs`.
 
 ---
@@ -1602,7 +1602,7 @@ O relatório completo já não cabe em texto. Gerar HTML autocontido (CSS inline
 ### Portão de saída da Fase 3
 
 - [ ] T3.1–T3.4 ✅.
-- [ ] Um relatório real gerado e colado em `docs/progresso.md`, mostrando Top 3 com ganho estimado.
+- [ ] Um relatório real gerado e colado em `docs/archive/progresso.md`, mostrando Top 3 com ganho estimado.
 - [ ] Identidade da decomposição verificada em teste property-based.
 - [ ] Timing de cooldown é a **última** seção do relatório.
 
@@ -1639,7 +1639,7 @@ Materializar uma tabela de features a partir do store: uma linha por `(log, joga
 
 **Critério de aceite:**
 - Teste: nenhum finding gerado por SHAP referencia uma feature de `NON_CONTROLLABLE`.
-- Métrica de validação (MAE em percentis) registrada em `docs/progresso.md`.
+- Métrica de validação (MAE em percentis) registrada em `docs/archive/progresso.md`.
 
 ---
 
