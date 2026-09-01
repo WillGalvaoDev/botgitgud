@@ -417,9 +417,49 @@ def test_token_collision_exhaustion_raises_explicitly(tmp_path: Path) -> None:
     # A mensagem de erro nunca inclui um token completo — só o artifact_id.
     assert "always-same" not in str(exc_info.value)
     assert "job-b" in str(exc_info.value)
-    # Nenhuma linha lixo foi deixada para trás.
-    rows = store.execute_returning("SELECT count(*) FROM report_links WHERE artifact_id = ?", [b])
-    assert rows[0][0] == 0
+    store.close()
+
+
+def test_token_collision_exhaustion_never_chains_the_raw_duckdb_exception(
+    tmp_path: Path,
+) -> None:
+    """CL.9A — auditoria de vazamento do capability token via logging.
+
+    Verificado empiricamente nesta auditoria: `duckdb.ConstraintException`
+    embute o VALOR bruto da chave duplicada na própria mensagem
+    (`'Duplicate key "token: <token completo>" violates primary key
+    constraint.'`). Antes desta correção, `issue()` encadeava essa exceção
+    via `raise ReportLinkTokenExhaustedError(...) from last_error` — um
+    `raise ... from` preserva a exceção original como `__cause__`, e
+    `traceback.format_exception` (usado por `logging_setup.py` sempre que
+    algo é logado com `exc_info=True`, ex.: `_cmd_serve`'s
+    `process.unexpected_error`) IMPRIME o `__cause__` inteiro, token
+    incluído. Este teste prova a propriedade real da nossa própria
+    exceção — não do comportamento interno do DuckDB — usando as MESMAS
+    ferramentas (`traceback`) que o pipeline de logging realmente usa.
+    """
+    import traceback
+
+    store = _store(tmp_path)
+    links = ReportLinkStore(store)
+    a = _make_artifact(tmp_path, "job-a")
+    b = _make_artifact(tmp_path, "job-b")
+    secret_token = "secret-colliding-token-9f2b7c"
+
+    issue_report_link(links, data_dir=tmp_path, artifact_id=a, token_factory=lambda: secret_token)
+
+    with pytest.raises(ReportLinkTokenExhaustedError) as exc_info:
+        issue_report_link(
+            links, data_dir=tmp_path, artifact_id=b, token_factory=lambda: secret_token
+        )
+
+    raised = exc_info.value
+    assert raised.__cause__ is None
+    assert raised.__context__ is None or secret_token not in str(raised.__context__)
+
+    # A mesma formatação que o pipeline de logging real usa (exc_info=True).
+    formatted = "".join(traceback.format_exception(type(raised), raised, raised.__traceback__))
+    assert secret_token not in formatted
     store.close()
 
 

@@ -228,7 +228,7 @@ class ReportLinkStore:
                 )
                 return existing
 
-            last_error: Exception | None = None
+            collisions = 0
             for attempt in range(_MAX_TOKEN_GENERATION_ATTEMPTS):
                 token = factory()
                 try:
@@ -237,8 +237,19 @@ class ReportLinkStore:
                         "VALUES (?, ?, ?, ?)",
                         [token, artifact_id, resolved_now, expires_at],
                     )
-                except duckdb.ConstraintException as exc:
-                    last_error = exc
+                except duckdb.ConstraintException:
+                    # NUNCA encadear a exceção original (`from exc`) nem
+                    # guardá-la: verificado empiricamente nesta auditoria
+                    # (CL.9A) que `duckdb.ConstraintException.args[0]`
+                    # inclui o VALOR bruto que violou a constraint —
+                    # `'Duplicate key "token: <token completo>" ...'`. Um
+                    # `raise ... from exc` faria esse texto reaparecer
+                    # inteiro em qualquer traceback formatado com
+                    # `exc_info=True` (ex.: `_cmd_serve`'s
+                    # `process.unexpected_error`). O log estruturado abaixo
+                    # já carrega tudo que é preciso para diagnosticar
+                    # (artifact_id, contagem de tentativas) sem o token.
+                    collisions += 1
                     log.warning(
                         "report_link.token_collision",
                         artifact_id=artifact_id,
@@ -260,8 +271,8 @@ class ReportLinkStore:
 
         raise ReportLinkTokenExhaustedError(
             f"não foi possível gerar um token único para {artifact_id!r} após "
-            f"{_MAX_TOKEN_GENERATION_ATTEMPTS} tentativas"
-        ) from last_error
+            f"{collisions} colisões consecutivas"
+        ) from None
 
     def resolve(self, token: str, *, now: datetime | None = None) -> ReportLinkResolution:
         """Nunca apaga um token expirado — só distingue. `purge_expired`

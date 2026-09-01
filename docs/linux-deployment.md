@@ -10,29 +10,35 @@ Scheduler + PowerShell — and the scripted deploy preparation around it.
 | Stage | Status | Where |
 |---|---|---|
 | Bootstrap, `.env` template, preflight, systemd install, backup/restore | **Ready and tested offline** (CL.8) | `deploy/` |
+| Caddy reverse-proxy template, capability-token log/header contract | **Ready and tested offline** (CL.9A) | `deploy/caddy/`, `deploy/install-caddy.sh` |
 | Provisioning the Oracle VM, SSH access | **Blocked on the VM existing** (CL.7) | manual, see `docs/` roadmap |
-| DuckDNS hostname, Caddy reverse proxy, HTTPS, opening 80/443 | **Out of scope here**, future ticket (CL.9+) | not covered here, not implemented anywhere yet |
-| **First production start of the bot** | **Blocked until CL.9** — see below | — |
+| Installing Caddy for real, binding 443/80, first TLS certificate | **Blocked on the VM existing** (CL.9A install step) | `deploy/install-caddy.sh`, run on the VM |
+| DuckDNS hostname, DNS `A` record | **Out of scope here**, future ticket (CL.9B) | not automated anywhere yet |
+| **First production start of the bot** | **Blocked until CL.9B** — see below | — |
 
-> ### The first production start is blocked until CL.9
+> ### The first production start is blocked until CL.9B (DNS)
 >
 > Capability-link delivery (CL.5) requires a valid `REPORT_PUBLIC_BASE_URL`. `build_bot()`
 > validates it at boot and fails loudly rather than emitting broken links — so starting the service
 > without a real public domain produces a crash-loop and, on the fifth restart, a storm-breaker
-> giveup. That domain does not exist until CL.9 (DuckDNS/Caddy/HTTPS).
+> giveup. That domain does not exist until CL.9B (DuckDNS) points a hostname at the VM's public IP
+> and Caddy obtains a real certificate for it.
 >
-> **What CL.8 delivers is a fully prepared host, not a running bot.** Bootstrap, preflight,
-> install and `enable` all complete; only `start` is gated. This is enforced in code, not just
-> documented: `install-systemd.sh --start` validates with `--production`, which turns an empty
-> `REPORT_PUBLIC_BASE_URL` into an error.
+> **What CL.8 + CL.9A deliver is a fully prepared host and reverse-proxy template, not a running
+> bot or a live HTTPS endpoint.** Bootstrap, preflight, systemd install/`enable`, and the Caddy
+> template/renderer are all ready and offline-tested; only the bot's `start` and Caddy's real
+> installation/certificate issuance are gated on the VM and DNS existing. This is enforced in code,
+> not just documented: `install-systemd.sh --start` validates with `--production`, which turns an
+> empty `REPORT_PUBLIC_BASE_URL` into an error; `install-caddy.sh` refuses to run without an
+> explicit `--domain`.
 >
-> Do **not** work around this by inventing a placeholder URL. A wrong base URL produces reports
-> whose links silently point nowhere — strictly worse than a service that has not started.
+> Do **not** work around this by inventing a placeholder URL or domain. A wrong base URL produces
+> reports whose links silently point nowhere — strictly worse than a service that has not started.
 
 Everything under `deploy/` is exercised by the offline suite (`tests/unit/test_deploy_prep.py`,
-`tests/unit/test_deploy_scripts.py`, `tests/unit/test_systemd_unit.py`) and needs no network, no
-root and no systemd to be verified. The scripts themselves, of course, only *run* on the target
-host.
+`tests/unit/test_deploy_scripts.py`, `tests/unit/test_systemd_unit.py`,
+`tests/unit/test_caddy_deploy.py`) and needs no network, no root, no systemd and no `caddy` binary
+to be verified. The scripts themselves, of course, only *run* on the target host.
 
 ## Architecture
 
@@ -310,6 +316,154 @@ Always stop before touching `/opt/botgitgud` — single-owner warehouse (`docs/w
 ```
 
 A future Caddy needs read access to none of it — it only reverse-proxies to `127.0.0.1:8080`.
+
+## CL.9A — Public HTTPS ingress (Caddy)
+
+```
+Internet -> HTTPS :443 -> Caddy -> 127.0.0.1:8080 -> ReportServer (CL.3)
+```
+
+The `ReportServer` (`bot/report_server.py`) does not change: it still binds only to
+`127.0.0.1:8080` (CL.3/CL.5, unmodified). Caddy is the one and only process this architecture
+allows to face the Internet.
+
+### OFFLINE AGORA (ready and tested without the VM)
+
+- `deploy/caddy/Caddyfile.template` — reverse-proxy template. `reverse_proxy` targets exactly
+  `127.0.0.1:8080`; only `path /r/*` is forwarded; everything else (`/healthz` included) falls
+  through to a generic `respond 404`, deny-by-default. No `log` block, no `redir`, no
+  `header_up`/`header_down`, no `tls internal` — see "Capability token and logs" below.
+- `src/botgitgud/ops/caddy_config.py` — pure domain validation (`validate_caddy_domain`) and
+  template rendering (`render_caddyfile`), the same "policy in Python, thin shell wrapper" split as
+  CL.6/CL.8. Rejects an empty domain, the literal placeholder, a scheme/port/path/whitespace, and
+  (found during this round's own review) enforces the placeholder appears **exactly once** in the
+  template — a naive `str.replace` with two occurrences corrupted an explanatory comment the first
+  time this was written; the renderer now refuses to render a template shaped like that.
+- `deploy/install-caddy.sh` — validates before installing, never overwrites a differing config
+  without `--force`, never reloads without `--reload`, never installs the `caddy` package itself
+  without `--install-package` (the only path that touches the network), never starts
+  `botgitgud.service`, never touches SSH or a firewall.
+- `tests/unit/test_caddy_deploy.py` — the contract above as offline, parametrized guards.
+
+### DEPENDE DA VM (blocked until CL.7's Oracle instance exists)
+
+- Installing the real `caddy` binary (`install-caddy.sh --install-package`, needs network).
+- Running `deploy-render-caddyfile` + `caddy validate` + installing to `/etc/caddy/Caddyfile` for
+  real.
+- Binding `:80`/`:443` for real traffic.
+
+### DEPENDE DE DNS (CL.9B, not started here)
+
+- A DuckDNS hostname (or equivalent) with an `A` record pointing at the VM's public IPv4.
+- Caddy's first real ACME/Let's Encrypt certificate issuance (needs the domain to already resolve
+  and port 80 reachable for the HTTP-01 challenge).
+- Setting the final `REPORT_PUBLIC_BASE_URL=https://<real-domain>` in `/opt/botgitgud/.env` — see
+  "Setting `REPORT_PUBLIC_BASE_URL`" below.
+- The first production `systemctl start botgitgud`.
+
+### Installing Caddy (future, on the VM)
+
+```bash
+sudo ./deploy/install-caddy.sh --domain example.duckdns.org --install-package
+# review the diff shown, then, once satisfied:
+sudo ./deploy/install-caddy.sh --domain example.duckdns.org --reload
+```
+
+Without `--domain`, the script refuses immediately — CL.9A never defaults to a fictional
+production domain. Without `--install-package`, it skips `apt-get`/network entirely and just
+renders + validates (when `caddy` is already present) + installs the config file; without
+`--reload`, Caddy is never told to pick up the new config. Each flag is a deliberate, separate
+gesture — never bundled into one "just do everything" invocation.
+
+### Setting `REPORT_PUBLIC_BASE_URL`
+
+Once — and only once — DNS resolves and Caddy has issued a real certificate:
+
+```bash
+sudo -u botgitgud "$EDITOR" /opt/botgitgud/.env
+# REPORT_PUBLIC_BASE_URL=https://example.duckdns.org
+
+/opt/botgitgud/.venv/bin/python -m botgitgud.cli deploy-validate-env \
+    --env-file /opt/botgitgud/.env --production
+sudo ./deploy/install-systemd.sh --start
+```
+
+CL.8's `--production` gate (`ops/deploy.py::validate_env_values`) remains the sole authority on
+production readiness — CL.9A does not add a second gate or duplicate that validation. It only
+makes the URL this gate demands actually reachable.
+
+### Capability token and logs
+
+`/r/{token}` carries a bearer capability in the path — anything that persists that path persists
+the secret. Audited and enforced by the template:
+
+| Concern | How it's handled |
+|---|---|
+| Caddy access log | No `log` block in the site. Access logging in Caddy is opt-in (confirmed against the official Caddyfile `log` directive reference): without that block, Caddy writes no per-request access-log entry for this site at all — not merely a redacted one. |
+| Query-string / alternate routing | None added — `reverse_proxy` forwards the original request unmodified; no `rewrite` directive exists. |
+| Redirects | None — a `redir` that echoed the path (e.g. a trailing-slash normalizer) could leak the token into a `Location` header or an intermediary's log; the template has no `redir` directive at all. |
+| Headers | No `header_up`/`header_down` — the security headers `bot/report_server.py` already sets (`X-Content-Type-Options`, `Content-Security-Policy`, `Referrer-Policy: no-referrer`, `Cache-Control: private, no-store`) pass through to the client unmodified; Caddy adds nothing that would override them. |
+| `/healthz` | Not proxied at all — falls through to the generic `respond 404`, same as any unmatched path. The internal health check stays reachable only via `127.0.0.1:8080/healthz` (SSH), never through the public domain. |
+| TLS | Caddy's automatic ACME/Let's Encrypt only — no `tls internal`, no manually-managed certificate file. |
+| Our own code (`ReportServer`, `ReportLinkStore`) | Audited this round. `_handle_report`'s catch-all logs only `token_fingerprint` (`bot/report_server.py`). One real gap found and fixed: `ReportLinkStore.issue()`'s token-collision-exhausted path used to chain the raw `duckdb.ConstraintException` as the exception's `__cause__` — verified empirically that DuckDB embeds the literal offending value in that exception's message (`'Duplicate key "token: <full token>" ...'`), which `exc_info=True` logging would have printed in full. Fixed by raising `from None` instead of chaining it; see `bot/report_links.py` and the regression test in `test_report_links.py`. This path only triggers after five consecutive collisions of a 256-bit random token, but the fix costs nothing and closes a real (if astronomically unlikely) leak vector. |
+
+### Threat model: Caddy's own error log — what we can and cannot guarantee
+
+The access-log claim above is something we can prove: it's a static property of our own committed
+Caddyfile, verified against official Caddy documentation. The following is a different, narrower
+class of risk that we audited but **cannot** close with equal confidence, and we say so plainly
+rather than asserting a guarantee we can't back up.
+
+**What we confirmed (official docs + multiple independent real-world reports):** Caddy's HTTP
+server has a separate error-level logger (`http.log.error`) that is active independent of whether a
+site has an access `log` block configured. It fires when `reverse_proxy` cannot reach its upstream
+— i.e. exactly the scenario where `127.0.0.1:8080` is unreachable because the bot process is down
+(a normal, expected state during a deploy/restart window, not a rare edge case). This goes to
+stderr, which under systemd lands in `journalctl -u caddy`.
+
+**What we could not confirm either way:** whether that specific error-log entry includes the
+request's URI (and therefore the capability token). Real-world examples we found are inconsistent:
+some show a bare message with no request object at all (`{"logger":"http.log.error","msg":"dial
+tcp ...: connection refused"}`); other Caddy error-logging code paths documented in the same source
+tree do attach a structured request object (which includes a `uri` field) to error log entries in
+other circumstances. We do not have a citable, version-pinned source that settles which shape
+applies to a bare `reverse_proxy` dial failure in the Caddy version that will actually run on the
+VM. **We are not going to claim a guarantee here we can't verify.**
+
+**Precisely scoped, though**: this risk exists *only* while the upstream is unreachable. A live
+`ReportServer` answering normally — 200, 404, or 410 — is proxied through transparently and hits
+neither this error logger (which is for Caddy-level failures, not application HTTP status codes)
+nor the access logger (disabled above). The exposure window is "bot is down and someone requests a
+specific `/r/{token}` URL during that window," not "every request that ever reaches Caddy."
+
+**No verified Caddyfile-only mitigation exists.** We looked for one and are not introducing it
+without a documented directive to point to — the ticket that raised this explicitly forbids
+inventing Caddy configuration. Silencing all error-level logging would also remove the "upstream
+down" signal operators actually need, trading real observability for an unverified confidentiality
+gain — not an acceptable trade per this project's own stated preference.
+
+**The control we do have and already rely on**: capability tokens are time-bounded by CL.2
+(`DEFAULT_REPORT_LINK_TTL_DAYS = 30`, `bot/report_links.py`). A worst-case appearance of a token in
+Caddy's own journal has a known, bounded validity window — it is not a permanent secret. This is an
+existing property of the system, not a new mechanism introduced to compensate for this finding.
+
+**Operator guidance (documentation only, nothing automated by this ticket)**: treat the systemd
+journal on the production host with the same handling discipline as any other secret-adjacent log
+— `journalctl` access is root/`adm`-group-restricted by default on Ubuntu; if a log aggregator is
+ever added downstream of the journal, confirm it does not forward `http.log.error` content for the
+Caddy unit without first checking this specific risk.
+
+### Firewall (documented only — nothing opened by this ticket)
+
+| Port | Future policy |
+|---|---|
+| `22/tcp` | Restricted to the administrative IP, per current policy (unchanged by CL.9A). |
+| `80/tcp` | Needed once Caddy is live, for the ACME HTTP-01 challenge and the plain-HTTP-to-HTTPS redirect Caddy manages automatically. |
+| `443/tcp` | The public HTTPS endpoint. |
+| `8080/tcp` | **Never public.** Loopback-only, exactly as CL.3/CL.5 already require — this ticket does not change that, and no script here opens it. |
+
+No OCI Security List, `ufw`, or `iptables` rule is created by this ticket — provisioning the actual
+firewall is CL.7/CL.9B's job, on the real VM.
 
 ## Windows stays available
 

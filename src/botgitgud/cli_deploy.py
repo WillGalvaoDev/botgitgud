@@ -16,6 +16,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from botgitgud.ops.caddy_config import CaddyDomainError, render_caddyfile
 from botgitgud.ops.deploy import (
     BACKUP_EXCLUSION_REASONS,
     BackupError,
@@ -101,6 +102,26 @@ def _cmd_deploy_list_backups(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_deploy_render_caddyfile(args: argparse.Namespace) -> int:
+    """`deploy/install-caddy.sh` chama isto — o domínio nunca é substituído
+    à mão no template versionado. Domínio não é segredo (é um nome DNS
+    público por definição), então não há nada a redigir na saída.
+    """
+    template_text = args.template.read_text(encoding="utf-8")
+    try:
+        rendered = render_caddyfile(template_text, args.domain)
+    except CaddyDomainError as exc:
+        sys.stderr.write(f"erro: {exc}\n")
+        return 1
+    if args.out is None:
+        sys.stdout.write(rendered)
+        return 0
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(rendered, encoding="utf-8")
+    sys.stdout.write(f"rendered={args.out}\n")
+    return 0
+
+
 def add_deploy_parsers(
     sub: argparse._SubParsersAction[argparse.ArgumentParser],  # type: ignore[name-defined]
 ) -> None:
@@ -150,3 +171,16 @@ def add_deploy_parsers(
     listing = sub.add_parser("deploy-list-backups", help="Lista backups, mais recente primeiro.")
     listing.add_argument("--dest", type=Path, default=Path("backups"))
     listing.set_defaults(func=_cmd_deploy_list_backups)
+
+    caddy = sub.add_parser(
+        "deploy-render-caddyfile",
+        help="Substitui o placeholder de domínio no template do Caddy (CL.9A).",
+    )
+    caddy.add_argument("--domain", required=True, help="Domínio real — nunca um valor inventado.")
+    caddy.add_argument(
+        "--template", type=Path, default=REPO_ROOT / "deploy" / "caddy" / "Caddyfile.template"
+    )
+    caddy.add_argument(
+        "--out", type=Path, default=None, help="Arquivo de saída; omitido imprime em stdout."
+    )
+    caddy.set_defaults(func=_cmd_deploy_render_caddyfile)
