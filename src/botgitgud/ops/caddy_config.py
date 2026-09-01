@@ -64,6 +64,58 @@ def validate_caddy_domain(domain: str | None) -> str:
     return candidate
 
 
+def caddyfile_contract_violations(text: str) -> tuple[str, ...]:
+    """CL.9B — o mesmo contrato que `tests/unit/test_caddy_deploy.py` prova
+    estaticamente sobre o TEMPLATE, generalizado para uma função reusável
+    que também roda sobre um Caddyfile já RENDERIZADO (domínio real, sem
+    `DOMAIN_PLACEHOLDER`) — a activation readiness (`ops/activation.py`)
+    chama isto antes de considerar o Caddy pronto para ativar.
+
+    Puro: só string parsing sobre o texto recebido, nenhum I/O, nenhuma
+    chamada ao binário `caddy` — isso continua sendo `caddy validate`
+    (`deploy/install-caddy.sh`), uma camada complementar que este módulo
+    nunca substitui. Devolve uma tupla de violações; vazia significa "sem
+    problemas encontrados por esta checagem" (não uma prova formal de que
+    o arquivo é válido para o Caddy real).
+    """
+    violations: list[str] = []
+    directives = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+    if DOMAIN_PLACEHOLDER in text:
+        violations.append(
+            f"placeholder {DOMAIN_PLACEHOLDER!r} ainda presente — Caddyfile não foi renderizado"
+        )
+
+    proxy_lines = [d for d in directives if d.startswith("reverse_proxy")]
+    if len(proxy_lines) != 1:
+        violations.append(
+            f"esperada exatamente 1 diretiva reverse_proxy, encontradas {len(proxy_lines)}"
+        )
+    elif proxy_lines[0] != "reverse_proxy @report_link 127.0.0.1:8080":
+        violations.append(
+            f"reverse_proxy não aponta exclusivamente para 127.0.0.1:8080: {proxy_lines[0]!r}"
+        )
+
+    for directive in directives:
+        if "0.0.0.0" in directive:
+            violations.append(f"diretiva expõe 0.0.0.0: {directive!r}")
+        if "healthz" in directive.lower():
+            violations.append(f"/healthz roteado por uma diretiva: {directive!r}")
+        if directive.startswith("log") or "log {" in directive:
+            violations.append(f"bloco de access log presente: {directive!r}")
+        if directive.startswith("redir"):
+            violations.append(f"diretiva de redirect presente: {directive!r}")
+
+    if "respond 404" not in directives:
+        violations.append("deny-by-default (respond 404) ausente")
+
+    return tuple(violations)
+
+
 def render_caddyfile(template: str, domain: str) -> str:
     """Substitui `DOMAIN_PLACEHOLDER` pelo domínio validado.
 

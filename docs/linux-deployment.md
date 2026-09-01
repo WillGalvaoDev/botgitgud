@@ -2,7 +2,9 @@
 
 Companion to `docs/v1-process-supervision.md` (the authority on the supervision *policy*:
 restart/backoff/storm-breaker/clean-stop, all in `src/botgitgud/ops/supervisor.py`,
-platform-independent). This document covers the Linux *launcher* — systemd instead of Task
+platform-independent) and to `docs/cl9b-activation-runbook.md` (the canonical step-by-step sequence
+for turning a provisioned VM into a live public HTTPS endpoint, plus the external validation plan
+and rollback procedure). This document covers the Linux *launcher* — systemd instead of Task
 Scheduler + PowerShell — and the scripted deploy preparation around it.
 
 ## What is ready now vs. what waits for the VM
@@ -11,10 +13,12 @@ Scheduler + PowerShell — and the scripted deploy preparation around it.
 |---|---|---|
 | Bootstrap, `.env` template, preflight, systemd install, backup/restore | **Ready and tested offline** (CL.8) | `deploy/` |
 | Caddy reverse-proxy template, capability-token log/header contract | **Ready and tested offline** (CL.9A) | `deploy/caddy/`, `deploy/install-caddy.sh` |
+| Activation runbook, domain↔`REPORT_PUBLIC_BASE_URL` coherence gate | **Ready and tested offline** (CL.9B) | `docs/cl9b-activation-runbook.md`, `deploy/activation-readiness.sh` |
 | Provisioning the Oracle VM, SSH access | **Blocked on the VM existing** (CL.7) | manual, see `docs/` roadmap |
 | Installing Caddy for real, binding 443/80, first TLS certificate | **Blocked on the VM existing** (CL.9A install step) | `deploy/install-caddy.sh`, run on the VM |
-| DuckDNS hostname, DNS `A` record | **Out of scope here**, future ticket (CL.9B) | not automated anywhere yet |
-| **First production start of the bot** | **Blocked until CL.9B** — see below | — |
+| DuckDNS hostname, DNS `A` record, opening 80/443 in OCI | **Blocked on the VM existing**, manual (CL.9B) | `docs/cl9b-activation-runbook.md` |
+| External validation (DNS/ports/TLS/routes/headers/Discord) | **Blocked on the VM + DNS existing** — plan documented, not executed | `docs/cl9b-activation-runbook.md` |
+| **First production start of the bot** | **Blocked until DNS + TLS are real** — see below | — |
 
 > ### The first production start is blocked until CL.9B (DNS)
 >

@@ -16,12 +16,14 @@ import argparse
 import sys
 from pathlib import Path
 
+from botgitgud.ops.activation import run_activation_readiness
 from botgitgud.ops.caddy_config import CaddyDomainError, render_caddyfile
 from botgitgud.ops.deploy import (
     BACKUP_EXCLUSION_REASONS,
     BackupError,
     create_backup,
     list_backups,
+    parse_env_file,
     restore_backup,
     validate_env_file,
 )
@@ -122,6 +124,32 @@ def _cmd_deploy_render_caddyfile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_deploy_activation_readiness(args: argparse.Namespace) -> int:
+    """CL.9B — agrega os gates offline de ativação (CL.8 + CL.9A + a nova
+    checagem de coerência domínio↔`REPORT_PUBLIC_BASE_URL`) num único
+    relatório. Nunca muta nada, nunca fala com a rede — ver
+    `ops/activation.py` e `docs/cl9b-activation-runbook.md`.
+    """
+    env_values = parse_env_file(args.env_file) if args.env_file.is_file() else {}
+    base_url = env_values.get("REPORT_PUBLIC_BASE_URL", "")
+
+    results = run_activation_readiness(
+        data_dir=args.data_dir,
+        env_path=args.env_file,
+        repo_root=args.repo_root,
+        domain=args.domain,
+        caddyfile_path=args.caddyfile,
+        base_url=base_url,
+        report_server_host=args.report_server_host,
+        report_server_port=args.report_server_port,
+    )
+    for result in results:
+        sys.stdout.write(f"[{_STATUS_LABEL[result.status]}] {result.name}: {result.detail}\n")
+    code = exit_code_for(results)
+    sys.stdout.write("activation_readiness=" + ("failed" if code else "passed") + "\n")
+    return code
+
+
 def add_deploy_parsers(
     sub: argparse._SubParsersAction[argparse.ArgumentParser],  # type: ignore[name-defined]
 ) -> None:
@@ -184,3 +212,23 @@ def add_deploy_parsers(
         "--out", type=Path, default=None, help="Arquivo de saída; omitido imprime em stdout."
     )
     caddy.set_defaults(func=_cmd_deploy_render_caddyfile)
+
+    activation = sub.add_parser(
+        "deploy-activation-readiness",
+        help="Gates offline de ativação (CL.9B) — nunca muta nada, nunca fala com a rede.",
+    )
+    activation.add_argument("--data-dir", type=Path, default=Path("data"))
+    activation.add_argument("--env-file", type=Path, default=Path(".env"))
+    activation.add_argument("--repo-root", type=Path, default=REPO_ROOT)
+    activation.add_argument("--report-server-host", default="127.0.0.1")
+    activation.add_argument("--report-server-port", type=int, default=8080)
+    activation.add_argument(
+        "--domain", required=True, help="Domínio configurado no Caddy — nunca um valor inventado."
+    )
+    activation.add_argument(
+        "--caddyfile",
+        type=Path,
+        required=True,
+        help="Caddyfile já renderizado (domínio real, não o template) a validar.",
+    )
+    activation.set_defaults(func=_cmd_deploy_activation_readiness)
