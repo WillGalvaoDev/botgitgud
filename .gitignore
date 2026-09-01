@@ -4,6 +4,11 @@ venv/
 __pycache__/
 *.py[cod]
 data/
+# CL.8: `deploy-backup` tem --dest relativo por padrao. Rodado da raiz do
+# repositorio, ele criaria aqui um arquivo com o warehouse e os relatorios
+# inteiros -- nunca versionavel.
+backups/
+botgitgud-backup-*.tar.gz
 .pytest_cache/
 .ruff_cache/
 .coverage

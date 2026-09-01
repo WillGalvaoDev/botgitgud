@@ -1,13 +1,38 @@
-# CL.6 — Linux/systemd deployment
+# Linux/systemd deployment
 
-Companion to `docs/v1-process-supervision.md` (which stays the authority on the supervision
-*policy*: restart/backoff/storm-breaker/clean-stop, all in `src/botgitgud/ops/supervisor.py`,
-platform-independent). This document only covers the Linux-specific *launcher* — systemd instead
-of Task Scheduler + PowerShell — and does not repeat policy details already documented there.
+Companion to `docs/v1-process-supervision.md` (the authority on the supervision *policy*:
+restart/backoff/storm-breaker/clean-stop, all in `src/botgitgud/ops/supervisor.py`,
+platform-independent). This document covers the Linux *launcher* — systemd instead of Task
+Scheduler + PowerShell — and the scripted deploy preparation around it.
 
-**Not covered here, on purpose** (out of scope for this ticket): creating the cloud VM, DuckDNS,
-Caddy/reverse-proxy/TLS. Those come later, in the infrastructure ticket. This document only gets
-the bot running locally on a Linux host under systemd, with the report server bound to loopback.
+## What is ready now vs. what waits for the VM
+
+| Stage | Status | Where |
+|---|---|---|
+| Bootstrap, `.env` template, preflight, systemd install, backup/restore | **Ready and tested offline** (CL.8) | `deploy/` |
+| Provisioning the Oracle VM, SSH access | **Blocked on the VM existing** (CL.7) | manual, see `docs/` roadmap |
+| DuckDNS hostname, Caddy reverse proxy, HTTPS, opening 80/443 | **Out of scope here**, future ticket (CL.9+) | not covered here, not implemented anywhere yet |
+| **First production start of the bot** | **Blocked until CL.9** — see below | — |
+
+> ### The first production start is blocked until CL.9
+>
+> Capability-link delivery (CL.5) requires a valid `REPORT_PUBLIC_BASE_URL`. `build_bot()`
+> validates it at boot and fails loudly rather than emitting broken links — so starting the service
+> without a real public domain produces a crash-loop and, on the fifth restart, a storm-breaker
+> giveup. That domain does not exist until CL.9 (DuckDNS/Caddy/HTTPS).
+>
+> **What CL.8 delivers is a fully prepared host, not a running bot.** Bootstrap, preflight,
+> install and `enable` all complete; only `start` is gated. This is enforced in code, not just
+> documented: `install-systemd.sh --start` validates with `--production`, which turns an empty
+> `REPORT_PUBLIC_BASE_URL` into an error.
+>
+> Do **not** work around this by inventing a placeholder URL. A wrong base URL produces reports
+> whose links silently point nowhere — strictly worse than a service that has not started.
+
+Everything under `deploy/` is exercised by the offline suite (`tests/unit/test_deploy_prep.py`,
+`tests/unit/test_deploy_scripts.py`, `tests/unit/test_systemd_unit.py`) and needs no network, no
+root and no systemd to be verified. The scripts themselves, of course, only *run* on the target
+host.
 
 ## Architecture
 
@@ -24,130 +49,149 @@ child directly — that decision (backoff, storm-breaker, clean-stop via `contro
 belongs entirely to `ops/supervisor.py`, exactly as it already does on Windows. Two competing
 restart layers is exactly what this design avoids.
 
-## 1. Create the service user
+## Deploy flow
 
-No home directory, no login shell — this account only ever runs one command:
-
-```bash
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin botgitgud
+```
+bootstrap  ->  configure .env  ->  preflight  ->  install systemd  ->  start
+                                                                        |
+                                            health check  <-------------+
+                                                                        |
+                                       stop / restart / backup / restore
 ```
 
-`--no-create-home` matters beyond hygiene: the systemd unit sets `ProtectHome=true`, which hides
-`/home`, `/root`, and `/run/user/*` from the service. If this user's home directory lived under
-`/opt/botgitgud`, `ProtectHome` would never touch it (it isn't one of those three paths) — but
-giving the service account a home directory at all invites exactly that class of mistake later.
-Keeping it homeless removes the question.
+### 0. Stage the source tree (operator, before bootstrap)
 
-## 2. Copy the repository
+`bootstrap-linux.sh` does **not** fetch code — no `git clone`, no download, no network. Put the
+tree at `/opt/botgitgud` first:
 
 ```bash
 sudo mkdir -p /opt/botgitgud
-sudo chown botgitgud:botgitgud /opt/botgitgud
-sudo -u botgitgud git clone <repo-url> /opt/botgitgud/repo   # or: rsync a deploy artifact in
+sudo git clone <repo-url> /opt/botgitgud      # or: rsync -a ./ host:/opt/botgitgud
 ```
 
-Adjust the checkout layout to taste — the unit only cares that the final tree lands at
-`/opt/botgitgud` with `pyproject.toml` at its root (see `WorkingDirectory` in the unit file).
+`/opt/botgitgud` must be the **repository root**. Bootstrap verifies four marker files
+(`pyproject.toml`, `src/botgitgud/__init__.py`, `src/botgitgud/cli.py`,
+`deploy/systemd/botgitgud.service`) and refuses with an actionable message if any is missing — an
+interrupted rsync or a wrong checkout fails there, cheaply, instead of halfway through `pip
+install`.
 
-## 3. Create the venv and install
+### 1. Bootstrap the host
 
 ```bash
-cd /opt/botgitgud
-sudo -u botgitgud python3 -m venv .venv
-sudo -u botgitgud .venv/bin/pip install -e .
+sudo ./deploy/bootstrap-linux.sh            # add --with-apt to let it install system packages
+sudo ./deploy/bootstrap-linux.sh --repo-dir /srv/botgitgud   # non-default root
 ```
 
-Any Python **3.12 or 3.13** on the host works — `pyproject.toml` declares `requires-python =
-">=3.11"` and nothing in the codebase requires 3.14. Don't add a PPA or build Python from source
-unless the distro's own package is genuinely older than 3.11; Ubuntu Server (current LTS) ships a
-compatible `python3` already.
+Idempotent. Creates the `botgitgud` system user/group (no home, no login shell — paired with
+`ProtectHome=true` in the unit), creates `/opt/botgitgud/data` and every persistent subdirectory,
+sets ownership and permissions (`750` on data, `600` on `.env` if present), verifies the minimum
+system dependencies, creates `.venv`, and installs the package.
 
-There is no `uv.lock` in this repository (deliberately out of scope for this ticket — see
-`pyproject.toml`'s version ranges). This means a fresh install can, in principle, resolve slightly
-different dependency versions on a different day. If that risk ever becomes a real incident,
-introduce dependency pinning as its own ticket — don't reach for it here.
+The install target is the **explicit path** (`pip install -e "${REPO_DIR}"`), never `-e .` — a `.`
+would resolve against the caller's working directory, so a `sudo` from elsewhere would install a
+different tree, or fail without saying why. After installing, bootstrap asserts that
+`botgitgud.__file__` actually resolves back to `${REPO_DIR}`, which catches a venv carrying an
+older editable install pointing at another checkout.
 
-## 4. Create `.env`
+It deliberately does **not**: write any secret, invent `.env` values, open a port, touch the
+firewall or SSH, install Caddy, fetch code, or start the service.
+
+### 2. Configure `.env`
 
 ```bash
-sudo -u botgitgud cp .env.example .env
-sudo -u botgitgud chmod 600 .env
-sudo -u botgitgud "$EDITOR" .env   # fill in real credentials
+sudo -u botgitgud cp deploy/env.example /opt/botgitgud/.env
+sudo -u botgitgud chmod 600 /opt/botgitgud/.env
+sudo -u botgitgud "$EDITOR" /opt/botgitgud/.env
 ```
 
-At minimum, set real values for `DISCORD_TOKEN`, `WCL_CLIENT_ID`, `WCL_CLIENT_SECRET`,
-`BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET`. Also set:
+`deploy/env.example` is the **production subset** — only the variables a deploy actually has to
+decide. (The repo-root `.env.example` is the development reference that documents every `Settings`
+field; it is verified by its own test. Two files, two audiences.)
+
+Required: the five credentials, `DATA_DIR` (absolute), and the report-server host/port.
+`REPORT_PUBLIC_BASE_URL` stays **empty** until a real domain exists — that is the honest state, and
+`build_bot()` (CL.5) fails startup loudly rather than emitting broken links.
+
+The validator refuses a template that was copied but never filled:
 
 ```bash
-DATA_DIR=/opt/botgitgud/data
+/opt/botgitgud/.venv/bin/python -m botgitgud.cli deploy-validate-env \
+    --env-file /opt/botgitgud/.env
 ```
 
-An absolute path removes any dependency on the process's working directory at the moment
-`Settings()` is read — belt-and-suspenders on top of the unit's own `WorkingDirectory=`.
+It prints variable **names** and diagnostics only — never a value. That is a structural property of
+the code (`EnvIssue` has nowhere to put one), not a formatting convention, so its output is safe in
+a shared terminal, a log, or CI.
 
-`REPORT_PUBLIC_BASE_URL` stays **empty** at this stage (no VM, no DuckDNS, no Caddy yet) — leaving
-it empty is intentional here, but note that `build_bot()` (CL.5) validates it at boot and fails
-startup cleanly if it is ever empty/invalid *while link delivery is exercised*; there is no
-production default baked in anywhere, by design (`config.py`).
-
-Never commit a real `.env`. `.env.example` only ever holds placeholder/empty values.
-
-## 5. Prepare `data/`
+### 3. Preflight
 
 ```bash
-sudo -u botgitgud mkdir -p /opt/botgitgud/data/{logs,reports,raw,ops,control}
+./deploy/preflight.sh
 ```
 
-The service user needs read-write on the whole `data/` subtree — it's where the DuckDB warehouse,
-persisted reports, the JSONL operational logs, and the `control/` marker files
-(`stop.request`/`supervisor.lock`/`bot.pid`) all live. Nothing outside `data/` is ever written by
-either process.
+Offline checks, exit code `!= 0` on any failure: architecture, Python version, venv, package
+imports (including `aiohttp` via the report server), persistent directories, real write
+permission, the systemd unit, `.env` validity, and whether the report-server port can actually be
+bound on loopback. It binds and immediately closes a socket — never listens, never accepts, never
+resolves an external name.
 
-## 6. Install the systemd unit
+There are **two gates**, and they are not the same question:
+
+| Mode | Command | `REPORT_PUBLIC_BASE_URL` empty |
+|---|---|---|
+| Host preparation (default) | `./deploy/preflight.sh` | warning — host can be ready before CL.9 |
+| Production start | `... deploy-preflight --production` | **error** — the bot cannot serve links |
+
+Warnings do not fail the run: a non-ARM64 dev machine and an empty `REPORT_PUBLIC_BASE_URL` are
+both legitimate during host preparation. A **present** URL is validated by CL.5's own
+`validate_report_public_base_url` in both modes — the flag only changes how an *absent* one is
+treated, never weakening the existing validation.
+
+### 4. Install the systemd unit
 
 ```bash
-sudo cp deploy/systemd/botgitgud.service /etc/systemd/system/botgitgud.service
-sudo systemctl daemon-reload
-sudo systemctl enable botgitgud
-sudo systemctl start botgitgud
+sudo ./deploy/install-systemd.sh            # validate -> copy -> daemon-reload -> enable
+sudo ./deploy/install-systemd.sh --start    # same, then validate .env and start
 ```
 
-`deploy/systemd/botgitgud.service` is a **template**, versioned in the repo but never installed
-automatically — copy it by hand, review the placeholder `User=`/`Group=`/paths against the real
-host first if this deployment ever deviates from `/opt/botgitgud`.
+Validates the unit (`systemd-analyze verify` when available, plus a check that `ExecStart` targets
+the supervisor) **before** copying it to `/etc/systemd/system`.
 
-## 7. Operate
+It does not start the service by default. `--start` applies the **production** gate: a missing
+credential *or* a missing `REPORT_PUBLIC_BASE_URL` refuses the start. Until CL.9 provides a real
+domain, `--start` is therefore expected to refuse — that is the gate working, not a bug. Install
+and `enable` still succeed, so the host is ready and the unit will be active on the next boot once
+the URL is configured.
+
+### 5. Operate
 
 ```bash
-sudo systemctl status botgitgud     # is it up, and since when
-sudo systemctl restart botgitgud    # e.g. after an upgrade
-sudo systemctl stop botgitgud       # graceful — see "Stop semantics" below
-sudo journalctl -u botgitgud -f     # live systemd-captured stdout/stderr
+sudo systemctl status botgitgud
+sudo systemctl restart botgitgud
+sudo systemctl stop botgitgud
+sudo journalctl -u botgitgud -f
 ```
 
-The durable, structured trail stays in JSONL, not the journal — `journalctl` is for a quick "is it
-alive / did it just crash" glance, not the source of truth:
+The durable structured trail stays in JSONL — `journalctl` is for a quick "is it alive" glance:
 
 ```bash
 tail -f /opt/botgitgud/data/logs/botgitgud.jsonl       # the bot (`serve`)
 tail -f /opt/botgitgud/data/logs/supervisor.jsonl      # the supervisor
 ```
 
-This ticket does **not** move logging to journald as the canonical trail — the rotating JSONL
-sinks (`logging_setup.py`, B5) stay exactly as they are; systemd capturing stdout/stderr into the
-journal is a free side benefit of running under systemd, not a replacement.
-
-### Health check
+### 6. Health check
 
 ```bash
-curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:8080/healthz     # -> ok
 ```
 
-Local only — the report server is never bound to anything but loopback (`REPORT_SERVER_HOST`,
-default `127.0.0.1`), and this unit opens no port. A future Caddy reverse-proxy talks to
-`127.0.0.1:8080`; nothing in this ticket opens a firewall rule or exposes it externally. Don't wire
-this into systemd's own watchdog/`ExecStartPost` polling — it's an operator's manual sanity check
-in this ticket, not an automated liveness gate.
+Local only. The CL.3 HTTP contract is unchanged — `/healthz` returns `200 ok` and deliberately
+exposes nothing internal. The report server never binds outside loopback, this unit opens no port,
+and no firewall rule is created by anything in `deploy/`. A future Caddy will reverse-proxy to
+`127.0.0.1:8080`; that is not implemented yet.
+
+Do not wire this endpoint into a systemd watchdog or an aggressive polling loop — it is an
+operator's manual sanity check at this stage.
 
 ## Stop semantics — why `systemctl stop` doesn't leave a dangling process
 
@@ -162,70 +206,112 @@ systemctl stop
     -> systemd observes a clean (exit code 0) stop: Restart=on-failure does not fire
 ```
 
-`TimeoutStopSec=45` in the unit gives this whole chain room to finish (default
-`SUPERVISOR_STOP_GRACE_S=30` plus margin) before systemd would otherwise escalate to `SIGKILL`
-across the whole cgroup. Raise both together if `SUPERVISOR_STOP_GRACE_S` is ever raised in `.env`.
+`TimeoutStopSec=45` gives this chain room to finish (default `SUPERVISOR_STOP_GRACE_S=30` plus
+margin) before systemd would escalate to `SIGKILL` across the cgroup. Raise both together if the
+grace period is ever raised.
 
-A restart-storm giveup (the supervisor detects a crash loop and stops trying, see
-`docs/v1-process-supervision.md`) **also** exits 0 — that's deliberate: it requires a human to
-look at `supervisor.jsonl` and run `systemctl start botgitgud` again after fixing the underlying
-cause, exactly like the Windows `.\start-bot-service.ps1` runbook already says. `systemd` correctly
-leaves it alone either way.
+A restart-storm giveup **also** exits 0 — deliberately: it requires a human to read
+`supervisor.jsonl` and run `systemctl start botgitgud` after fixing the cause. systemd correctly
+leaves both cases alone.
+
+## Backup
+
+**Safe sequence once the service is operational — stop, back up, start:**
+
+```bash
+sudo systemctl stop botgitgud
+./deploy/backup.sh                                    # -> /opt/botgitgud/backups/*.tar.gz
+sudo systemctl start botgitgud
+```
+
+Other forms:
+
+```bash
+./deploy/backup.sh --dest /mnt/external/botgitgud
+/opt/botgitgud/.venv/bin/python -m botgitgud.cli deploy-list-backups --dest /opt/botgitgud/backups
+```
+
+`backup.sh` **refuses to run** while `botgitgud.service` is active, exiting non-zero. DuckDB has a
+single-owner contract: an archive taken mid-write can capture the warehouse in an intermediate
+state — a file that looks valid and only fails when someone actually needs it. A consistent hot
+backup is a different problem, deliberately out of scope for this phase.
+
+The script never stops the service itself — that is the operator's decision. Where systemd does not
+exist (development machine, CI) the guard is skipped, so backup stays testable offline.
+
+Produces a local `.tar.gz`. No S3, no OCI Object Storage, no paid service — copying the archive
+elsewhere afterwards is the operator's decision.
+
+**Included** (allowlist in `src/botgitgud/ops/deploy.py::BACKUP_ENTRIES`): `warehouse.duckdb`,
+`raw/`, `reports/`, `ops/`, `logs/`.
+
+**Excluded**, and why:
+
+| Excluded | Reason |
+|---|---|
+| `control/` (whole directory) | Ephemeral control state, **never** backed up and never restored: a restored `stop.request` would tell the supervisor to shut down on its next poll, and a stale `bot.pid`/`supervisor.lock` would confuse boot-time recovery. |
+| `ops-snapshot.json` | Republished by the running bot within seconds; never a source of truth. |
+| `spells.json` | Runtime cache, reseeded from the repository. |
+| venv, source code, `.env` | Not state. The allowlist means these cannot leak into an archive that later gets copied around. |
+
+The allowlist is the point: a denylist would silently include any new directory added under
+`data/` later. Here the failure mode is "something was left out of the backup" (detectable,
+fixable), never "a credential ended up inside it".
+
+## Restore
+
+```bash
+sudo systemctl stop botgitgud
+./deploy/restore.sh /opt/botgitgud/backups/botgitgud-backup-20260901-120000.tar.gz
+./deploy/restore.sh <archive> --overwrite      # required to replace existing files
+sudo systemctl start botgitgud
+```
+
+The service must be stopped — replacing the warehouse file under an open DuckDB connection
+corrupts it, and `restore.sh` refuses while the unit is active. Restore also refuses to overwrite
+existing files without `--overwrite`, because restoring over a live warehouse is only recoverable
+with another backup.
+
+**Every member is validated before a single byte is extracted.** A backup archive is an artifact
+that circulates and can be substituted; that it is *normally* produced by this program is no
+guarantee, and that is precisely the threat model of a restore. Rejected outright:
+
+- absolute paths (`/etc/...`, `C:/...`);
+- any `..` component, including under the `data/` prefix;
+- backslashes — never present in a legitimate tar member name, and a path separator on Windows, so
+  `data/..\..\evil` would pass a POSIX-component check and escape on extraction;
+- symlinks and hardlinks (the classic escape vector), devices and FIFOs;
+- anything outside the `data/` prefix or outside the backup allowlist.
+
+One hostile member rejects the **whole** archive, so a partial extraction never lands on disk.
+`filter="data"` (stdlib) stays applied on top of this as defense in depth.
 
 ## Upgrade procedure
 
 ```bash
 sudo systemctl stop botgitgud
-# backup first — see below
+./deploy/backup.sh
 cd /opt/botgitgud
 sudo -u botgitgud git fetch && sudo -u botgitgud git checkout <target-commit>
 sudo -u botgitgud .venv/bin/pip install -e .
-# run the project's own smoke/test suite here if the change is non-trivial
+./deploy/preflight.sh
 sudo systemctl start botgitgud
-sudo systemctl status botgitgud
 tail -20 /opt/botgitgud/data/logs/botgitgud.jsonl   # confirm process.started
 ```
 
-Stop before touching anything under `/opt/botgitgud` — the DuckDB warehouse has a single-owner
-contract (`docs/warehouse-policy.md`); never `pip install` or swap code while the bot still holds
-the connection.
+Always stop before touching `/opt/botgitgud` — single-owner warehouse (`docs/warehouse-policy.md`).
 
-## Backup
-
-Persistent state worth backing up:
+## Filesystem ownership
 
 ```
-data/warehouse.duckdb
-data/raw/
-data/reports/
-data/ops/
-data/logs/
-```
-
-**Never** back up or restore `data/control/stop.request` — it is an ephemeral control signal, not
-operational state. Restoring it from a backup would immediately (and incorrectly) tell the running
-supervisor to shut the bot down the moment it next polls. `ops/control.py`'s own contract already
-guarantees the two processes that read it never delete it themselves (only
-`start-bot-service.ps1`/its Linux equivalent clears it on a deliberate start) — a backup/restore
-cycle must not reintroduce a stale one from outside that contract.
-
-The free-tier architecture already decided the primary/secondary split: the always-on host is
-primary, a local machine is the secondary copy. This document only names *what* to copy — it does
-not implement a backup cron here; add one as its own ticket if/when it's actually needed.
-
-## Filesystem ownership summary
-
-```
-/opt/botgitgud             repo + venv (code) — service user owns it, but nothing
-                            outside data/ is written at runtime
+/opt/botgitgud             repo + venv (code) — owned by the service user; nothing outside
+                            data/ is written at runtime
 /opt/botgitgud/data        persistent, writable state — warehouse, reports, logs, control/
 ```
 
-A future Caddy does **not** need read access to any of this — it only ever reverse-proxies HTTP
-requests to `127.0.0.1:8080`; it never touches DuckDB or the filesystem directly.
+A future Caddy needs read access to none of it — it only reverse-proxies to `127.0.0.1:8080`.
 
 ## Windows stays available
 
-`scripts/*.ps1` and Task Scheduler remain fully functional and unmodified — this ticket adds a
-Linux launcher, it does not retire the Windows one. See `docs/v1-process-supervision.md` for that
-path.
+`scripts/*.ps1` and Task Scheduler remain fully functional and unmodified — this is an additional
+launcher, not a replacement. See `docs/v1-process-supervision.md`.

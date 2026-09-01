@@ -19,6 +19,7 @@ from botgitgud.analysis.cohort_builder import BucketBuildResult, CohortState, bu
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
 from botgitgud.bot.ops_snapshot import ColdBuildPublisher
+from botgitgud.cli_deploy import add_deploy_parsers
 from botgitgud.cli_discovery import (
     add_dataset_status_parser,
     add_discover_parser,
@@ -366,6 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_experiment_decide_parser(sub)
     add_experiment_calibrate_parser(sub)
     add_ops_parsers(sub)
+    add_deploy_parsers(sub)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)
