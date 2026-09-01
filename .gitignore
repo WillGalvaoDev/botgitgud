@@ -1,20 +1,66 @@
+# -- segredos ---------------------------------------------------------------
+# `.env` real nunca entra no Git. Os dois templates (raiz = referencia de
+# desenvolvimento com todos os campos; deploy/ = subconjunto de producao)
+# SAO versionados de proposito -- por isso a negacao explicita: sem ela, o
+# padrao `.env.*` abaixo engoliria `.env.example`.
 .env
+.env.*
+!.env.example
+
+# -- ambientes virtuais -----------------------------------------------------
 .venv/
 venv/
+
+# -- bytecode / caches de ferramentas ---------------------------------------
 __pycache__/
 *.py[cod]
-data/
-# CL.8: `deploy-backup` tem --dest relativo por padrao. Rodado da raiz do
-# repositorio, ele criaria aqui um arquivo com o warehouse e os relatorios
-# inteiros -- nunca versionavel.
-backups/
-botgitgud-backup-*.tar.gz
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.dmypy.json
+.pyright/
+.hypothesis/
+
+# -- cobertura --------------------------------------------------------------
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
+
+# -- estado operacional / runtime -------------------------------------------
+# `data/` guarda TODO o estado durável: warehouse DuckDB, raw Parquet,
+# relatorios HTML emitidos, logs JSONL, ops-snapshot e os arquivos de
+# controle (stop.request/bot.pid/supervisor.lock). Nada disso e versionavel
+# -- e nada disso jamais foi commitado (auditado em GH.0).
+data/
 *.duckdb
 *.duckdb.wal
-.DS_Store
+
+# Backups do estado durável. `deploy-backup` tem `--dest` relativo por
+# padrao: rodado da raiz do repositorio, criaria aqui um arquivo com o
+# warehouse e os relatorios inteiros.
+backups/
+botgitgud-backup-*.tar.gz
+*.tar.gz
+
+# Logs soltos fora de `data/logs/` (que `data/` ja cobre).
+*.log
+
+# -- scratch de gravacao de cassettes ---------------------------------------
+# As cassettes versionadas ficam em tests/fixtures/cassettes/ (necessarias
+# para a suite offline); estes dois diretorios sao scratch de re-gravacao.
 tests/fixtures/_record_scratch/
 tests/fixtures/_record_scratch_new/
+
+# -- IDE / SO ---------------------------------------------------------------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -- tooling local -----------------------------------------------------------
+# Configuracao pessoal do Claude Code. Coberto pelo gitignore GLOBAL desta
+# maquina, o que nao vale para um clone em outro lugar -- declarado aqui
+# para o repositorio ser autossuficiente.
+.claude/settings.local.json

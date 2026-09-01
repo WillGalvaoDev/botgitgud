@@ -13,6 +13,7 @@ Nenhum comando aqui fala com Discord, WCL, Blizzard ou qualquer rede.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from botgitgud.ops.deploy import (
     validate_env_file,
 )
 from botgitgud.ops.preflight import CheckStatus, exit_code_for, run_preflight
+from botgitgud.ops.publication import run_publication_safety
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -150,6 +152,38 @@ def _cmd_deploy_activation_readiness(args: argparse.Namespace) -> int:
     return code
 
 
+def _cmd_publication_check(args: argparse.Namespace) -> int:
+    """GH.0 — recusa publicar com `.env`, chave privada, warehouse, backup
+    ou dado de runtime tracked. NÃO substitui secret scanning dedicado (ver
+    `ops/publication.py`).
+
+    A enumeração dos arquivos é feita aqui, com `git ls-files`, para que a
+    política em `ops/publication.py` continue pura e testável sem um
+    repositório git de verdade.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "ls-files"],
+            cwd=args.repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        sys.stderr.write(f"erro: não foi possível listar arquivos tracked: {exc}\n")
+        return 1
+
+    tracked = [line for line in completed.stdout.splitlines() if line.strip()]
+    results = run_publication_safety(args.repo_root, tracked)
+    for result in results:
+        sys.stdout.write(f"[{_STATUS_LABEL[result.status]}] {result.name}: {result.detail}\n")
+    code = exit_code_for(results)
+    sys.stdout.write(f"tracked_files={len(tracked)}\n")
+    sys.stdout.write("publication_check=" + ("failed" if code else "passed") + "\n")
+    sys.stdout.write("nota=nao substitui secret scanning dedicado (gitleaks/trufflehog)\n")
+    return code
+
+
 def add_deploy_parsers(
     sub: argparse._SubParsersAction[argparse.ArgumentParser],  # type: ignore[name-defined]
 ) -> None:
@@ -232,3 +266,10 @@ def add_deploy_parsers(
         help="Caddyfile já renderizado (domínio real, não o template) a validar.",
     )
     activation.set_defaults(func=_cmd_deploy_activation_readiness)
+
+    publication = sub.add_parser(
+        "publication-check",
+        help="Recusa publicar com .env/chave/warehouse/backup/dado de runtime tracked (GH.0).",
+    )
+    publication.add_argument("--repo-root", type=Path, default=REPO_ROOT)
+    publication.set_defaults(func=_cmd_publication_check)
