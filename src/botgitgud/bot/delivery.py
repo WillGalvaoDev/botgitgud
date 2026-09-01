@@ -1,4 +1,4 @@
-"""RC.3/RC.9/RC.10 — fronteira de entrega no Discord.
+"""RC.3/RC.9/RC.10/CL.5 — fronteira de entrega no Discord.
 
 Incidente 1 (docs/rc-discord-delivery-resilience.md): `channel.send(...,
 file=...)` levantou `discord.Forbidden` 403/50013, a excecao subiu por
@@ -8,21 +8,34 @@ Incidente 2 (mesmo documento, secao "Segundo smoke"): o caminho interativo
 tinha uma implementacao separada e menos resiliente — nao persistia o relatorio
 e ainda assim dizia ao usuario que o resultado fora preservado.
 
+Incidente 3 (soak real, pos-EB.6/RP.3): o Discord passou a fazer PREVIEW do
+`.html` anexado como texto puro (discord.py 2.7.1's `discord.File` nao expõe
+`content_type`; o Discord infere pela extensão e mostra o markup cru). CL.5
+elimina ESTRUTURALMENTE esse vetor: nenhuma função deste módulo anexa
+arquivo — `test_delivery.py` prova isso por AST toda vez que os testes
+rodam, nunca só por revisão manual.
+
+O produto agora é: HTML persistido (report_store.py) -> capability link
+(report_links.py, CL.2) -> resumo compacto (report/discord_summary.py, CL.4)
++ link -> UMA mensagem. `bot/report_server.py` (CL.3) serve o HTML atrás do
+link; nada aqui conhece HTTP.
+
 Regras desta camada:
 
 1. **Nenhuma excecao da API do Discord atravessa daqui para cima.** Toda falha
-   vira um `DeliveryOutcome` explicito, classificado e logado. Isso nao e
-   `except Exception: pass` — erros ficam visiveis nos logs.
-2. **A camada nunca decide se o artefato foi preservado.** Quem chama informa
-   (`preserved`), porque so quem chama sabe se a persistencia deu certo. Uma
-   mensagem de fallback nunca pode afirmar preservacao que nao aconteceu.
-3. **Todo evento carrega o contexto do canal** (`DeliveryContext`), para que um
-   403/50013 identifique exatamente qual canal esta sem permissao.
+   vira um `DeliveryOutcome` explicito, classificado e logado.
+2. **Falha de link/URL/render é SEMPRE terminal e explícita** (política do
+   ticket CL.5) — nunca mascarada como "relatório indisponível" e nunca
+   rebaixada para um attachment. Só uma falha do PRÓPRIO envio ao Discord
+   usa a semântica de retry já existente (a capability persistida sobrevive
+   ao retry — CL.2 já é idempotente por artifact_id).
+3. **Todo evento carrega o contexto do canal** (`DeliveryContext`) e NUNCA o
+   token/URL completos — só `artifact_id`/`token_fingerprint` (ver
+   `bot/report_links.py::_fingerprint`).
 """
 
 from __future__ import annotations
 
-import io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -31,28 +44,24 @@ import discord
 import structlog
 
 from botgitgud.bot.job_models import DeliveryStatus, Job
-from botgitgud.bot.report_store import ReportPersistenceError, load_report
+from botgitgud.bot.report_links import (
+    ReportLinkError,
+    ReportLinkStore,
+    _fingerprint,
+    issue_report_link,
+)
+from botgitgud.bot.report_store import ReportPersistenceError
+from botgitgud.bot.report_url import ReportPublicBaseUrlError, build_report_url
+from botgitgud.report.contract import ReportContract
+from botgitgud.report.discord_summary import MAX_DISCORD_REPORT_SUMMARY, render_discord_summary
 
 log = structlog.get_logger(__name__)
-
-REPORT_FILENAME = "relatorio.html"
-
-# RC.9/A.4: dois textos distintos, porque a verdade e distinta. Nenhum deles
-# revela caminho local do servidor.
-PRESERVED_NOTICE = (
-    "⚠️ A análise foi concluída e o relatório foi preservado, mas não consegui "
-    "anexá-lo neste canal. Ele pode ser reenviado."
-)
-NOT_PRESERVED_NOTICE = (
-    "⚠️ A análise foi concluída, mas não consegui anexar o relatório neste canal "
-    "e também não foi possível guardá-lo. Refaça a análise para obtê-lo."
-)
 
 
 class Sendable(Protocol):
     """O mínimo que esta camada precisa de um canal do Discord."""
 
-    async def send(self, content: str, *, file: Any | None = ...) -> Any: ...
+    async def send(self, content: str, *, allowed_mentions: Any | None = ...) -> Any: ...
 
 
 class ChannelResolver(Protocol):
@@ -93,11 +102,26 @@ class DeliveryOutcome:
     error: str | None = None
     http_status: int | None = None
     discord_code: int | None = None
-    used_fallback: bool = False
 
     @property
     def delivered(self) -> bool:
         return self.status == "delivered"
+
+
+@dataclass(frozen=True, slots=True)
+class ReportDeliveryConfig:
+    """CL.5 — o que a entrega de relatório precisa para ir de `artifact_id`
+    a URL pública. `link_store` embrulha a MESMA `Store` (uma conexão
+    DuckDB por processo) que o resto do bot usa — nunca uma segunda
+    conexão criada aqui. `public_base_url` já vem validada
+    (`bot/report_url.py`) no momento em que o bot sobe (`build_bot`),
+    então uma entrega individual nunca descobre uma configuração inválida
+    tarde demais.
+    """
+
+    link_store: ReportLinkStore
+    data_dir: Path
+    public_base_url: str
 
 
 def context_from_discord(channel: Any, *, job_id: str | None = None) -> DeliveryContext:
@@ -121,113 +145,13 @@ def _describe(e: discord.HTTPException) -> tuple[str, int | None, int | None]:
     return (f"discord http {status} code {code}: {e.text or type(e).__name__}", status, code)
 
 
-async def _send(channel: Sendable, content: str, *, file: Any | None = None) -> None:
-    if file is None:
-        await channel.send(content)
-    else:
-        await channel.send(content, file=file)
-
-
-def _as_stream(html: str) -> io.BytesIO:
-    return io.BytesIO(html.encode("utf-8"))
-
-
-async def send_report(
-    channel: Sendable,
-    *,
-    summary: str,
-    html: str,
-    mention: str = "",
-    context: DeliveryContext,
-    preserved: bool,
-) -> DeliveryOutcome:
-    """Envia resumo + anexo HTML. Caminho unico para interativo e fila.
-
-    `preserved` diz se o artefato ja esta em disco; ele so decide QUAL texto de
-    fallback e honesto, nunca se o envio acontece.
-    """
-    prefix = f"{mention}\n" if mention else ""
-    body = f"{prefix}```markdown\n{summary}\n```"
-    log.info("delivery.started", **context.fields())
-    try:
-        await _send(channel, body, file=discord.File(_as_stream(html), filename=REPORT_FILENAME))
-    except discord.Forbidden as e:
-        message, status, code = _describe(e)
-        log.warning(
-            "delivery.failed",
-            reason="forbidden",
-            http_status=status,
-            discord_code=code,
-            report_preserved=preserved,
-            **context.fields(),
-        )
-        return await _try_fallback(
-            channel,
-            context=context,
-            mention=mention,
-            cause=message,
-            http_status=status,
-            code=code,
-            preserved=preserved,
-        )
-    except discord.HTTPException as e:
-        message, status, code = _describe(e)
-        log.warning(
-            "delivery.failed",
-            reason="http_exception",
-            http_status=status,
-            discord_code=code,
-            report_preserved=preserved,
-            **context.fields(),
-        )
-        return DeliveryOutcome("failed", error=message, http_status=status, discord_code=code)
-    log.info("delivery.succeeded", **context.fields())
-    return DeliveryOutcome("delivered")
-
-
-async def _try_fallback(
-    channel: Sendable,
-    *,
-    context: DeliveryContext,
-    mention: str,
-    cause: str,
-    http_status: int | None,
-    code: int | None,
-    preserved: bool,
-) -> DeliveryOutcome:
-    notice = PRESERVED_NOTICE if preserved else NOT_PRESERVED_NOTICE
-    text = f"{mention} {notice}" if mention else notice
-    try:
-        await _send(channel, text)
-    except discord.HTTPException as e:
-        message, status, fallback_code = _describe(e)
-        log.warning(
-            "delivery.fallback_failed",
-            http_status=status,
-            discord_code=fallback_code,
-            **context.fields(),
-        )
-        return DeliveryOutcome(
-            "failed",
-            error=f"{cause}; fallback: {message}",
-            http_status=http_status,
-            discord_code=code,
-        )
-    log.info("delivery.fallback_succeeded", report_preserved=preserved, **context.fields())
-    # O artefato nao foi entregue: a entrega continua `failed`, mesmo que o
-    # aviso curto tenha chegado.
-    return DeliveryOutcome(
-        "failed", error=cause, http_status=http_status, discord_code=code, used_fallback=True
-    )
-
-
 async def send_text(
     channel: Sendable, *, content: str, context: DeliveryContext
 ) -> DeliveryOutcome:
-    """Mensagem sem anexo (falha de dominio, build_cohort, aviso)."""
+    """Mensagem sem link/anexo (falha de dominio, build_cohort, aviso)."""
     log.info("delivery.started", **context.fields())
     try:
-        await _send(channel, content)
+        await channel.send(content)
     except discord.HTTPException as e:
         message, status, code = _describe(e)
         log.warning(
@@ -242,42 +166,185 @@ async def send_text(
     return DeliveryOutcome("delivered")
 
 
-async def deliver_persisted_report(
-    channel: Sendable,
-    *,
-    report_path: str | Path,
-    context: DeliveryContext,
-    mention: str = "",
-    summary: str | None = None,
-) -> DeliveryOutcome:
-    """RC.10/A.6 — reenvia um relatorio JA persistido, de qualquer caminho.
-    Redelivery != reanalysis: le do disco e **nao faz nenhuma chamada a WCL**.
+def _issue_link_url(
+    config: ReportDeliveryConfig, *, artifact_id: str, context: DeliveryContext
+) -> tuple[str, None] | tuple[None, DeliveryOutcome]:
+    """Passos A+B da política de falha do CL.5: emitir/reusar a capability
+    (CL.2, idempotente por `artifact_id`) e construir a URL pública. Uma
+    falha em qualquer um dos dois é SEMPRE terminal — nunca mascarada como
+    "relatório indisponível", nunca some para um attachment.
     """
     try:
-        html = load_report(report_path)
-    except ReportPersistenceError as e:
-        log.warning("delivery.report_unreadable", error=str(e), **context.fields())
-        return DeliveryOutcome("failed", error=str(e))
-    return await send_report(
-        channel,
-        summary=summary or "Reenvio do relatório desta análise.",
-        html=html,
-        mention=mention,
-        context=context,
-        preserved=True,
+        link = issue_report_link(
+            config.link_store, data_dir=config.data_dir, artifact_id=artifact_id
+        )
+    except (ReportPersistenceError, ReportLinkError) as e:
+        log.error(
+            "report_delivery.link_issue_failed",
+            artifact_id=artifact_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            **context.fields(),
+        )
+        return None, DeliveryOutcome(
+            "failed", error=f"falha ao emitir link do relatório: {type(e).__name__}"
+        )
+
+    log.info(
+        "report_delivery.link_ready",
+        artifact_id=artifact_id,
+        token_fingerprint=_fingerprint(link.token),
+        **context.fields(),
     )
+
+    try:
+        report_url = build_report_url(config.public_base_url, link.token)
+    except ReportPublicBaseUrlError as e:
+        log.error(
+            "report_delivery.url_build_failed",
+            artifact_id=artifact_id,
+            error=str(e),
+            **context.fields(),
+        )
+        return None, DeliveryOutcome(
+            "failed", error=f"falha ao construir URL do relatório: {type(e).__name__}"
+        )
+
+    return report_url, None
+
+
+async def _send_one_message(
+    channel: Sendable, content: str, *, artifact_id: str, context: DeliveryContext
+) -> DeliveryOutcome:
+    """O ÚNICO `channel.send` de uma entrega de relatório bem-sucedida —
+    sempre com `allowed_mentions=AllowedMentions.none()` (obrigatório no
+    CL.5: a sanitização textual de CL.4 é defesa em profundidade, não
+    substituto). Falha aqui usa a semântica de retry já existente: a
+    capability já foi persistida antes desta chamada, então um retry
+    reusa a MESMA URL (CL.2).
+    """
+    log.info("report_delivery.started", artifact_id=artifact_id, **context.fields())
+    try:
+        await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+    except discord.Forbidden as e:
+        message, status, code = _describe(e)
+        log.warning(
+            "report_delivery.send_failed",
+            reason="forbidden",
+            artifact_id=artifact_id,
+            http_status=status,
+            discord_code=code,
+            **context.fields(),
+        )
+        return DeliveryOutcome("failed", error=message, http_status=status, discord_code=code)
+    except discord.HTTPException as e:
+        message, status, code = _describe(e)
+        log.warning(
+            "report_delivery.send_failed",
+            reason="http_exception",
+            artifact_id=artifact_id,
+            http_status=status,
+            discord_code=code,
+            **context.fields(),
+        )
+        return DeliveryOutcome("failed", error=message, http_status=status, discord_code=code)
+
+    log.info("report_delivery.sent", artifact_id=artifact_id, **context.fields())
+    return DeliveryOutcome("delivered")
+
+
+async def deliver_completed_report(
+    channel: Sendable,
+    *,
+    contract: ReportContract,
+    artifact_id: str,
+    config: ReportDeliveryConfig,
+    context: DeliveryContext,
+) -> DeliveryOutcome:
+    """CL.5 — o caminho único de entrega para uma análise concluída. HTML
+    JÁ persistido é pré-condição do chamador (worker.py/discord_bot.py
+    persistem antes de chamar isto, como já faziam desde RC.1/A.3).
+
+    Ordem: emitir/reusar link -> montar URL -> renderizar resumo -> UM
+    `channel.send`. Falha em qualquer um dos três primeiros passos é
+    terminal e explícita (política A/B/C do ticket); só a falha do send
+    em si (D) usa retry.
+    """
+    report_url, failure = _issue_link_url(config, artifact_id=artifact_id, context=context)
+    if failure is not None:
+        return failure
+    assert report_url is not None
+
+    try:
+        content = render_discord_summary(contract, report_url=report_url)
+    except Exception as e:
+        log.error(
+            "report_delivery.render_failed",
+            artifact_id=artifact_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+            **context.fields(),
+        )
+        return DeliveryOutcome(
+            "failed", error=f"falha ao renderizar resumo compacto: {type(e).__name__}"
+        )
+
+    # CL.4 já prova isto por teste de propriedade; cinto-e-suspensório
+    # aqui garante que uma regressão futura em discord_summary.py nunca
+    # chega ao Discord sem ser notada.
+    assert len(content) <= MAX_DISCORD_REPORT_SUMMARY
+
+    return await _send_one_message(channel, content, artifact_id=artifact_id, context=context)
+
+
+_REDELIVERY_NOTICE_DEFAULT = "🔄 Reenvio do relatório desta análise."
+
+
+async def deliver_report_link(
+    channel: Sendable,
+    *,
+    artifact_id: str,
+    config: ReportDeliveryConfig,
+    context: DeliveryContext,
+    notice: str | None = None,
+) -> DeliveryOutcome:
+    """RC.10 — reenvio de um relatório JÁ persistido, sem reanálise. Ao
+    contrário de `deliver_completed_report`, não recebe (nem reconstrói)
+    um `ReportContract` — o texto renderizado nunca é persistido à parte
+    do HTML, então um reenvio puro reemite/reusa a MESMA capability (CL.2
+    é idempotente por `artifact_id`) e reenvia o MESMO link que o usuário
+    já teria recebido, com um aviso curto no lugar do resumo completo.
+    `issue_report_link` já falha alto (`ReportArtifactNotFoundError`,
+    subclasse de `ReportPersistenceError`) se o `.html` não existir mais.
+    """
+    report_url, failure = _issue_link_url(config, artifact_id=artifact_id, context=context)
+    if failure is not None:
+        return failure
+    assert report_url is not None
+
+    text = notice or _REDELIVERY_NOTICE_DEFAULT
+    content = f"{text}\n🔗 [Ver relatório completo]({report_url})"
+    return await _send_one_message(channel, content, artifact_id=artifact_id, context=context)
 
 
 async def deliver_existing_report(
-    channel: Sendable, *, job: Job, summary: str | None = None
+    channel: Sendable,
+    *,
+    job: Job,
+    config: ReportDeliveryConfig,
+    notice: str | None = None,
 ) -> DeliveryOutcome:
-    """Reenvio a partir de um job da fila (mantem a assinatura do RC anterior)."""
+    """Reenvio a partir de um job da fila — `job.job_id` É o `artifact_id`
+    (mesma identidade que `worker.py` usa para persistir, ver
+    `report_path_for`).
+    """
     if not job.report_path:
         return DeliveryOutcome("failed", error="job sem report_path persistido")
-    return await deliver_persisted_report(
+    return await deliver_report_link(
         channel,
-        report_path=job.report_path,
+        artifact_id=job.job_id,
+        config=config,
         context=DeliveryContext.from_job(job),
-        mention=f"<@{job.discord_user_id}>",
-        summary=summary,
+        notice=notice,
     )

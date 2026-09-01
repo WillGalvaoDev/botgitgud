@@ -19,8 +19,10 @@ from test_pipeline import _build_deps, _DispatchTransport, _happy_path_responses
 
 import botgitgud.bot.discord_bot as discord_module
 import botgitgud.bot.worker as worker_module
+from botgitgud.bot.delivery import ReportDeliveryConfig
 from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
+from botgitgud.bot.report_links import ReportLinkStore
 from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
 from botgitgud.ingest.store import Store
@@ -77,6 +79,10 @@ def test_run_claimed_analyze_job_returns_summary_and_html(tmp_path: Path) -> Non
     assert outcome.html_report is not None
     assert "<html" in outcome.html_report
     assert "DE ONDE VEIO O GAP DE DPS" not in outcome.message
+    # CL.5: o resumo compacto do Discord (report/discord_summary.py) é
+    # renderizado a partir DESTE contrato na entrega — nunca reconstruído.
+    assert outcome.report_contract is not None
+    assert outcome.report_contract.resultado.char_name == "Zarad"
     store.close()
 
 
@@ -471,9 +477,16 @@ def test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop(
     monkeypatch.setattr(discord_module.asyncio, "sleep", real_time_ticks)
     bot = SimpleNamespace(get_channel=lambda _id: None)
 
+    report_delivery = ReportDeliveryConfig(
+        link_store=ReportLinkStore(deps.store),
+        data_dir=deps.settings.data_dir,
+        public_base_url="https://botgitgud.duckdns.org",
+    )
     try:
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(discord_module._worker_loop(bot, deps, queue))  # type: ignore[arg-type]
+            asyncio.run(
+                discord_module._worker_loop(bot, deps, queue, report_delivery)  # type: ignore[arg-type]
+            )
     finally:
         structlog.reset_defaults()
 

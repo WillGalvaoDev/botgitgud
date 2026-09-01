@@ -530,7 +530,8 @@ def test_discord_direct_path_triggers_after_delivery() -> None:
     fora da cobertura unitária (docs/desvios.md D-22), então a prova é
     estrutural, via AST — a mesma técnica que `test_report_contract.py` já
     usa para provar um call site: a chamada existe, e vem DEPOIS de
-    `send_report` no corpo da função.
+    `deliver_completed_report` (CL.5; antigo `send_report`) no corpo da
+    função.
     """
     import ast
     import inspect
@@ -559,7 +560,7 @@ def test_discord_direct_path_triggers_after_delivery() -> None:
             and node.func.id == name
         )
 
-    assert _line_of("maybe_enqueue_benchmark_build") > _line_of("send_report")
+    assert _line_of("maybe_enqueue_benchmark_build") > _line_of("deliver_completed_report")
 
 
 def test_worker_path_call_site_exists() -> None:

@@ -149,7 +149,13 @@ def test_status_reports_worker_running_and_stopped(tmp_path: Path) -> None:
             deps = SimpleNamespace(
                 store=store,
                 client=SimpleNamespace(),
-                settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
+                settings=SimpleNamespace(
+                    data_dir=tmp_path,
+                    bot_stop_poll_interval_s=1.0,
+                    report_public_base_url="https://botgitgud.duckdns.org",
+                    report_server_host="127.0.0.1",
+                    report_server_port=0,
+                ),
             )
             bot = discord_module.build_bot(deps)  # type: ignore[arg-type]
             status: Any = bot.get_command("status").callback  # type: ignore[union-attr]

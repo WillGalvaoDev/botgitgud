@@ -33,18 +33,22 @@ from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.delivery import (
     ChannelResolver,
     DeliveryContext,
+    ReportDeliveryConfig,
     context_from_discord,
-    send_report,
+    deliver_completed_report,
     send_text,
 )
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import write_snapshot
+from botgitgud.bot.report_links import ReportLinkStore
+from botgitgud.bot.report_server import ReportServer
 from botgitgud.bot.report_store import (
     ReportPersistenceError,
     interactive_artifact_id,
     persist_report,
 )
+from botgitgud.bot.report_url import validate_report_public_base_url
 from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import (
     ApiError,
@@ -97,7 +101,12 @@ def _current_budget(deps: Deps) -> BudgetStatus:
     return BudgetStatus(points_remaining=remaining, limit_per_hour=limit)
 
 
-async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQueue) -> None:
+async def _notify_outcome(
+    bot: ChannelResolver,
+    outcome: JobOutcome,
+    queue: JobQueue,
+    report_delivery: ReportDeliveryConfig,
+) -> None:
     """RC.3 — fronteira de entrega. Nenhuma excecao do Discord sai daqui: a
     camada bot/delivery.py classifica cada falha e devolve um DeliveryOutcome,
     que este nivel persiste sem jamais tocar no estado da analise (RC.2).
@@ -157,15 +166,25 @@ async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQ
         result = await send_text(
             channel, content=f"{mention} ❌ relatório HTML indisponível.", context=context
         )
+    elif outcome.report_contract is None:
+        # Nunca deveria divergir de html_report (os dois nascem do mesmo
+        # render_analysis/contract_for em worker.py) — mas um guard
+        # explícito aqui, como o de html_report acima, nunca tenta montar
+        # um resumo compacto a partir de um contrato ausente.
+        log.error("discord_bot.analyze_outcome_missing_contract", job_id=job.job_id)
+        result = await send_text(
+            channel, content=f"{mention} ❌ relatório indisponível.", context=context
+        )
     else:
-        result = await send_report(
+        # CL.5: job.job_id É o artifact_id (mesma identidade que worker.py
+        # usa para persistir — ver persist_report(deps.settings.data_dir,
+        # job.job_id, html_report)).
+        result = await deliver_completed_report(
             channel,
-            summary=outcome.message,
-            html=outcome.html_report,
-            mention=mention,
+            contract=outcome.report_contract,
+            artifact_id=job.job_id,
+            config=report_delivery,
             context=context,
-            # A fila persiste antes de entregar: o artefato existe.
-            preserved=outcome.report_path is not None,
         )
 
     if result.delivered:
@@ -174,7 +193,9 @@ async def _notify_outcome(bot: ChannelResolver, outcome: JobOutcome, queue: JobQ
         queue.mark_delivery_failed(job.job_id, error=result.error or "falha de entrega")
 
 
-async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
+async def _worker_loop(
+    bot: commands.Bot, deps: Deps, queue: JobQueue, report_delivery: ReportDeliveryConfig
+) -> None:
     last_points: float | None = None
     last_limit: float | None = None
     while True:
@@ -215,10 +236,16 @@ async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
             defer_count=job.defer_count,
             points_remaining=budget.points_remaining,
         )
-        await _run_one_job(bot, deps, queue, job)
+        await _run_one_job(bot, deps, queue, job, report_delivery)
 
 
-async def _run_one_job(bot: ChannelResolver, deps: Deps, queue: JobQueue, job: Job) -> None:
+async def _run_one_job(
+    bot: ChannelResolver,
+    deps: Deps,
+    queue: JobQueue,
+    job: Job,
+    report_delivery: ReportDeliveryConfig,
+) -> None:
     """RC.4 — ultima fronteira de isolamento: um job nunca pode matar o
     consumidor da fila. CancelledError passa direto (shutdown continua
     funcionando); qualquer outra excecao inesperada e logada com stack e
@@ -227,7 +254,7 @@ async def _run_one_job(bot: ChannelResolver, deps: Deps, queue: JobQueue, job: J
     try:
         loop = asyncio.get_running_loop()
         outcome = await loop.run_in_executor(None, run_claimed_job, queue, job, deps)
-        await _notify_outcome(bot, outcome, queue)
+        await _notify_outcome(bot, outcome, queue, report_delivery)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -347,10 +374,61 @@ async def _stop_request_watcher(bot: commands.Bot, data_dir: Path, poll_interval
             return
 
 
+class BotGitGudBot(commands.Bot):
+    """CL.5 — liga o lifecycle do `ReportServer` (CL.3) ao MESMO loop de
+    eventos assíncrono que `discord.py` já gerencia por baixo de
+    `bot.run()` (`asyncio.run(runner())`, onde `runner()` faz `async with
+    self: await self.start(...)`). Iniciar o servidor a partir de fora
+    exigiria um segundo loop — e um `ReportServer` iniciado num loop não
+    pode ser corretamente fechado depois que ESSE loop específico já
+    terminou. `setup_hook()` roda dentro de `login()`, ANTES de qualquer
+    conexão ao gateway — uma falha de bind (porta ocupada) interrompe o
+    startup aqui, antes do bot sequer tentar falar com o Discord.
+    """
+
+    def __init__(self, *, report_server: ReportServer, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._report_server = report_server
+
+    async def setup_hook(self) -> None:
+        await self._report_server.start()
+        log.info("discord_bot.report_server_started", port=self._report_server.port)
+
+    async def close(self) -> None:
+        # Ordem: ReportServer para ENQUANTO o loop que o iniciou ainda está
+        # vivo — antes de `super().close()` derrubar o websocket/HTTP
+        # client do bot. `ReportServer.stop()` já é um no-op seguro se
+        # `start()` nunca chegou a rodar (setup_hook falhou antes).
+        await self._report_server.stop()
+        log.info("discord_bot.report_server_stopped")
+        await super().close()
+
+
 def build_bot(deps: Deps) -> commands.Bot:
+    # Config -> Store (deps.store já existe) -> ReportLinkStore -> ReportServer
+    # -> Discord runtime (ordem de startup pedida pelo CL.5). A validação da
+    # base pública roda ANTES de qualquer objeto de rede ser construído: um
+    # `report_public_base_url` ausente/inválido falha aqui, claramente, nunca
+    # produzindo um bot operacional com links quebrados.
+    public_base_url = validate_report_public_base_url(deps.settings.report_public_base_url)
+    # MESMA Store que o resto do bot usa (deps.store) — nunca uma segunda
+    # conexão DuckDB só para os capability links.
+    link_store = ReportLinkStore(deps.store)
+    report_server = ReportServer(
+        link_store=link_store,
+        data_dir=deps.settings.data_dir,
+        host=deps.settings.report_server_host,
+        port=deps.settings.report_server_port,
+    )
+    report_delivery = ReportDeliveryConfig(
+        link_store=link_store,
+        data_dir=deps.settings.data_dir,
+        public_base_url=public_base_url,
+    )
+
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = commands.Bot(command_prefix="!", intents=intents)
+    bot = BotGitGudBot(report_server=report_server, command_prefix="!", intents=intents)
     queue = JobQueue(deps.store)
     supervisor = WorkerSupervisor()
     stop_watcher_started = False
@@ -369,7 +447,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             log.info("discord_bot.crash_recovery", n_reverted=n_reverted)
         # RC.5/RC.7: reconexao com worker vivo nao cria um segundo; worker morto
         # (crash anterior) e recriado aqui em vez de ficar sem consumidor.
-        if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue)):
+        if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue, report_delivery)):
             # D-34: publica já no boot, para que `ops-status` responda desde o
             # primeiro segundo em vez de esperar o primeiro tick do worker.
             _publish_snapshot(deps, queue, queue.list_active(), None, None)
@@ -471,11 +549,12 @@ def build_bot(deps: Deps) -> commands.Bot:
             run.hot_path = True
             record_analysis_result(run, result)
 
-            # T3.4: cabeçalho + Top 3 em texto, HTML como anexo.
-            # RP.3: os dois saem do MESMO `ReportContract` validado — este
-            # caminho não tem acesso aos renderizadores por fora dele.
+            # RP.3: HTML + ReportContract saem do MESMO render_analysis — este
+            # caminho não tem acesso aos renderizadores por fora dele. CL.5:
+            # `rendered.contract` alimenta o resumo compacto na entrega
+            # abaixo; `rendered.summary` (texto longo) não é mais usado para
+            # entrega, só `rendered.html` continua persistido como hoje.
             rendered = render_analysis(result)
-            summary_text = rendered.summary
             html_report = rendered.html
             # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
             # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
@@ -515,12 +594,15 @@ def build_bot(deps: Deps) -> commands.Bot:
             run.guild_id = context.guild_id
 
             run.delivery_started_at = now_iso()
-            outcome = await send_report(
+            # CL.5: artifact_id É o mesmo id que acabou de ser persistido
+            # acima — mesma identidade que a entrega usa para emitir/reusar
+            # a capability (bot/report_links.py, CL.2).
+            outcome = await deliver_completed_report(
                 ctx,  # type: ignore[arg-type]
-                summary=summary_text,
-                html=html_report,
+                contract=rendered.contract,
+                artifact_id=artifact_id,
+                config=report_delivery,
                 context=context,
-                preserved=True,
             )
             run.delivery_finished_at = now_iso()
             run.delivery_status = str(outcome.status)

@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from botgitgud.report.contract import ReportContract
 
 # B2: `deferred_budget` e um estado PROPRIO, nao um sabor de `failed`. A
 # diferenca e operacional e visivel ao usuario:
@@ -169,6 +172,12 @@ class JobOutcome:
     # NAO e falha: o job continua elegivel e retoma sozinho.
     deferred: bool = False
     deferred_until: str | None = None
+    # CL.5: o MESMO ReportContract que produziu `html_report` — a entrega por
+    # link (bot/delivery.py::deliver_completed_report) precisa dele para
+    # renderizar o resumo compacto (report/discord_summary.py). Nasce em
+    # worker.py via `report.render.contract_for(analysis)`, reusando o
+    # construtor canônico (RP.0) em vez de recalcular achados aqui.
+    report_contract: ReportContract | None = None
 
 
 @dataclass(frozen=True, slots=True)

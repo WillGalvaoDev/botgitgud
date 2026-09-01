@@ -226,29 +226,3 @@ def render_header_and_top3(header: ReportHeader, top_actions: Sequence[Finding])
     lines.extend(render_top_actions_section(top_actions))
     lines.append(_SEPARATOR)
     return "\n".join(lines)
-
-
-def chunk_report_for_discord(text: str, max_len: int = 1900) -> list[str]:
-    """Break `text` on line boundaries into chunks of at most `max_len`
-    characters, never mid-line (achado 4.8 — legacy's blind 1900-char slice
-    could split a line, and with it a markdown code fence, in half).
-    """
-    lines = text.split("\n")
-    chunks: list[str] = []
-    current: list[str] = []
-    current_len = 0
-
-    for line in lines:
-        added_len = len(line) + (1 if current else 0)  # + newline joining it
-        if current and current_len + added_len > max_len:
-            chunks.append("\n".join(current))
-            current = []
-            current_len = 0
-            added_len = len(line)
-        current.append(line)
-        current_len += added_len
-
-    if current:
-        chunks.append("\n".join(current))
-
-    return chunks

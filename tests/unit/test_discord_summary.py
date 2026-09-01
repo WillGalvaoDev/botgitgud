@@ -759,20 +759,23 @@ def test_zero_discord_store_wcl_filesystem_http_imports() -> None:
     assert "socket" not in source
 
 
-# -- chunk_report_for_discord audit: confirmed dead, not removed (user's explicit call) --
+# -- chunk_report_for_discord audit -------------------------------------------------------
 
 
-def test_chunk_report_for_discord_still_exists_and_is_unused_in_this_module() -> None:
-    """CL.4 audits (per the ticket) whether `chunk_report_for_discord`
-    (report/text.py) is still dead code — confirmed zero production call
-    sites, 4 test call sites, in an earlier pass of this same ticket.
-    Per explicit user instruction ("não faça limpeza ampla"), it is left
-    untouched; this test only pins that `discord_summary.py` never calls
-    it (a compact single-message renderer has no use for a chunker).
+def test_chunk_report_for_discord_was_removed_as_confirmed_dead_code() -> None:
+    """CL.4 audited `chunk_report_for_discord` (report/text.py) and found
+    zero production call sites, only 4 test call sites — left untouched
+    then, per explicit user instruction ("não faça limpeza ampla"). CL.5
+    reaudited it after wiring the new link-based delivery (which never
+    calls it either) and confirmed it was STILL clearly dead — the ticket
+    explicitly authorized removing it at that point, and it (plus
+    `discord_chunk_max_len`, config.py) was removed. This test pins that
+    it no longer exists, so a future reintroduction is deliberate, not
+    silent.
     """
-    from botgitgud.report.text import chunk_report_for_discord
+    import botgitgud.report.text as text_module
 
-    assert callable(chunk_report_for_discord)
+    assert not hasattr(text_module, "chunk_report_for_discord")
     source = inspect.getsource(discord_summary_module)
     assert "chunk_report_for_discord" not in source
 

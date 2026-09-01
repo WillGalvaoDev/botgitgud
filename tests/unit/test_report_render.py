@@ -329,27 +329,29 @@ def test_summary_renderer_cannot_receive_setup_at_all() -> None:
 
 
 def test_delivery_never_sends_html_as_message_content() -> None:
-    """13: o fallback e a mensagem inline só recebem constantes/texto — o
-    `html` só existe como `discord.File`.
+    """13 (revisto pelo CL.5): o incidente de soak provou que MESMO um
+    `discord.File` de HTML é perigoso (o Discord faz preview do markup cru
+    como texto). CL.5 elimina `html` de `bot/delivery.py` por completo — a
+    entrega nunca mais toca o HTML, só uma capability URL
+    (bot/report_links.py) servida por bot/report_server.py. A prova agora é
+    estrutural: zero `discord.File`, zero parâmetro/variável `html` no
+    módulo inteiro.
     """
     import botgitgud.bot.delivery as delivery_module
 
     tree = ast.parse(inspect.getsource(delivery_module))
-    file_args: set[str] = set()
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "File"
-        ):
-            file_args.update(
-                a.id for a in ast.walk(node) if isinstance(a, ast.Name) and a.id == "html"
+        assert not (isinstance(node, ast.Attribute) and node.attr == "File"), (
+            "bot/delivery.py não pode referenciar discord.File (CL.5)"
+        )
+        if isinstance(node, (ast.arg, ast.Name)):
+            assert node.arg != "html" if isinstance(node, ast.arg) else node.id != "html", (
+                "bot/delivery.py não pode referenciar `html` (CL.5)"
             )
-    assert "html" in file_args  # o único destino de `html` é um anexo
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.keyword) and node.arg == "content":
-            assert not (isinstance(node.value, ast.Name) and node.value.id == "html")
+        if isinstance(node, ast.keyword):
+            assert node.arg not in ("file", "files", "attachments"), (
+                f"bot/delivery.py não pode usar kwarg {node.arg!r} (CL.5)"
+            )
 
 
 # -- 14: semântica de relatório existente preservada -------------------------------

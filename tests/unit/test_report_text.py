@@ -15,7 +15,7 @@ from botgitgud.analysis.setup_finding import (
 )
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
-from botgitgud.report.text import ReportHeader, chunk_report_for_discord, render_report
+from botgitgud.report.text import ReportHeader, render_report
 
 
 def _spell(spell_id: int, name: str) -> SpellInfo:
@@ -361,37 +361,3 @@ def test_manifest_footer_absent_when_manifest_not_given() -> None:
     text = render_report(_header(), [])
     assert "Cohort:" not in text
     assert "Versão:" not in text
-
-
-# -- chunking ------------------------------------------------------------------
-
-
-def test_chunking_never_splits_a_line() -> None:
-    lines = [f"line-{i}" * 5 for i in range(500)]
-    text = "\n".join(lines)
-    chunks = chunk_report_for_discord(text, max_len=200)
-    reconstructed_lines = "\n".join(chunks).split("\n")
-    assert reconstructed_lines == lines
-
-
-def test_chunking_respects_max_len() -> None:
-    lines = [f"line-{i}" * 5 for i in range(500)]
-    text = "\n".join(lines)
-    chunks = chunk_report_for_discord(text, max_len=200)
-    assert all(len(c) <= 200 for c in chunks)
-
-
-def test_chunking_single_short_text_is_one_chunk() -> None:
-    chunks = chunk_report_for_discord("hello\nworld", max_len=1900)
-    assert chunks == ["hello\nworld"]
-
-
-def test_chunking_handles_line_longer_than_max_len() -> None:
-    """A single line longer than max_len still comes back as its own chunk
-    (never silently truncated or dropped) — it's just not further split.
-    """
-    long_line = "x" * 300
-    chunks = chunk_report_for_discord(f"short\n{long_line}\nshort2", max_len=200)
-    assert long_line in "\n".join(chunks)
-    assert "short" in chunks[0]
-    assert "short2" in chunks[-1]

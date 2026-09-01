@@ -29,7 +29,7 @@ from botgitgud.errors import (
     CohortDeferredBudget,
     RateLimitBudgetExceeded,
 )
-from botgitgud.report.render import render_analysis
+from botgitgud.report.render import contract_for, render_analysis
 
 log = structlog.get_logger(__name__)
 
@@ -153,6 +153,11 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
 
     queue.mark_done(job.job_id, report_path=report_path)
     log.info("worker.analysis_completed", job_id=job.job_id, job_type=job.job_type)
+    # CL.5: o MESMO construtor canônico (RP.0) que render_analysis já usou
+    # dentro de _run_analyze — recomputar é barato/puro (nenhum I/O), e
+    # evita alargar a assinatura de _run_analyze só para carregar o
+    # contrato de volta através de mais uma camada.
+    contract = contract_for(analysis) if analysis is not None else None
     if analysis is not None:
         # EB.6: só DEPOIS de o artefato estar persistido e o job marcado
         # `done` — o relatório nunca espera por isto, e uma falha aqui não
@@ -164,6 +169,7 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         message=message,
         html_report=html_report,
         report_path=report_path,
+        report_contract=contract,
     )
 
 

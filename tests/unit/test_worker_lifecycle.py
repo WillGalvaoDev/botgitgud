@@ -14,12 +14,16 @@ from typing import Any
 import discord
 import pytest
 
+from botgitgud.bot.delivery import ReportDeliveryConfig
 from botgitgud.bot.discord_bot import WorkerSupervisor, _notify_outcome, _run_one_job
 from botgitgud.bot.job_models import BudgetStatus
 from botgitgud.bot.jobs import JobQueue
+from botgitgud.bot.report_links import ReportLinkStore
 from botgitgud.bot.report_store import persist_report
 from botgitgud.bot.worker import JobOutcome
 from botgitgud.ingest.store import Store
+from botgitgud.report.contract import ConfidenceSummary, ExecutionSection, ReportContract
+from botgitgud.report.text import ReportHeader
 
 
 def _forbidden(code: int = 50013) -> discord.Forbidden:
@@ -33,14 +37,39 @@ def _http_error() -> discord.HTTPException:
 
 
 class _Channel:
-    def __init__(self, *, fail_with_file: Exception | None = None) -> None:
-        self.sent: list[tuple[str, Any]] = []
-        self._fail_with_file = fail_with_file
+    def __init__(self, *, fail: Exception | None = None) -> None:
+        self.sent: list[tuple[str, dict[str, Any]]] = []
+        self._fail = fail
 
-    async def send(self, content: str, *, file: Any | None = None) -> None:
-        if file is not None and self._fail_with_file is not None:
-            raise self._fail_with_file
-        self.sent.append((content, file))
+    async def send(self, content: str, **kwargs: Any) -> None:
+        if self._fail is not None:
+            raise self._fail
+        self.sent.append((content, kwargs))
+
+
+def _contract() -> ReportContract:
+    return ReportContract(
+        resultado=ReportHeader("Zilbag", "Boss", "DeathKnight", "Unholy", 20, 300.0, 360.0),
+        setup=None,
+        execucao=ExecutionSection(comparisons=(), performance=None, dps_gap=None),
+        top_actions=(),
+        confianca=ConfidenceSummary(
+            reference_pool_members=40,
+            matched_cohort_members=20,
+            cohort_warnings=(),
+            matched_covariates=(),
+            relaxed_covariates=(),
+        ),
+        manifest=None,
+    )  # type: ignore[arg-type]
+
+
+def _delivery_config(tmp_path: Path) -> ReportDeliveryConfig:
+    return ReportDeliveryConfig(
+        link_store=ReportLinkStore(Store(tmp_path)),
+        data_dir=tmp_path,
+        public_base_url="https://botgitgud.duckdns.org",
+    )
 
 
 class _Bot:
@@ -74,11 +103,16 @@ def test_zilbag_like_forbidden_preserves_report_and_records_delivery_failure(
         report = persist_report(tmp_path, job.job_id, "<html>Zilbag</html>")
         queue.mark_done(job.job_id, report_path=str(report))
 
-        channel = _Channel(fail_with_file=_forbidden())
+        channel = _Channel(fail=_forbidden())
         outcome = JobOutcome(
-            job, True, "resumo", html_report="<html>Zilbag</html>", report_path=str(report)
+            job,
+            True,
+            "resumo",
+            html_report="<html>Zilbag</html>",
+            report_path=str(report),
+            report_contract=_contract(),
         )
-        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue))
+        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue, _delivery_config(tmp_path)))
 
         stored = queue.get(job.job_id)
         assert stored is not None
@@ -96,9 +130,8 @@ def test_successful_delivery_is_recorded(tmp_path: Path) -> None:
         job = _claim_one(queue)
         assert job is not None
         queue.mark_done(job.job_id, report_path=str(persist_report(tmp_path, job.job_id, "<h/>")))
-        asyncio.run(
-            _notify_outcome(_Bot(_Channel()), JobOutcome(job, True, "r", html_report="<h/>"), queue)
-        )
+        outcome = JobOutcome(job, True, "r", html_report="<h/>", report_contract=_contract())
+        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue, _delivery_config(tmp_path)))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.delivery_status == "delivered"
@@ -110,7 +143,8 @@ def test_analysis_failure_stays_distinct_from_delivery_failure(tmp_path: Path) -
         job = _claim_one(queue)
         assert job is not None
         queue.mark_failed(job.job_id, error="InsufficientCohort")
-        asyncio.run(_notify_outcome(_Bot(_Channel()), JobOutcome(job, False, "sem coorte"), queue))
+        outcome = JobOutcome(job, False, "sem coorte")
+        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue, _delivery_config(tmp_path)))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.status == "failed"
@@ -124,10 +158,9 @@ def test_http_exception_does_not_escape_notify(tmp_path: Path) -> None:
         job = _claim_one(queue)
         assert job is not None
         queue.mark_done(job.job_id, report_path=str(persist_report(tmp_path, job.job_id, "<h/>")))
-        channel = _Channel(fail_with_file=_http_error())
-        asyncio.run(
-            _notify_outcome(_Bot(channel), JobOutcome(job, True, "r", html_report="<h/>"), queue)
-        )
+        channel = _Channel(fail=_http_error())
+        outcome = JobOutcome(job, True, "r", html_report="<h/>", report_contract=_contract())
+        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue, _delivery_config(tmp_path)))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.delivery_status == "failed"
@@ -150,7 +183,7 @@ def test_unexpected_job_exception_is_logged_and_job_is_not_left_running(tmp_path
                 raise RuntimeError("bug inesperado")
 
             loop.run_in_executor = boom  # type: ignore[method-assign]
-            await _run_one_job(_Bot(_Channel()), deps, queue, job)  # type: ignore[arg-type]
+            await _run_one_job(_Bot(_Channel()), deps, queue, job, _delivery_config(tmp_path))  # type: ignore[arg-type]
 
         asyncio.run(invoke())
         stored = queue.get(job.job_id)
@@ -172,7 +205,7 @@ def test_cancellation_is_never_swallowed(tmp_path: Path) -> None:
                 raise asyncio.CancelledError
 
             loop.run_in_executor = cancelled  # type: ignore[method-assign]
-            await _run_one_job(_Bot(_Channel()), deps, queue, job)  # type: ignore[arg-type]
+            await _run_one_job(_Bot(_Channel()), deps, queue, job, _delivery_config(tmp_path))  # type: ignore[arg-type]
 
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(invoke())

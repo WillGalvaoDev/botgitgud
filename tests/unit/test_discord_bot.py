@@ -9,10 +9,13 @@ import pytest
 
 import botgitgud.bot.discord_bot as discord_module
 from botgitgud.analysis.pipeline import AnalysisResult
+from botgitgud.bot.delivery import ReportDeliveryConfig
 from botgitgud.bot.discord_bot import _enqueue_message, _notify_outcome, parse_report_input
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import read_snapshot
+from botgitgud.bot.report_links import ReportLinkStore
+from botgitgud.bot.report_store import persist_report
 from botgitgud.bot.worker import JobOutcome
 from botgitgud.errors import (
     ApiError,
@@ -23,7 +26,35 @@ from botgitgud.errors import (
     ScopeRejected,
 )
 from botgitgud.ingest.store import Store
+from botgitgud.report.contract import ConfidenceSummary, ExecutionSection, ReportContract
 from botgitgud.report.text import ReportHeader
+
+_BASE_URL = "https://botgitgud.duckdns.org"
+
+
+def _delivery_config(tmp_path: Path) -> ReportDeliveryConfig:
+    return ReportDeliveryConfig(
+        link_store=ReportLinkStore(Store(tmp_path)), data_dir=tmp_path, public_base_url=_BASE_URL
+    )
+
+
+def _contract(**overrides: object) -> ReportContract:
+    defaults: dict[str, object] = {
+        "resultado": ReportHeader("Zarad", "Boss", "Warlock", "Demonology", 20, 300.0, 360.0),
+        "setup": None,
+        "execucao": ExecutionSection(comparisons=(), performance=None, dps_gap=None),
+        "top_actions": (),
+        "confianca": ConfidenceSummary(
+            reference_pool_members=40,
+            matched_cohort_members=20,
+            cohort_warnings=(),
+            matched_covariates=(),
+            relaxed_covariates=(),
+        ),
+        "manifest": None,
+    }
+    defaults.update(overrides)
+    return ReportContract(**defaults)  # type: ignore[arg-type]
 
 
 def _job(
@@ -51,11 +82,14 @@ def _job(
 
 
 class _Channel:
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, Any | None]] = []
+    def __init__(self, *, fail: Exception | None = None) -> None:
+        self.sent: list[tuple[str, dict[str, Any]]] = []
+        self._fail = fail
 
-    async def send(self, message: str, *, file: Any | None = None) -> None:
-        self.sent.append((message, file))
+    async def send(self, message: str, **kwargs: Any) -> None:
+        if self._fail is not None:
+            raise self._fail
+        self.sent.append((message, kwargs))
 
 
 class _Bot:
@@ -85,7 +119,16 @@ def _deps(tmp_path: Path) -> SimpleNamespace:
         client=SimpleNamespace(),
         # D-34: o worker loop e o on_ready publicam o ops-snapshot em data_dir.
         # bot_stop_poll_interval_s: B6, o on_ready arma o watcher de stop.request.
-        settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
+        # CL.5: build_bot() valida report_public_base_url no boot — precisa
+        # de um valor válido mesmo nestes testes que nunca chegam a servir
+        # HTTP de verdade (ReportServer nunca é iniciado sem setup_hook()).
+        settings=SimpleNamespace(
+            data_dir=tmp_path,
+            bot_stop_poll_interval_s=1.0,
+            report_public_base_url=_BASE_URL,
+            report_server_host="127.0.0.1",
+            report_server_port=0,
+        ),
     )
 
 
@@ -106,28 +149,40 @@ def test_enqueue_message_new_deduped_and_rejected() -> None:
 
 
 def test_notify_analyze_success_sends_summary_and_html_once(tmp_path: Path) -> None:
+    persist_report(tmp_path, "job-1", "<html></html>")
     channel = _Channel()
-    outcome = JobOutcome(_job(), True, "resumo curto", html_report="<html></html>")
+    outcome = JobOutcome(
+        _job(), True, "resumo curto", html_report="<html></html>", report_contract=_contract()
+    )
     with Store(tmp_path) as store:
-        asyncio.run(_notify_outcome(_Bot(channel), outcome, JobQueue(store)))
+        asyncio.run(
+            _notify_outcome(_Bot(channel), outcome, JobQueue(store), _delivery_config(tmp_path))
+        )
     assert len(channel.sent) == 1
-    message, attachment = channel.sent[0]
-    assert "resumo curto" in message
-    assert attachment is not None
-    assert attachment.filename == "relatorio.html"
+    message, kwargs = channel.sent[0]
+    assert _BASE_URL in message
+    assert "file" not in kwargs and "files" not in kwargs
 
 
 def test_notify_build_failure_and_requeued_contracts(tmp_path: Path) -> None:
     channel = _Channel()
+    config = _delivery_config(tmp_path)
     with Store(tmp_path) as store:
         queue = JobQueue(store)
         asyncio.run(
-            _notify_outcome(_Bot(channel), JobOutcome(_job("build_cohort"), True, "feito"), queue)
+            _notify_outcome(
+                _Bot(channel), JobOutcome(_job("build_cohort"), True, "feito"), queue, config
+            )
         )
-        asyncio.run(_notify_outcome(_Bot(channel), JobOutcome(_job(), False, "falhou"), queue))
+        asyncio.run(
+            _notify_outcome(_Bot(channel), JobOutcome(_job(), False, "falhou"), queue, config)
+        )
         asyncio.run(
             _notify_outcome(
-                _Bot(channel), JobOutcome(_job(), False, "aguarde", requeued=True), queue
+                _Bot(channel),
+                JobOutcome(_job(), False, "aguarde", requeued=True),
+                queue,
+                config,
             )
         )
     assert [message for message, _ in channel.sent] == ["<@123> ✅ feito", "<@123> ❌ falhou"]
@@ -149,7 +204,7 @@ def test_worker_loop_does_not_check_budget_when_queue_is_empty(
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
 
 @pytest.mark.parametrize(
@@ -230,9 +285,9 @@ def test_status_empty_queue(tmp_path: Path) -> None:
     async def invoke() -> None:
         ctx = _Context()
         await callback(ctx)
-        message, attachment = ctx.sent[0]
+        message, kwargs = ctx.sent[0]
         assert "Fila vazia" in message
-        assert attachment is None
+        assert "file" not in kwargs
         # RC.14: sem on_ready neste teste, o worker realmente nao esta rodando
         assert "Worker" in message
 
@@ -240,7 +295,7 @@ def test_status_empty_queue(tmp_path: Path) -> None:
     deps.store.close()
 
 
-def test_analisar_happy_path_sends_summary_and_attachment(
+def test_analisar_happy_path_sends_compact_summary_and_link(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     deps = _deps(tmp_path)
@@ -267,10 +322,10 @@ def test_analisar_happy_path_sends_summary_and_attachment(
         monkeypatch.setattr(discord_module.asyncio, "get_running_loop", lambda: _ImmediateLoop())
         ctx = _Context()
         await callback(ctx, "Zarad", "ABCDEFGHIJKLMNOP?fight=1")
-        message, attachment = ctx.sent[0]
-        assert "TOP 3 AÇÕES COM GANHO" in message
-        assert attachment is not None
-        assert attachment.filename == "relatorio.html"
+        message, kwargs = ctx.sent[0]
+        assert "Zarad" in message
+        assert _BASE_URL in message
+        assert "file" not in kwargs and "files" not in kwargs
 
     asyncio.run(invoke())
     deps.store.close()
@@ -295,7 +350,7 @@ def test_worker_loop_survives_budget_api_error(
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
     assert calls == 2
 
 
@@ -316,7 +371,7 @@ def test_worker_loop_publishes_the_ops_snapshot_each_tick(
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
     snapshot = read_snapshot(tmp_path)
     assert snapshot is not None
@@ -367,7 +422,7 @@ def test_worker_loop_resumes_an_expired_deferred_job_without_a_new_queued_job(
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
     assert len(claim_calls) == 1
 
@@ -397,7 +452,7 @@ def test_worker_loop_does_not_check_budget_for_a_deferred_job_still_in_the_futur
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
 
 def test_worker_loop_ignores_a_future_deferred_job_even_with_a_queued_job_present(
@@ -433,7 +488,7 @@ def test_worker_loop_ignores_a_future_deferred_job_even_with_a_queued_job_presen
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
     assert len(claim_calls) == 1  # o queued sozinho já abre o guard
 
@@ -473,7 +528,7 @@ def test_worker_loop_opens_the_guard_when_an_expired_deferral_coexists_with_a_qu
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
 
     assert len(claim_calls) == 1
 
@@ -499,7 +554,7 @@ def test_snapshot_write_failure_never_kills_the_worker(
     deps = SimpleNamespace(settings=SimpleNamespace(data_dir=tmp_path))
     worker_loop: Any = discord_module._worker_loop
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(worker_loop(SimpleNamespace(), deps, queue))
+        asyncio.run(worker_loop(SimpleNamespace(), deps, queue, _delivery_config(tmp_path)))
     assert calls == 2
 
 

@@ -275,8 +275,13 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     deps = _build_deps(settings)
     from botgitgud.bot.discord_bot import build_bot
 
-    bot = build_bot(deps)
     try:
+        # CL.5: build_bot() agora pode falhar antes de qualquer conexao ao
+        # Discord (report_public_base_url invalida/ausente, ReportServer
+        # nao consegue bindar) — precisa estar DENTRO do try/finally para
+        # que deps.store/deps.client sejam liberados mesmo nesse caso,
+        # nunca vazados por um startup que nunca chegou a rodar.
+        bot = build_bot(deps)
         bot.run(settings.discord_token.get_secret_value())
     except BaseException as e:
         # Ultimo lugar em que uma queda do processo ainda pode deixar
