@@ -128,13 +128,27 @@ class _WindowsLockBackend:
     segura isto" que `SupervisorLock.acquire` precisa.
     """
 
+    # Os `type: ignore[attr-defined]` abaixo são o espelho exato dos que
+    # `_PosixLockBackend` já carrega: o typeshed condiciona os atributos de
+    # `msvcrt` a `sys.platform == "win32"`, então type-checar em Linux (o CI)
+    # não os enxerga — do mesmo jeito que type-checar em Windows não enxerga
+    # os de `fcntl`. Sem isto o módulo só passa no pyright de UMA plataforma,
+    # e este arquivo existe justamente para ser correto nas duas.
     def lock(self, handle: IO[bytes]) -> None:
         assert _msvcrt is not None  # nunca None quando este backend é usado de verdade
-        _msvcrt.locking(handle.fileno(), _msvcrt.LK_NBLCK, 1)
+        _msvcrt.locking(  # type: ignore[attr-defined]
+            handle.fileno(),
+            _msvcrt.LK_NBLCK,  # type: ignore[attr-defined]
+            1,
+        )
 
     def unlock(self, handle: IO[bytes]) -> None:
         assert _msvcrt is not None
-        _msvcrt.locking(handle.fileno(), _msvcrt.LK_UNLCK, 1)
+        _msvcrt.locking(  # type: ignore[attr-defined]
+            handle.fileno(),
+            _msvcrt.LK_UNLCK,  # type: ignore[attr-defined]
+            1,
+        )
 
 
 class _PosixLockBackend:
