@@ -4,6 +4,14 @@
 # ("Testes") -- nao ha logica de verificacao propria aqui, so a orquestracao.
 # Se um portao mudar, ele muda no projeto e este arquivo continua valido.
 #
+# MATRIZ Windows + Linux, e nao um SO so, porque o projeto tem os dois como
+# alvo de verdade: o desenvolvimento acontece em Windows e a producao roda em
+# Linux (systemd). `ops/platform_process.py` tem um backend nativo por
+# plataforma (`msvcrt` x `fcntl`), entao rodar num SO so deixaria metade do
+# codigo de supervisao sem execucao real. A matriz ja pagou por si: a primeira
+# execucao em Linux revelou um erro de type-check que nunca aparecia no
+# Windows.
+#
 # Nada aqui toca Discord, Warcraft Logs, Blizzard ou qualquer servico externo:
 # a suite e offline por construcao (cassettes gravadas + `-m "not network"` no
 # pyproject.toml). Por isso o workflow tambem nao usa `secrets` -- ver o bloco
@@ -25,8 +33,24 @@ concurrency:
 
 jobs:
   quality-gates:
-    runs-on: ubuntu-latest
+    # Um job so, parametrizado. `fail-fast: false` para que a falha num SO nao
+    # esconda o resultado do outro -- saber se um problema e especifico de
+    # plataforma ou nao e justamente o motivo da matriz existir.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    name: quality-gates (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+
+    defaults:
+      run:
+        # bash nos DOIS runners (existe no windows-latest, via Git for
+        # Windows). Assim os passos abaixo sao um script so, sem uma variante
+        # PowerShell duplicada para cada comando.
+        shell: bash
 
     env:
       # PLACEHOLDERS SINTETICOS -- nao sao segredos e nao autenticam em lugar
@@ -57,33 +81,45 @@ jobs:
       - name: Instalar o projeto
         # A venv fica em `.venv` na raiz porque o pyright esta configurado com
         # `venvPath = "."` / `venv = ".venv"` no pyproject.toml -- sem ela ele
-        # cai no interpretador do PATH e acusa centenas de erros de import.
+        # cai no interpretador do PATH e acusa centenas de erros de import. O
+        # proprio pyright resolve `Scripts/` (Windows) ou `bin/` (POSIX), entao
+        # a configuracao continua portavel.
         #
         # Os extras sao `[data,ml,dev]`: `data` e `dev` sao obvios, e `ml` e
         # obrigatorio porque `botgitgud.cli` importa a trilha phase4, que
         # importa `sklearn` no topo do modulo. Sem `ml`, ate
         # `publication-check` falha com ModuleNotFoundError.
+        #
+        # `VENV_PY` normaliza o unico caminho que difere entre os dois
+        # runners; todos os passos seguintes sao identicos nos dois SOs.
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e ".[data,ml,dev]"
+          if [ -x .venv/bin/python ]; then
+            echo "VENV_PY=.venv/bin/python" >> "$GITHUB_ENV"
+            VENV_PY=.venv/bin/python
+          else
+            echo "VENV_PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+            VENV_PY=.venv/Scripts/python.exe
+          fi
+          "$VENV_PY" -m pip install --upgrade pip
+          "$VENV_PY" -m pip install -e ".[data,ml,dev]"
 
       - name: ruff check
-        run: .venv/bin/python -m ruff check .
+        run: $VENV_PY -m ruff check .
 
       - name: ruff format --check
-        run: .venv/bin/python -m ruff format --check .
+        run: $VENV_PY -m ruff format --check .
 
       - name: pyright
-        run: .venv/bin/python -m pyright
+        run: $VENV_PY -m pyright
 
       - name: publication-check
         # Portao do proprio projeto (GH.0): recusa `.env`, chave privada,
         # warehouse, backup ou dado de runtime versionado por acidente.
-        run: .venv/bin/python -m botgitgud.cli publication-check
+        run: $VENV_PY -m botgitgud.cli publication-check
 
       - name: pytest tests/unit
-        run: .venv/bin/python -m pytest tests/unit -q
+        run: $VENV_PY -m pytest tests/unit -q
 
       - name: pytest tests/golden
-        run: .venv/bin/python -m pytest tests/golden -q
+        run: $VENV_PY -m pytest tests/golden -q
