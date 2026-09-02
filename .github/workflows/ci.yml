@@ -128,3 +128,48 @@ jobs:
 
       - name: pytest tests/golden
         run: $VENV_PY -m pytest tests/golden -rs
+
+  # Contrato ESTAVEL do CI para branch protection.
+  #
+  # A matriz publica um check por combinacao ("quality-gates (ubuntu-latest)",
+  # "quality-gates (windows-latest)"). Exigir esses nomes diretamente na
+  # protecao da main e fragil: no dia em que um SO for adicionado, removido ou
+  # renomeado, a regra passa a exigir um check que ninguem publica, e merges
+  # travam sem que nada tenha quebrado de verdade. Este job existe para ser o
+  # unico nome que a protecao precisa conhecer -- a matriz pode mudar a
+  # vontade atras dele.
+  #
+  # Semantica, exatamente:
+  #
+  # * `needs: [quality-gates]` para toda a matriz. Para um job de matriz,
+  #   `needs.quality-gates.result` e o resultado AGREGADO: `success` so quando
+  #   TODAS as combinacoes deram success; `failure` se qualquer uma falhou;
+  #   `cancelled` se foi cancelada; `skipped` se nao rodou.
+  # * `if: always()` porque, sem isso, um `needs` que falha faz ESTE job ser
+  #   pulado -- e um job pulado nao publica status nenhum. O check ficaria
+  #   eternamente "Expected", em vez de vermelho. Com `always()` ele sempre
+  #   roda e sempre reporta.
+  # * A comparacao e por igualdade estrita a `success`: qualquer outro valor
+  #   (`failure`, `cancelled`, `skipped`) reprova. Nao existe
+  #   `continue-on-error` em lugar nenhum deste workflow.
+  ci-success:
+    needs: [quality-gates]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Nao precisa de token: nao faz checkout, nao le nem escreve nada no repo.
+    permissions: {}
+
+    steps:
+      - name: Conferir o resultado agregado da matriz
+        env:
+          # Via `env`, e nao interpolado direto no `run`: o valor nunca e
+          # concatenado no script.
+          MATRIX_RESULT: ${{ needs.quality-gates.result }}
+        run: |
+          echo "resultado agregado de quality-gates: ${MATRIX_RESULT}"
+          if [ "${MATRIX_RESULT}" != "success" ]; then
+            echo "::error::a matriz quality-gates terminou em '${MATRIX_RESULT}', nao em 'success'"
+            exit 1
+          fi
+          echo "todos os quality gates passaram nos dois sistemas operacionais"
