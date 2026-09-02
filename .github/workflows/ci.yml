@@ -118,8 +118,13 @@ jobs:
         # warehouse, backup ou dado de runtime versionado por acidente.
         run: $VENV_PY -m botgitgud.cli publication-check
 
+      # Sem `-q` aqui: o `addopts` do pyproject.toml ja aplica um, e um
+      # segundo vira `-qq`, que suprime a linha final de contagem -- o log do
+      # CI ficava sem "N passed, M skipped". `-rs` lista os testes skipados
+      # COM a razao, que e o que torna auditavel quais contratos sao
+      # especificos de plataforma em cada runner da matriz.
       - name: pytest tests/unit
-        run: $VENV_PY -m pytest tests/unit -q
+        run: $VENV_PY -m pytest tests/unit -rs
 
       - name: pytest tests/golden
-        run: $VENV_PY -m pytest tests/golden -q
+        run: $VENV_PY -m pytest tests/golden -rs
