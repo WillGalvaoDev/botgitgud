@@ -203,7 +203,15 @@ class LightGBMModel:
             force_row_wise=True,
             deterministic=True,
         )
-        model.fit(x, y)
+        # O stub do LightGBM declara `X: List[List[float] | List[int]]`, e
+        # `list` é invariante — então `list[list[float]]`, que é o que
+        # `transform` devolve, é rejeitado pelo type checker embora seja aceito
+        # em runtime. O erro só aparece quando `pandas` está instalado (o extra
+        # `ml` o traz via shap): sem ele o membro `DataFrame` da união fica
+        # Unknown e o pyright aceita qualquer coisa. Silenciado em vez de
+        # converter para ndarray porque a conversão mudaria o que é entregue ao
+        # LightGBM, e este caminho existe justamente para comparar modelos.
+        model.fit(x, y)  # type: ignore[arg-type]
         return cls(feature_space, model)
 
     def predict(self, observations: Sequence[ExperimentalObservation]) -> list[float]:

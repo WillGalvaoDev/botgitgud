@@ -102,8 +102,11 @@ Blizzard.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e ".[data,dev]"      # Windows: .venv\Scripts\pip
+.venv/bin/pip install -e ".[data,ml,dev]"   # Windows: .venv\Scripts\pip
 ```
+
+O extra `ml` é obrigatório mesmo sem usar a Fase 4: `botgitgud.cli` importa a trilha experimental
+no topo do módulo, então `scikit-learn` precisa estar presente para qualquer subcomando carregar.
 
 ### Configuração
 

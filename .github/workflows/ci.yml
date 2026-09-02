@@ -1,0 +1,89 @@
+# Portoes de qualidade do repositorio publico.
+#
+# Este workflow roda EXATAMENTE os mesmos comandos documentados no README
+# ("Testes") -- nao ha logica de verificacao propria aqui, so a orquestracao.
+# Se um portao mudar, ele muda no projeto e este arquivo continua valido.
+#
+# Nada aqui toca Discord, Warcraft Logs, Blizzard ou qualquer servico externo:
+# a suite e offline por construcao (cassettes gravadas + `-m "not network"` no
+# pyproject.toml). Por isso o workflow tambem nao usa `secrets` -- ver o bloco
+# `env` abaixo.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Somente leitura: este workflow nao publica, nao comenta e nao empurra nada.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # PLACEHOLDERS SINTETICOS -- nao sao segredos e nao autenticam em lugar
+      # nenhum. Existem porque `Settings` (pydantic-settings) exige as cinco
+      # credenciais para ser construido, e alguns testes de CLI constroem o
+      # objeto real. Sem isto, esses testes falham por configuracao ausente e
+      # nao por regressao. Um segredo de verdade nunca deve aparecer aqui: a
+      # suite e offline e nao autentica em nada.
+      DISCORD_TOKEN: ci-placeholder-not-a-secret
+      WCL_CLIENT_ID: ci-placeholder-not-a-secret
+      WCL_CLIENT_SECRET: ci-placeholder-not-a-secret
+      BLIZZARD_CLIENT_ID: ci-placeholder-not-a-secret
+      BLIZZARD_CLIENT_SECRET: ci-placeholder-not-a-secret
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # 3.12: o pyproject declara `requires-python = ">=3.11"`, e ruff e
+          # pyright ja fixam a semantica de linguagem em 3.11 por conta propria
+          # (`target-version` / `pythonVersion`). 3.12 e a versao com que a
+          # instalacao limpa foi validada na GH.2.
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar o projeto
+        # A venv fica em `.venv` na raiz porque o pyright esta configurado com
+        # `venvPath = "."` / `venv = ".venv"` no pyproject.toml -- sem ela ele
+        # cai no interpretador do PATH e acusa centenas de erros de import.
+        #
+        # Os extras sao `[data,ml,dev]`: `data` e `dev` sao obvios, e `ml` e
+        # obrigatorio porque `botgitgud.cli` importa a trilha phase4, que
+        # importa `sklearn` no topo do modulo. Sem `ml`, ate
+        # `publication-check` falha com ModuleNotFoundError.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e ".[data,ml,dev]"
+
+      - name: ruff check
+        run: .venv/bin/python -m ruff check .
+
+      - name: ruff format --check
+        run: .venv/bin/python -m ruff format --check .
+
+      - name: pyright
+        run: .venv/bin/python -m pyright
+
+      - name: publication-check
+        # Portao do proprio projeto (GH.0): recusa `.env`, chave privada,
+        # warehouse, backup ou dado de runtime versionado por acidente.
+        run: .venv/bin/python -m botgitgud.cli publication-check
+
+      - name: pytest tests/unit
+        run: .venv/bin/python -m pytest tests/unit -q
+
+      - name: pytest tests/golden
+        run: .venv/bin/python -m pytest tests/golden -q
