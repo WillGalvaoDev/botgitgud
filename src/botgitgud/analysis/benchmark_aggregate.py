@@ -166,7 +166,7 @@ def trinket_pair_key(setup: SetupProfile) -> str | None:
 # -- dedup ---------------------------------------------------------------------
 
 
-def _player_identity(log: PlayerLog) -> tuple[str, str]:
+def player_identity(log: PlayerLog) -> tuple[str, str]:
     """`(nome, server)` normalizados por case — mesma convenção que
     `wcl_parsing.find_player_in_details` já usa para comparar nomes de
     personagem vindos da WCL.
@@ -174,7 +174,7 @@ def _player_identity(log: PlayerLog) -> tuple[str, str]:
     return (log.build.character_name.strip().lower(), (log.build.server or "").strip().lower())
 
 
-def _dedup_priority(log: PlayerLog) -> tuple[float, str, int]:
+def dedup_priority(log: PlayerLog) -> tuple[float, str, int]:
     """Regra CANÔNICA de desempate entre observações do MESMO jogador na
     MESMA banda — usada com `min()`, então "menor tupla" == "vence". Maior
     `rank_percent` primeiro (nega para inverter a ordem), depois
@@ -193,13 +193,13 @@ def _dedup_band(members: Sequence[PlayerLog]) -> tuple[list[PlayerLog], int]:
     """
     by_identity: dict[tuple[str, str], list[PlayerLog]] = {}
     for log in members:
-        by_identity.setdefault(_player_identity(log), []).append(log)
+        by_identity.setdefault(player_identity(log), []).append(log)
 
     kept: list[PlayerLog] = []
     removed = 0
     for identity in sorted(by_identity):  # saída determinística, não ordem de inserção
         group = by_identity[identity]
-        kept.append(min(group, key=_dedup_priority))
+        kept.append(min(group, key=dedup_priority))
         removed += len(group) - 1
     return kept, removed
 

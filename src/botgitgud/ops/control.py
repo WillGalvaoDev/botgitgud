@@ -72,7 +72,7 @@ def clear_stop_request(data_dir: Path) -> None:
 def write_pid(data_dir: Path, pid: int) -> None:
     path = pid_path_for(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # tmp + replace, the same atomic pattern as ops_snapshot.py / report_store.py:
+    # tmp + replace, the same atomic pattern as ops_snapshot.py:
     # a reader (stop-bot-service.ps1, running as a separate process) must never
     # observe a half-written PID.
     tmp = path.with_suffix(".tmp")

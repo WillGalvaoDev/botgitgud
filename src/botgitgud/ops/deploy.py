@@ -31,17 +31,14 @@ from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path, PurePosixPath
 
-from botgitgud.bot.report_url import ReportPublicBaseUrlError, validate_report_public_base_url
-
 # -- layout persistente ------------------------------------------------------
 
 # Diretórios que o bootstrap cria e que o preflight exige existir. Espelham
 # exatamente o que o código já resolve em runtime: ingest/store.py (`raw/`),
-# bot/report_store.py (`reports/`), logging_setup.py (`logs/`),
-# ops/control.py (`control/`) e bot/analysis_runs.py (`ops/analysis-runs`).
+# logging_setup.py (`logs/`), ops/control.py (`control/`) e
+# bot/analysis_runs.py (`ops/analysis-runs`).
 PERSISTENT_DIRNAMES: tuple[str, ...] = (
     "raw",
-    "reports",
     "logs",
     "control",
     "ops",
@@ -112,10 +109,7 @@ class EnvReport:
 
     @property
     def ok(self) -> bool:
-        """Warnings não reprovam: `REPORT_PUBLIC_BASE_URL` vazio é o estado
-        legítimo enquanto não existe domínio (CL.9+), e um deploy pode subir
-        assim desde que ninguém tente entregar link ainda.
-        """
+        """Warnings do ambiente não reprovam o deploy."""
         return not self.errors
 
 
@@ -126,12 +120,6 @@ REQUIRED_ENV_VARS: tuple[str, ...] = (
     "BLIZZARD_CLIENT_ID",
     "BLIZZARD_CLIENT_SECRET",
 )
-
-# Hosts aceitos para REPORT_SERVER_HOST. O servidor de relatório NUNCA pode
-# escutar fora do loopback (CL.3/CL.5): o Caddy futuro é o único processo
-# exposto, e um `0.0.0.0` aqui publicaria os relatórios (capability na URL)
-# na Internet inteira sem ninguém perceber.
-_LOOPBACK_HOSTS = frozenset({"localhost", "::1", "[::1]"})
 
 _PLACEHOLDER_MARKERS = (
     "changeme",
@@ -144,13 +132,6 @@ _PLACEHOLDER_MARKERS = (
     "xxxx",
     "<",
 )
-
-
-def _is_loopback(host: str) -> bool:
-    normalized = host.strip().lower()
-    if normalized in _LOOPBACK_HOSTS:
-        return True
-    return normalized.startswith("127.")
 
 
 def _looks_like_placeholder(value: str) -> bool:
@@ -180,27 +161,8 @@ def parse_env_file(path: Path) -> dict[str, str]:
     return values
 
 
-def validate_env_values(
-    values: dict[str, str], *, require_public_base_url: bool = False
-) -> EnvReport:
-    """Regras de produção. Puro: recebe o dict já parseado, devolve o
-    diagnóstico — sem tocar em disco, sem rede, sem imprimir nada.
-
-    `require_public_base_url` separa dois gates que NÃO são o mesmo:
-
-    - **preparação do host** (default, `False`): `REPORT_PUBLIC_BASE_URL`
-      vazia é warning. É o estado correto enquanto DuckDNS/Caddy não
-      existem (CL.9) — e um host pode legitimamente ficar pronto antes
-      disso.
-    - **start de produção** (`True`): vazia é ERRO. Sem URL pública a
-      entrega por capability link falha no boot (CL.5 valida em
-      `build_bot`), então iniciar o serviço nesse estado produz
-      crash-loop, não um bot utilizável.
-
-    A validação da CL.5 não é enfraquecida em nenhum dos dois modos: uma
-    URL PRESENTE é sempre validada pela mesma
-    `validate_report_public_base_url`.
-    """
+def validate_env_values(values: dict[str, str]) -> EnvReport:
+    """Validate production credentials and paths without I/O or networking."""
     issues: list[EnvIssue] = []
 
     for name in REQUIRED_ENV_VARS:
@@ -217,57 +179,6 @@ def validate_env_values(
                     "ainda contém um valor de template — substitua pela credencial real",
                 )
             )
-
-    host = values.get("REPORT_SERVER_HOST", "").strip()
-    if host and not _is_loopback(host):
-        issues.append(
-            EnvIssue(
-                Severity.ERROR,
-                "REPORT_SERVER_HOST",
-                "deve permanecer em loopback (127.0.0.1); expor o report server "
-                "publicaria a capability da URL na Internet",
-            )
-        )
-
-    port = values.get("REPORT_SERVER_PORT", "").strip()
-    if port:
-        try:
-            port_number = int(port)
-        except ValueError:
-            issues.append(EnvIssue(Severity.ERROR, "REPORT_SERVER_PORT", "não é um inteiro válido"))
-        else:
-            if not 1 <= port_number <= 65535:
-                issues.append(
-                    EnvIssue(Severity.ERROR, "REPORT_SERVER_PORT", "fora da faixa 1-65535")
-                )
-
-    base_url = values.get("REPORT_PUBLIC_BASE_URL", "").strip()
-    if not base_url:
-        if require_public_base_url:
-            issues.append(
-                EnvIssue(
-                    Severity.ERROR,
-                    "REPORT_PUBLIC_BASE_URL",
-                    "obrigatória para um start de produção: sem ela a entrega por "
-                    "capability link falha no boot (CL.5). Fica bloqueada até a CL.9 "
-                    "(DuckDNS/Caddy/HTTPS) definir o domínio real",
-                )
-            )
-        else:
-            issues.append(
-                EnvIssue(
-                    Severity.WARNING,
-                    "REPORT_PUBLIC_BASE_URL",
-                    "vazia — esperado enquanto não há domínio; a entrega de link por "
-                    "capability falhará no boot até ser preenchida (CL.5/CL.9)",
-                )
-            )
-    else:
-        # Mesma função do CL.5, nunca uma segunda validação divergente.
-        try:
-            validate_report_public_base_url(base_url)
-        except ReportPublicBaseUrlError as exc:
-            issues.append(EnvIssue(Severity.ERROR, "REPORT_PUBLIC_BASE_URL", str(exc)))
 
     data_dir = values.get("DATA_DIR", "").strip()
     # PurePosixPath, não Path: este valor descreve um caminho no host LINUX de
@@ -286,14 +197,12 @@ def validate_env_values(
     return EnvReport(tuple(issues))
 
 
-def validate_env_file(path: Path, *, require_public_base_url: bool = False) -> EnvReport:
+def validate_env_file(path: Path) -> EnvReport:
     if not path.is_file():
         return EnvReport(
             (EnvIssue(Severity.ERROR, str(path), "arquivo .env não existe"),),
         )
-    return validate_env_values(
-        parse_env_file(path), require_public_base_url=require_public_base_url
-    )
+    return validate_env_values(parse_env_file(path))
 
 
 # -- backup / restore --------------------------------------------------------

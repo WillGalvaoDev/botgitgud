@@ -27,8 +27,7 @@ Warcraft Logs API
    ├─ report/      condensa tudo num ReportContract de 5 seções:
    │               RESULTADO · SETUP · EXECUÇÃO · TOP 3 · CONFIANÇA
    │
-   └─ bot/         fila persistente + worker → HTML persistido → capability link →
-                   UMA mensagem compacta no Discord (≤1800 chars) + link clicável
+   └─ bot/         fila persistente + worker → UMA resposta de coaching no Discord
 ```
 
 O ponto não-óbvio do desenho é a **coorte**: comparar um jogador com "o melhor do mundo" não
@@ -36,15 +35,10 @@ produz conselho acionável. O sistema seleciona logs realmente comparáveis (mes
 spec, mesma dificuldade, duração dentro de banda, covariáveis pareadas) e só então mede a
 diferença — reportando explicitamente o tamanho da amostra e a confiança quando a coorte é fraca.
 
-### Entrega do relatório
+### Entrega do coaching
 
-O relatório HTML **nunca** é anexado ao Discord. Ele é persistido em disco, recebe um
-*capability link* (token de 256 bits, `secrets.token_urlsafe(32)`, com TTL) e é servido por um
-servidor HTTP local em `127.0.0.1:8080`, atrás de um reverse proxy. O Discord recebe uma única
-mensagem compacta contendo a URL.
-
-Isso resolve um incidente real: anexar o `.html` fazia o Discord renderizar o arquivo inteiro como
-preview de texto no canal. A decisão está registrada em `docs/rc-discord-delivery-resilience.md`.
+Cada análise concluída entrega exatamente uma resposta de coaching no Discord, sem anexo e sem
+URL. O bot não produz nem hospeda uma página paralela para esse resultado.
 
 ## Stack
 
@@ -52,7 +46,7 @@ preview de texto no canal. A decisão está registrada em `docs/rc-discord-deliv
 |---|---|
 | Linguagem | Python 3.11+ |
 | Discord | `discord.py` |
-| HTTP | `httpx` (APIs), `aiohttp` (report server, já transitivo do discord.py) |
+| HTTP | `httpx` (APIs) |
 | Armazenamento | DuckDB (warehouse) + Parquet (eventos brutos) |
 | Configuração | `pydantic-settings` (typed, via `.env`) |
 | Logging | `structlog` (JSONL rotacionado, com redação de segredos) |
@@ -82,15 +76,15 @@ src/botgitgud/
   blizzard/     cliente da API Blizzard (catálogo de magias)
   ingest/       persistência: DuckDB, Parquet, fetchers
   analysis/     coorte, alinhamento, grading, gap de DPS, benchmark, setup
-  report/       ReportContract, render de texto/HTML, gráficos SVG
-  bot/          Discord, fila, worker, capability links, report server, entrega
-  ops/          supervisor de processo, deploy, preflight, ativação, publicação
+  report/       ReportContract, resposta de coaching e render de texto
+  bot/          Discord, fila, worker e entrega
+  ops/          supervisor de processo, deploy, preflight e publicação
   phase4/       trilha experimental de ML (NÃO promovida — ver abaixo)
 tests/
   unit/         suíte principal (offline)
   golden/       snapshots de regressão
   fixtures/     cassettes HTTP gravadas + helpers
-deploy/         systemd unit, Caddy template, scripts de bootstrap/backup/ativação
+deploy/         systemd unit e scripts de bootstrap/backup
 docs/           índice em docs/README.md; contratos, runbooks, experimentos, archive/
 legacy/         bot.py original congelado — oracle executável da suíte golden, nunca produção
 ```
@@ -133,7 +127,7 @@ python -m botgitgud.cli recover-jobs   # devolve jobs presos em `running` para `
 ```
 
 Comandos de deploy (`deploy-preflight`, `deploy-backup`, `deploy-restore`,
-`deploy-render-caddyfile`, `deploy-activation-readiness`, `publication-check`) e a trilha
+`publication-check`) e a trilha
 experimental (`experiment-*`, `discover`, `triage`, `dataset-status`) estão documentados em
 `--help` e em `docs/`.
 
@@ -158,9 +152,7 @@ rodá-los consome orçamento real de API.
 O alvo é uma VM Linux ARM64 sob systemd:
 
 ```
-systemd → supervisor Python → processo do bot → Discord runtime + ReportServer (127.0.0.1:8080)
-                                                          ↑
-                                              Caddy (HTTPS) faz reverse proxy
+systemd → supervisor Python → processo do bot → Discord runtime
 ```
 
 O systemd supervisiona **apenas** o supervisor Python; a política de restart do bot (backoff,
@@ -168,12 +160,7 @@ storm breaker, parada limpa) permanece em `ops/supervisor.py`, para não existir
 concorrentes tentando reiniciar o mesmo processo.
 
 Estão prontos e testados offline: bootstrap do host, template de `.env` de produção, preflight,
-unit systemd, backup/restore, template do Caddy e o gate de ativação
-(`docs/activation-runbook.md`).
-
-**Nada disso está ativo.** Não há VM provisionada, domínio, registro DNS nem certificado TLS
-emitido. O primeiro start de produção está deliberadamente bloqueado por código enquanto
-`REPORT_PUBLIC_BASE_URL` não apontar para um domínio real — ver `docs/linux-deployment.md`.
+unit systemd e backup/restore. O bot pode iniciar sem configuração de endpoint público.
 
 Antes de publicar ou empurrar o repositório:
 
@@ -214,8 +201,7 @@ operacional vigente dos contratos técnicos, dos experimentos da Fase 4 e dos re
 (`docs/archive/`), para ninguém executar um procedimento a partir de um documento antigo.
 
 Atalhos: [`runbook.md`](docs/runbook.md) (operação e incidentes),
-[`linux-deployment.md`](docs/linux-deployment.md) (deploy Linux/systemd/Caddy),
-[`activation-runbook.md`](docs/activation-runbook.md) (ativação do endpoint público),
+[`linux-deployment.md`](docs/linux-deployment.md) (deploy Linux/systemd),
 [`desvios.md`](docs/desvios.md) (registro de desvios, com a justificativa de cada um).
 
 ## Licença

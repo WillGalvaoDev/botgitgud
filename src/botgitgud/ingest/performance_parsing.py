@@ -10,12 +10,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from botgitgud.domain.models import AuraBand
+
 
 @dataclass(frozen=True, slots=True)
 class AuraUptime:
     spell_id: int
     name: str
     uptime_frac: float
+    total_uses: int = 0
+    bands: tuple[AuraBand, ...] = ()
 
 
 def parse_aura_uptimes(buffs_data: dict[str, Any]) -> list[AuraUptime]:
@@ -40,6 +44,12 @@ def parse_aura_uptimes(buffs_data: dict[str, Any]) -> list[AuraUptime]:
                 spell_id=guid,
                 name=a.get("name") or f"Spell #{guid}",
                 uptime_frac=uptime_ms / total_time,
+                total_uses=int(a.get("totalUses") or 0),
+                bands=tuple(
+                    AuraBand(start_ms=int(b["startTime"]), end_ms=int(b["endTime"]))
+                    for b in (a.get("bands") or [])
+                    if isinstance(b, dict) and "startTime" in b and "endTime" in b
+                ),
             )
         )
     return result
@@ -130,4 +140,22 @@ def parse_resource_waste(events: list[dict[str, Any]], player_id: int) -> dict[i
         if rtype is None:
             continue
         waste[int(rtype)] = waste.get(int(rtype), 0.0) + float(ev.get("waste") or 0)
+    return waste
+
+
+def parse_resource_waste_by_ability(
+    events: list[dict[str, Any]], player_id: int
+) -> dict[int, dict[int, float]]:
+    """Preserve waste by resource type and ability from existing event pages."""
+    waste: dict[int, dict[int, float]] = {}
+    for ev in events:
+        if ev.get("type") != "resourcechange" or ev.get("sourceID") != player_id:
+            continue
+        rtype = ev.get("resourceChangeType")
+        ability_id = ev.get("abilityGameID")
+        if rtype is None or ability_id is None:
+            continue
+        by_ability = waste.setdefault(int(rtype), {})
+        ability_id = int(ability_id)
+        by_ability[ability_id] = by_ability.get(ability_id, 0.0) + float(ev.get("waste") or 0)
     return waste

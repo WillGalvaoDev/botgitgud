@@ -14,7 +14,10 @@ query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {
         id encounterID name startTime endTime kill difficulty
         phaseTransitions { id startTime }
       }
-      masterData { actors { id name type subType petOwner } }
+      masterData {
+        actors { id name type subType petOwner }
+        abilities { gameID name icon type }
+      }
       table(fightIDs: $fightIDs, dataType: Summary, translate: true)
       castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)
       damageTable: table(fightIDs: $fightIDs, dataType: DamageDone, translate: true)
@@ -117,12 +120,14 @@ query GetPercentile(
 
 QUERY_RANKINGS_PAGE = """
 query GetRankingsCDs(
-  $encounterID: Int!, $className: String!, $specName: String!, $page: Int!, $partition: Int!
+  $encounterID: Int!, $className: String!, $specName: String!, $page: Int!, $partition: Int!,
+  $difficulty: Int!
 ) {
   worldData {
     encounter(id: $encounterID) {
       characterRankings(
-        className: $className, specName: $specName, metric: dps, page: $page, partition: $partition
+        className: $className, specName: $specName, metric: dps, page: $page,
+        partition: $partition, difficulty: $difficulty
       )
     }
   }

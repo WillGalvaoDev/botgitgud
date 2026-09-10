@@ -159,7 +159,7 @@ def test_top_candidate_groups_excludes_out_of_scope_and_unknown_specs(tmp_path: 
         rankings = (
             _dps_ranking("Supported", class_name="Mage", spec_name="Fire"),
             _dps_ranking("Support", class_name="Evoker", spec_name="Augmentation"),
-            _dps_ranking("Unknown", class_name="DemonHunter", spec_name="Devourer"),
+            _dps_ranking("Unknown", class_name="Mage", spec_name="Chronomancer"),
         )
         discovery.write_fight_rankings(_fight_rankings(1, dps=rankings), report_code="CODE1")
 

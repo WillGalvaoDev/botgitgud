@@ -28,11 +28,15 @@ from __future__ import annotations
 import math
 from typing import Literal
 
+from botgitgud.analysis.grading import MIN_N_FOR_GRADING
+
 SANITY_BAND_PCT = 0.35
 POSITIONAL_BAND_PCT = 0.12
 POSITIONAL_MIN_N = 8
 
 COHORT_MIN_HARD = 8
+COHORT_TARGET_N = MIN_N_FOR_GRADING
+COHORT_STRETCH_N = 30
 COHORT_MIN_WARN = 20
 COHORT_MAX = 100
 MAX_RANKING_PAGES = 10

@@ -336,24 +336,22 @@ def test_unknown_budget_is_null_with_a_reason() -> None:
 # -- entrega ---------------------------------------------------------------------------
 
 
-def test_persist_before_send_is_provable_from_the_artifact(tmp_path: Path) -> None:
+def test_delivery_timing_is_persisted(tmp_path: Path) -> None:
     with track_analysis(tmp_path) as run:
-        run.report_persisted_at = "2026-08-26T00:00:01+00:00"
         run.delivery_started_at = "2026-08-26T00:00:02+00:00"
         run.delivery_finished_at = "2026-08-26T00:00:03+00:00"
         run.delivery_status = "delivered"
         analysis_id = run.analysis_id
     payload = read_analysis_run(tmp_path, analysis_id)
     assert payload is not None
-    persisted = datetime.fromisoformat(payload["report_persisted_at"])
     started = datetime.fromisoformat(payload["delivery_started_at"])
-    assert persisted < started
+    finished = datetime.fromisoformat(payload["delivery_finished_at"])
+    assert started < finished
     assert payload["delivery_status"] == "delivered"
 
 
 def test_delivery_failure_is_persisted(tmp_path: Path) -> None:
     with track_analysis(tmp_path) as run:
-        run.report_persisted_at = "2026-08-26T00:00:01+00:00"
         run.delivery_status = "failed"
         run.channel_id = "1529559571968954489"
         run.guild_id = "204649688400527360"
@@ -379,17 +377,6 @@ def test_analysis_failure_is_persisted_and_the_error_propagates(tmp_path: Path) 
     assert payload["final_status"] == "analysis_failed"
     assert payload["error_type"] == "RuntimeError"
     assert "pipeline quebrou" in payload["error_message"]
-
-
-def test_report_persistence_failure_is_persisted(tmp_path: Path) -> None:
-    with track_analysis(tmp_path) as run:
-        run.final_status = "report_persistence_failed"
-        run.report_path_exists = False
-        analysis_id = run.analysis_id
-    payload = read_analysis_run(tmp_path, analysis_id)
-    assert payload is not None
-    assert payload["final_status"] == "report_persistence_failed"
-    assert payload["report_path_exists"] is False
 
 
 def test_an_early_return_still_leaves_telemetry(tmp_path: Path) -> None:

@@ -110,14 +110,7 @@ def test_settings_hash_changes_when_a_non_secret_field_changes() -> None:
     assert base != changed
 
 
-# -- CL.6: fields must load the same way from a systemd EnvironmentFile ------
-# EnvironmentFile= just sets process environment variables before exec — the
-# exact same mechanism `os.environ` already uses, and pydantic-settings reads
-# BOTH .env AND real env vars by default. No new loading path is introduced;
-# this only proves the CL.5 fields aren't accidentally file-only.
-
-
-def test_report_server_settings_load_from_plain_environment_variables(
+def test_retired_report_environment_variables_are_ignored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DISCORD_TOKEN", "d" * 10)
@@ -131,9 +124,9 @@ def test_report_server_settings_load_from_plain_environment_variables(
 
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
 
-    assert settings.report_server_host == "127.0.0.1"
-    assert settings.report_server_port == 9090
-    assert settings.report_public_base_url == "https://example.com"
+    assert "report_server_host" not in type(settings).model_fields
+    assert "report_server_port" not in type(settings).model_fields
+    assert "report_public_base_url" not in type(settings).model_fields
 
 
 def test_settings_hash_ignores_credential_values() -> None:

@@ -166,6 +166,13 @@ def test_different_policy_version_is_a_distinct_job(tmp_path: Path) -> None:
     backend.add_fight("repA", 1, (FakePlayer("Alpha", rank_percent=97.0),))
     deps, queue, _client = _env(tmp_path, backend)
 
+    target_v1 = EncounterBenchmarkTarget(
+        spec=TARGET.spec,
+        encounter_id=TARGET.encounter_id,
+        difficulty=TARGET.difficulty,
+        partition=TARGET.partition,
+        benchmark_policy_version="v1",
+    )
     target_v2 = EncounterBenchmarkTarget(
         spec=TARGET.spec,
         encounter_id=TARGET.encounter_id,
@@ -176,8 +183,8 @@ def test_different_policy_version_is_a_distinct_job(tmp_path: Path) -> None:
     r1 = ensure_benchmark_job(
         deps=deps,
         queue=queue,
-        target=TARGET,
-        policy=BenchmarkPolicy.default(),
+        target=target_v1,
+        policy=BenchmarkPolicy(policy_version="v1"),
         candidates=_candidates_for(backend),
         current_population_size=1,
     )

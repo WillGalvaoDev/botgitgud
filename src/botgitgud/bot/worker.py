@@ -22,14 +22,13 @@ from botgitgud.bot.benchmark_job import run_benchmark_build_job
 from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.job_models import Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
-from botgitgud.bot.report_store import ReportPersistenceError, persist_report
 from botgitgud.errors import (
     COLD_COHORT_NO_PROGRESS,
     BotGitGudError,
     CohortDeferredBudget,
     RateLimitBudgetExceeded,
 )
-from botgitgud.report.render import contract_for, render_analysis
+from botgitgud.report.render import contract_for
 
 log = structlog.get_logger(__name__)
 
@@ -119,23 +118,12 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         )
         return JobOutcome(job=job, ok=False, message=message)
 
-    report_path: str | None = None
     analysis: AnalysisResult | None = None
     try:
         if job.job_type == "analyze":
-            message, html_report, analysis = _run_analyze(job, deps)
-            # RC.1/RC.11: o artefato vira arquivo ANTES de qualquer tentativa de
-            # entrega. Se isto falhar, o job falha como erro de producao do
-            # artifact — nunca seguimos para o Discord com um anexo inexistente.
-            report_path = str(persist_report(deps.settings.data_dir, job.job_id, html_report))
-            log.info("worker.report_persisted", job_id=job.job_id, report_path=report_path)
+            message, analysis = _run_analyze(job, deps)
         else:
             message = _run_build_cohort(job, deps)
-            html_report = None
-    except ReportPersistenceError as e:
-        log.error("worker.report_persistence_failed", job_id=job.job_id, error=str(e))
-        queue.mark_failed(job.job_id, error=str(e))
-        return JobOutcome(job=job, ok=False, message=str(e))
     except RateLimitBudgetExceeded as e:
         log.info("worker.job_requeued_budget_exceeded", job_id=job.job_id, error=str(e))
         queue.requeue(job.job_id)
@@ -151,24 +139,15 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
         queue.mark_failed(job.job_id, error=str(e))
         return JobOutcome(job=job, ok=False, message=str(e))
 
-    queue.mark_done(job.job_id, report_path=report_path)
+    queue.mark_done(job.job_id, report_path=None)
     log.info("worker.analysis_completed", job_id=job.job_id, job_type=job.job_type)
-    # CL.5: o MESMO construtor canônico (RP.0) que render_analysis já usou
-    # dentro de _run_analyze — recomputar é barato/puro (nenhum I/O), e
-    # evita alargar a assinatura de _run_analyze só para carregar o
-    # contrato de volta através de mais uma camada.
     contract = contract_for(analysis) if analysis is not None else None
     if analysis is not None:
-        # EB.6: só DEPOIS de o artefato estar persistido e o job marcado
-        # `done` — o relatório nunca espera por isto, e uma falha aqui não
-        # pode reverter nada (o job já está concluído).
         maybe_enqueue_benchmark_build(deps=deps, queue=queue, result=analysis, source="worker")
     return JobOutcome(
         job=job,
         ok=True,
         message=message,
-        html_report=html_report,
-        report_path=report_path,
         report_contract=contract,
     )
 
@@ -252,7 +231,7 @@ def _record_cold_progress(run: object, error: CohortDeferredBudget) -> None:
     run.final_status = "deferred_budget"  # type: ignore[attr-defined]
 
 
-def _run_analyze(job: Job, deps: Deps) -> tuple[str, str, AnalysisResult]:
+def _run_analyze(job: Job, deps: Deps) -> tuple[str, AnalysisResult]:
     report_code, fight_id_s, character_name = job.dedup_key.split(":", 2)
     req = AnalysisRequest(
         report_code=report_code, fight_id=int(fight_id_s), character_name=character_name
@@ -282,12 +261,10 @@ def _run_analyze(job: Job, deps: Deps) -> tuple[str, str, AnalysisResult]:
         run.cold_build_state = "ready" if run.cold_build_started else None
         run.hot_path = not run.cold_build_started
         record_analysis_result(run, result)
-        # RP.3: nunca renderiza a partir do `AnalysisResult` cru — o
-        # `ReportContract` (RP.0) e seu guarda execution-only são
-        # obrigatórios, e `render_analysis` é o único jeito de chegar aos
-        # renderizadores por este caminho.
-        rendered = render_analysis(result)
-        return rendered.summary, rendered.html, result
+        # A resposta pública é renderizada na fronteira de entrega a partir
+        # do contrato canônico; nenhum artefato paralelo é produzido aqui.
+        contract_for(result)
+        return "Análise concluída.", result
 
 
 def _run_build_cohort(job: Job, deps: Deps) -> str:

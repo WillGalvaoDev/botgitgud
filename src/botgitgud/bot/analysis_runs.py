@@ -7,7 +7,7 @@ antes do envio. Tudo isso vivia em stdout.
 
 Arquivo JSON ao lado do warehouse — não no DuckDB, para não reintroduzir a D-34
 (observabilidade que exige derrubar o processo dono). Escrita atômica, como o
-ops-snapshot e o report_store.
+ops-snapshot.
 """
 
 from __future__ import annotations
@@ -120,9 +120,6 @@ class AnalysisRun:
     accounting_reason: str | None = None
 
     # relatório e entrega
-    report_artifact_id: str | None = None
-    report_path_exists: bool | None = None
-    report_persisted_at: str | None = None
     delivery_started_at: str | None = None
     delivery_finished_at: str | None = None
     delivery_status: str | None = None

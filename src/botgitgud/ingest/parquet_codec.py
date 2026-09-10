@@ -13,8 +13,12 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from botgitgud.domain.damage_scope import DamageScopeVersion
 from botgitgud.domain.models import (
     AbilityDamage,
+    AbilitySourceDamage,
+    AuraBand,
+    AuraDetail,
     FightRef,
     GearPiece,
     PhaseInterval,
@@ -71,12 +75,35 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
     cast_timeline_json = json.dumps({str(k): list(v) for k, v in log.cast_timeline.items()})
     damage_by_ability_json = json.dumps(
         {
-            str(k): {"spell_id": v.spell_id, "total": v.total, "hits": v.hits, "casts": v.casts}
+            str(k): {
+                "spell_id": v.spell_id,
+                "total": v.total,
+                "hits": v.hits,
+                "casts": v.casts,
+                "by_source": {
+                    str(source_id): {
+                        "source_id": source.source_id,
+                        "total": source.total,
+                        "hits": source.hits,
+                    }
+                    for source_id, source in v.by_source.items()
+                },
+            }
             for k, v in log.damage_by_ability.items()
         }
     )
     uptimes_json = json.dumps({str(k): v for k, v in log.uptimes.items()})
     resource_waste_json = json.dumps(dict(log.resource_waste))
+    resource_waste_by_ability_json = json.dumps(log.resource_waste_by_ability)
+    aura_details_json = json.dumps(
+        {
+            str(spell_id): {
+                "total_uses": detail.total_uses,
+                "bands": [[band.start_ms, band.end_ms] for band in detail.bands],
+            }
+            for spell_id, detail in log.aura_details.items()
+        }
+    )
     avg_targets_per_cast_json = json.dumps({str(k): v for k, v in log.avg_targets_per_cast.items()})
     talent_pairs_json = json.dumps([list(p) for p in sorted(build.talent_pairs)])
     setup_json = _encode_setup(build.setup)
@@ -122,11 +149,19 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
             "damage_by_ability_json": [damage_by_ability_json],
             "uptimes_json": [uptimes_json],
             "resource_waste_json": [resource_waste_json],
+            "resource_waste_by_ability_json": [resource_waste_by_ability_json],
+            "aura_details_json": [aura_details_json],
             "avg_targets_per_cast_json": [avg_targets_per_cast_json],
             "talent_pairs_json": [talent_pairs_json],
             "setup_json": [setup_json],
             "phase_intervals_json": [phase_intervals_json],
             "phase_cast_timeline_json": [phase_cast_timeline_json],
+            "damage_scope": [log.damage_scope.value],
+            "support_subtracted_damage": [
+                log.support_subtracted_damage
+                if log.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
+                else 0.0
+            ],
         }
     )
     pq.write_table(table, path)
@@ -167,11 +202,28 @@ def read_parquet_log(path: Path) -> PlayerLog:
         setup=_decode_setup(row.get("setup_json")),
     )
     cast_timeline = {int(k): tuple(v) for k, v in json.loads(row["cast_timeline_json"]).items()}
-    damage_by_ability = {
-        int(k): AbilityDamage(**v) for k, v in json.loads(row["damage_by_ability_json"]).items()
-    }
+    damage_by_ability = {}
+    for k, value in json.loads(row["damage_by_ability_json"]).items():
+        by_source = {
+            int(source_id): AbilitySourceDamage(**source)
+            for source_id, source in value.pop("by_source", {}).items()
+        }
+        damage_by_ability[int(k)] = AbilityDamage(**value, by_source=by_source)
     uptimes = {int(k): v for k, v in json.loads(row["uptimes_json"]).items()}
     resource_waste = json.loads(row["resource_waste_json"])
+    resource_waste_by_ability = {
+        int(rtype): {int(ability_id): waste for ability_id, waste in by_ability.items()}
+        for rtype, by_ability in json.loads(
+            row.get("resource_waste_by_ability_json") or "{}"
+        ).items()
+    }
+    aura_details = {
+        int(spell_id): AuraDetail(
+            total_uses=detail["total_uses"],
+            bands=tuple(AuraBand(start_ms=b[0], end_ms=b[1]) for b in detail["bands"]),
+        )
+        for spell_id, detail in json.loads(row.get("aura_details_json") or "{}").items()
+    }
     avg_targets_per_cast = {
         int(k): v for k, v in json.loads(row.get("avg_targets_per_cast_json") or "{}").items()
     }
@@ -180,6 +232,7 @@ def read_parquet_log(path: Path) -> PlayerLog:
         for spell_id, entries in json.loads(row.get("phase_cast_timeline_json") or "{}").items()
     }
 
+    damage_scope = DamageScopeVersion(row.get("damage_scope") or DamageScopeVersion.LEGACY_UNSCOPED)
     return PlayerLog(
         fight=fight,
         build=build,
@@ -190,8 +243,16 @@ def read_parquet_log(path: Path) -> PlayerLog:
         damage_by_ability=damage_by_ability,
         uptimes=uptimes,
         resource_waste=resource_waste,
+        resource_waste_by_ability=resource_waste_by_ability,
+        aura_details=aura_details,
         deaths=row["deaths"],
         downtime_s=row.get("downtime_s") or 0.0,
         avg_targets_per_cast=avg_targets_per_cast,
         phase_cast_timeline=phase_cast_timeline,
+        damage_scope=damage_scope,
+        support_subtracted_damage=(
+            (row.get("support_subtracted_damage") or 0.0)
+            if damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
+            else 0.0
+        ),
     )

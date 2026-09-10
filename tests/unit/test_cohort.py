@@ -15,6 +15,14 @@ from botgitgud.analysis.cohort import (
     within_positional_band,
     within_sanity_band,
 )
+from botgitgud.analysis.grading import MIN_N_FOR_GRADING
+
+
+def test_target_is_derived_from_grading_threshold() -> None:
+    from botgitgud.analysis.cohort import COHORT_TARGET_N
+
+    assert COHORT_TARGET_N == MIN_N_FOR_GRADING
+
 
 # -- documented acceptance criteria ------------------------------------------
 

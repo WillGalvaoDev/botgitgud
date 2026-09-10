@@ -44,6 +44,7 @@ from botgitgud.analysis.benchmark_aggregate import build_encounter_benchmark
 from botgitgud.analysis.benchmark_build_budget import affordable_fights, estimate_benchmark_build
 from botgitgud.analysis.benchmark_build_progress import BenchmarkBuildProgressStore, ProgressRow
 from botgitgud.analysis.benchmark_store import BenchmarkStore
+from botgitgud.analysis.benchmark_store_models import population_fingerprint
 from botgitgud.config import Settings
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, RankingCandidate
 from botgitgud.ingest.benchmark_fetch import QueryFn, fetch_fight_player_details
@@ -80,6 +81,20 @@ class BenchmarkBuildResult:
     @property
     def is_ready(self) -> bool:
         return self.state is BenchmarkBuildState.READY
+
+
+class LocalBenchmarkRebuildError(RuntimeError):
+    """O rebuild local recusou alterar a população ou usar dado incompleto."""
+
+
+@dataclass(frozen=True, slots=True)
+class LocalBenchmarkRebuildResult:
+    source_benchmark_id: str
+    benchmark_id: str
+    observations_reused: int
+    before_by_band: dict[str, int]
+    after_by_band: dict[str, int]
+    population_fingerprint: str
 
 
 _UNKNOWN_BAND = "pending"
@@ -140,6 +155,120 @@ def _thin_player_log(row: ProgressRow, target: EncounterBenchmarkTarget) -> Play
         dps=None,
         percentile=row.rank_percent,
         cast_timeline={},
+    )
+
+
+def rebuild_benchmark_from_local_progress(
+    *,
+    progress_store: BenchmarkBuildProgressStore,
+    benchmark_store: BenchmarkStore,
+    source_target: EncounterBenchmarkTarget,
+    target: EncounterBenchmarkTarget,
+    policy: BenchmarkPolicy,
+) -> LocalBenchmarkRebuildResult:
+    """Re-bandeia uma população persistida, sem capacidade de aquisição.
+
+    A assinatura deliberadamente não recebe cliente nem ``query_fn``. Todas
+    as observações precisam existir completas no progresso da versão fonte.
+    """
+    source_dimensions = (
+        source_target.spec,
+        source_target.encounter_id,
+        source_target.difficulty,
+        source_target.partition,
+    )
+    target_dimensions = (target.spec, target.encounter_id, target.difficulty, target.partition)
+    if source_dimensions != target_dimensions:
+        raise LocalBenchmarkRebuildError("source and target must describe the same population")
+    if target.benchmark_policy_version != policy.policy_version:
+        raise LocalBenchmarkRebuildError("target and policy versions do not match")
+
+    source_meta = next(
+        (
+            row
+            for row in benchmark_store.list_benchmarks()
+            if row["benchmark_id"] == source_target.benchmark_id
+        ),
+        None,
+    )
+    if source_meta is None:
+        raise LocalBenchmarkRebuildError("source benchmark does not exist")
+
+    source_rows = progress_store.read_progress(source_target.benchmark_id)
+    if not source_rows:
+        raise LocalBenchmarkRebuildError("source benchmark has no local progress observations")
+    incomplete = [
+        row.candidate_key
+        for row in source_rows
+        if row.status != "fetched" or row.rank_percent is None or row.setup is None
+    ]
+    if incomplete:
+        raise LocalBenchmarkRebuildError(
+            f"source has {len(incomplete)} incomplete local observations; "
+            "network acquisition refused"
+        )
+
+    source_observations = [_thin_player_log(row, source_target) for row in source_rows]
+    fingerprint = population_fingerprint(source_observations)
+    if fingerprint != source_meta["population_fingerprint"]:
+        raise LocalBenchmarkRebuildError(
+            "source progress population fingerprint does not match benchmark"
+        )
+
+    candidates = [
+        RankingCandidate(row.report_code, row.fight_id, row.player_name, row.duration_s or 0.0)
+        for row in source_rows
+    ]
+    existing_target_rows = progress_store.read_progress(target.benchmark_id)
+    if existing_target_rows and {row.candidate_key for row in existing_target_rows} != {
+        row.candidate_key for row in source_rows
+    }:
+        raise LocalBenchmarkRebuildError("existing target progress population differs from source")
+    progress_store.register_candidates(target.benchmark_id, candidates)
+    for row in source_rows:
+        band = policy.band_for(row.rank_percent)
+        progress_store.mark_fetched(
+            target.benchmark_id,
+            row.report_code,
+            row.fight_id,
+            row.player_name,
+            band=band.name if band is not None else "outside_policy_bands",
+            rank_percent=row.rank_percent,
+            duration_s=row.duration_s,
+            item_level=row.item_level,
+            class_name=row.class_name,
+            spec_name=row.spec_name,
+            server=row.server,
+            partition=row.partition,
+            setup=row.setup,
+        )
+
+    target_rows = progress_store.read_progress(target.benchmark_id)
+    if {row.candidate_key for row in target_rows} != {row.candidate_key for row in source_rows}:
+        raise LocalBenchmarkRebuildError("target progress population differs from source")
+    observations = [_thin_player_log(row, target) for row in target_rows]
+    if population_fingerprint(observations) != fingerprint:
+        raise LocalBenchmarkRebuildError("rebuilt population fingerprint differs from source")
+
+    benchmark = build_encounter_benchmark(observations, target=target, policy=policy)
+    benchmark_store.write_benchmark(benchmark, policy=policy, observations=observations)
+    written_meta = next(
+        row
+        for row in benchmark_store.list_benchmarks()
+        if row["benchmark_id"] == target.benchmark_id
+    )
+    if written_meta["population_fingerprint"] != fingerprint:
+        raise LocalBenchmarkRebuildError("persisted population fingerprint differs from source")
+
+    before, _ = _band_counts(source_rows)
+    after, _ = _band_counts(target_rows)
+    return LocalBenchmarkRebuildResult(
+        source_benchmark_id=source_target.benchmark_id,
+        benchmark_id=target.benchmark_id,
+        observations_reused=len(observations),
+        before_by_band=before,
+        after_by_band=after,
+        population_fingerprint=fingerprint,
     )
 
 

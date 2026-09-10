@@ -114,11 +114,14 @@ def _single_band_benchmark(
 
 
 def _multi_band_benchmark() -> EncounterBenchmark:
-    bands = {
-        "p95-99": _band("p95-99", {GOOD: 8, BAD: 2}, 10),
-        "p75-95": _band("p75-95", {GOOD: 20, BAD: 10}, 30),
-        "p50-75": _band("p50-75", {GOOD: 12, BAD: 8}, 20),
-    }
+    bands = _empty_bands()
+    bands.update(
+        {
+            "p95-99": _band("p95-99", {GOOD: 8, BAD: 2}, 10),
+            "p75-95": _band("p75-95", {GOOD: 20, BAD: 10}, 30),
+            "p50-75": _band("p50-75", {GOOD: 12, BAD: 8}, 20),
+        }
+    )
     return _benchmark(bands)
 
 
@@ -529,7 +532,7 @@ def test_scenario_multi_band_breakdown_exact() -> None:
     finding = _compare(_BAD_SETUP, bm)
     assert finding.prevalence is not None
     breakdown = {bp.band.name: bp.n_available for bp in finding.prevalence.bands}
-    assert breakdown == {"p95-99": 10, "p75-95": 30, "p50-75": 20}
+    assert breakdown == {"p99-100": 0, "p95-99": 10, "p75-95": 30, "p50-75": 20}
 
 
 # -- 34-35: determinismo -------------------------------------------------------------

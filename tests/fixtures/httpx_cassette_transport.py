@@ -79,8 +79,58 @@ class ReplayTransport(httpx.BaseTransport):
         # Do not re-record against WCL merely because a query literal changed.
         if cassette is None and isinstance(payload, dict):
             query = payload.get("query")
+            # M16 adds report masterData abilities to GetPlayerMeta. Historical
+            # responses do not contain that field, so replay identity comes only
+            # from the secondary tables already present in those responses.
+            if (
+                isinstance(query, str)
+                and "GetPlayerMeta" in query
+                and "        abilities { gameID name icon type }\n" in query
+            ):
+                legacy_query = query.replace(
+                    "        abilities { gameID name icon type }\n", ""
+                ).replace(
+                    "      masterData {\n        actors { id name type subType petOwner }\n      }",
+                    "      masterData { actors { id name type subType petOwner } }",
+                )
+                legacy_payload = {**payload, "query": legacy_query}
+                legacy_key = cassette_key(request.method, str(request.url), legacy_payload)
+                cassette = load_cassette(legacy_key)
             if isinstance(query, str) and "limit: 10000" in query and "dataType: Casts" in query:
                 legacy_payload = {**payload, "query": query.replace("limit: 10000", "limit: 5000")}
+                legacy_key = cassette_key(request.method, str(request.url), legacy_payload)
+                cassette = load_cassette(legacy_key)
+            # M3 compatibility is intentionally Mythic-only.  The recorded golden
+            # target is difficulty=5 and the live measurement showed that the old,
+            # unfiltered query returned Mythic, so that one replay is equivalent.
+            # Heroic (or any other difficulty) fails closed.  GATE-10 is resolved:
+            # a same-instant measurement found difficulty=5 and the unfiltered query
+            # identical; full re-recording would require the wider dependent-log set.
+            variables = payload.get("variables")
+            if (
+                cassette is None
+                and isinstance(query, str)
+                and "GetRankingsCDs" in query
+                and isinstance(variables, dict)
+                and variables.get("difficulty") == 5
+            ):
+                legacy_query = query.replace(
+                    "$encounterID: Int!, $className: String!, $specName: String!, "
+                    "$page: Int!, $partition: Int!,\n"
+                    "  $difficulty: Int!",
+                    "$encounterID: Int!, $className: String!, $specName: String!, "
+                    "$page: Int!, $partition: Int!",
+                ).replace(
+                    "className: $className, specName: $specName, metric: dps, page: $page,\n"
+                    "        partition: $partition, difficulty: $difficulty",
+                    "className: $className, specName: $specName, metric: dps, "
+                    "page: $page, partition: $partition",
+                )
+                legacy_payload = {
+                    **payload,
+                    "query": legacy_query,
+                    "variables": {k: v for k, v in variables.items() if k != "difficulty"},
+                }
                 legacy_key = cassette_key(request.method, str(request.url), legacy_payload)
                 cassette = load_cassette(legacy_key)
         if cassette is None:

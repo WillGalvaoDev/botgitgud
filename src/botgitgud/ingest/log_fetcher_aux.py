@@ -14,7 +14,7 @@ from typing import Any
 import structlog
 
 from botgitgud.domain.external_buffs import AUGMENTATION_BUFF_IDS, EXTERNAL_BUFF_IDS
-from botgitgud.domain.models import PhaseInterval, PhaseKey
+from botgitgud.domain.models import AuraDetail, PhaseInterval, PhaseKey
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError
 from botgitgud.ingest.performance_parsing import parse_aura_uptimes
@@ -81,7 +81,7 @@ def fetch_buffs_and_debuffs(
     fight_id: int,
     player_id: int,
     catalog: SpellCatalog,
-) -> tuple[bool, frozenset[int], dict[int, float]]:
+) -> tuple[bool, frozenset[int], dict[int, float], dict[int, AuraDetail]]:
     """T2.1 (has_augmentation/external_buffs) + T3.1 (uptimes): one query
     each to the Buffs and Debuffs tables — a single Buffs fetch serves
     both purposes rather than querying it twice. (False, frozenset(), {})
@@ -93,6 +93,7 @@ def fetch_buffs_and_debuffs(
     has_augmentation = False
     external_buffs: frozenset[int] = frozenset()
     uptimes: dict[int, float] = {}
+    aura_details: dict[int, AuraDetail] = {}
 
     try:
         res_json = query_fn(
@@ -113,6 +114,7 @@ def fetch_buffs_and_debuffs(
         for aura in parse_aura_uptimes(buffs_data):
             catalog.learn(aura.spell_id, aura.name, "wcl")
             uptimes[aura.spell_id] = aura.uptime_frac
+            aura_details[aura.spell_id] = AuraDetail(aura.total_uses, aura.bands)
     except ApiError as e:
         log.warning("log_fetcher.buffs_failed", error=str(e))
 
@@ -132,10 +134,11 @@ def fetch_buffs_and_debuffs(
         for aura in parse_aura_uptimes(debuffs_data):
             catalog.learn(aura.spell_id, aura.name, "wcl")
             uptimes[aura.spell_id] = aura.uptime_frac
+            aura_details[aura.spell_id] = AuraDetail(aura.total_uses, aura.bands)
     except ApiError as e:
         log.warning("log_fetcher.debuffs_failed", error=str(e))
 
-    return has_augmentation, external_buffs, uptimes
+    return has_augmentation, external_buffs, uptimes, aura_details
 
 
 def fetch_cast_timelines(

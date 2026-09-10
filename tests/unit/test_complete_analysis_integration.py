@@ -5,7 +5,7 @@ Não basta provar `setup_analysis is not None`: a pergunta é se uma análise
 com benchmark disponível produz, ao mesmo tempo, findings das CINCO
 categorias de Setup E a análise de Execution completa, e se as duas chegam
 juntas ao `ReportContract`. Cada cenário abaixo roda o caminho equivalente
-ao `!analisar` real (`run_analysis` + `render_analysis`), nunca uma
+ao `!analisar` real (`run_analysis` + contrato de coaching), nunca uma
 simulação das camadas.
 
 Zero WCL real, zero Discord: `_DispatchTransport` (test_pipeline.py) para o
@@ -52,7 +52,8 @@ from botgitgud.domain.models import (
     TalentNode,
 )
 from botgitgud.ingest.log_fetcher import LogFetcher
-from botgitgud.report.render import render_analysis
+from botgitgud.report.coaching_answer import render_coaching_answer
+from botgitgud.report.render import contract_for
 from botgitgud.report.setup_text import render_setup_section
 
 ALL_CATEGORIES = frozenset(
@@ -259,8 +260,7 @@ def test_scenario_a_report_contract_carries_all_five_sections(tmp_path: Path) ->
 
     deps2 = _build_deps(tmp_path, _DispatchTransport(_responses_with_rich_setup()))
     result = _analyze(deps2)
-    rendered = render_analysis(result)
-    contract = rendered.contract
+    contract = contract_for(result)
 
     assert contract.resultado.char_name == "Zarad"  # 1. RESULTADO
     assert contract.setup is not None  # 2. SETUP
@@ -272,15 +272,17 @@ def test_scenario_a_report_contract_carries_all_five_sections(tmp_path: Path) ->
     assert contract.confianca.reference_pool_members is not None
 
     # 4. TOP 3 — execution-only, sempre
-    from botgitgud.analysis.findings import Finding
+    from botgitgud.analysis.findings import Finding, RelevanceFinding
 
-    assert all(isinstance(a, Finding) for a in contract.top_actions)
+    assert all(isinstance(a, Finding) for a in contract.top_actions.level1)
+    assert all(isinstance(a, RelevanceFinding) for a in contract.top_actions.level2)
     setup_ids = {id(f) for f in contract.setup.findings}
-    assert not any(id(a) in setup_ids for a in contract.top_actions)
+    priorities = (*contract.top_actions.level1, *contract.top_actions.level2)
+    assert not any(id(a) in setup_ids for a in priorities)
 
     # SETUP aparece no relatório de texto; a mensagem inline continua sem ele
     assert render_setup_section(contract.setup)
-    assert "SETUP" not in rendered.summary
+    assert "SETUP" not in render_coaching_answer(contract)
 
 
 # ==================================================================================
@@ -311,11 +313,10 @@ def test_scenario_b_missing_benchmark_degrades_honestly_and_queues_a_build(
     assert not hasattr(result.setup_analysis, "score")
     assert all(not hasattr(f, "estimated_gain_pct") for f in result.setup_analysis.findings)
 
-    # O relatório continua entregável, e sem seção SETUP inventada
-    rendered = render_analysis(result)
-    assert "<html" in rendered.html
-    assert rendered.summary
-    assert render_setup_section(rendered.contract.setup) == []
+    # A resposta continua entregável, e sem seção SETUP inventada
+    contract = contract_for(result)
+    assert render_coaching_answer(contract)
+    assert render_setup_section(contract.setup) == []
 
     # E um benchmark_build foi enfileirado — sem a análise ter esperado nada
     outcome = maybe_enqueue_benchmark_build(deps=deps, queue=queue, result=result, source="test")
@@ -425,7 +426,7 @@ def test_scenario_c_build_then_ready_then_next_analysis_is_complete(tmp_path: Pa
     assert second.comparisons  # Execution também roda
     assert second.dps_gap is not None
 
-    contract = render_analysis(second).contract
+    contract = contract_for(second)
     assert contract.setup is not None
     assert {f.category for f in contract.setup.findings} == ALL_CATEGORIES
     assert contract.execucao.comparisons
@@ -520,8 +521,8 @@ def test_scenario_e_setup_text_never_makes_a_causal_claim(tmp_path: Path) -> Non
     observations_seen = {f.observation for f in result.setup_analysis.findings}
     assert ObservationCode.LOW_PREVALENCE in observations_seen
 
-    rendered = render_analysis(result)
-    section = "\n".join(render_setup_section(rendered.contract.setup)).lower()
+    contract = contract_for(result)
+    section = "\n".join(render_setup_section(contract.setup)).lower()
     assert section  # há de fato uma seção para inspecionar
     for word in _FORBIDDEN_WORDS:
         assert word not in section, word
@@ -599,18 +600,13 @@ def test_talent_build_does_not_filter_the_encounter_benchmark(tmp_path: Path) ->
     assert a == b
 
 
-def test_production_matching_is_still_v1_and_talent_cluster_still_applies(
+def test_production_matching_uses_v2_default(
     tmp_path: Path,
 ) -> None:
-    """MATCHING V2: NÃO ativado nesta rodada — limitação aceita e
-    documentada. Este teste é a prova de que continua assim, e falha se
-    alguém ativar v2 sem passar por essa decisão.
-    """
-    from botgitgud.analysis.cohort_match import DEGRADATION_ORDER
+    """M4 activates v2 through the literal production default."""
     from botgitgud.domain.models import DEFAULT_MATCHING_POLICY_VERSION, CohortCriteria
 
-    assert DEFAULT_MATCHING_POLICY_VERSION == "v1"
-    assert "talent_cluster" in DEGRADATION_ORDER
+    assert DEFAULT_MATCHING_POLICY_VERSION == "v2"
 
     criteria = CohortCriteria(
         encounter_id=3179,
@@ -622,7 +618,7 @@ def test_production_matching_is_still_v1_and_talent_cluster_still_applies(
         duration_min_s=280.0,
         duration_max_s=320.0,
     )
-    assert criteria.matching_policy_version == "v1"
+    assert criteria.matching_policy_version == "v2"
 
     # e o pipeline continua sem passar outra coisa
     import ast

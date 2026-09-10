@@ -33,7 +33,6 @@ from botgitgud.ops.deploy import (
 from botgitgud.ops.preflight import (
     CheckStatus,
     check_persistent_dirs,
-    check_report_server_bind,
     check_systemd_unit,
     check_writable,
     exit_code_for,
@@ -68,6 +67,7 @@ def _populate_data_dir(root: Path) -> None:
         (root / name).mkdir(parents=True, exist_ok=True)
     (root / "warehouse.duckdb").write_text("fake-warehouse", encoding="utf-8")
     (root / "raw" / "fight.parquet").write_text("raw-bytes", encoding="utf-8")
+    (root / "reports").mkdir(exist_ok=True)
     (root / "reports" / "abc123.html").write_text("<html>relatorio</html>", encoding="utf-8")
     (root / "logs" / "botgitgud.jsonl").write_text('{"event":"x"}\n', encoding="utf-8")
     (root / "ops" / "analysis-runs" / "run.json").write_text("{}", encoding="utf-8")
@@ -87,7 +87,8 @@ def test_persistent_dirs_cover_every_runtime_directory() -> None:
     """
     paths = persistent_dirs(Path("/opt/botgitgud/data"))
     names = {p.name for p in paths}
-    assert {"raw", "reports", "logs", "control", "analysis-runs"} <= names
+    assert {"raw", "logs", "control", "analysis-runs"} <= names
+    assert "reports" not in names
 
 
 def test_persistent_dirs_are_all_under_the_given_data_dir(tmp_path: Path) -> None:
@@ -124,74 +125,16 @@ def test_placeholder_credential_is_rejected() -> None:
     assert any(issue.variable == "DISCORD_TOKEN" for issue in report.errors)
 
 
-def test_non_loopback_report_server_host_is_rejected() -> None:
-    for host in ("0.0.0.0", "192.168.1.10", "example.com"):
-        report = validate_env_values(_env(REPORT_SERVER_HOST=host))
-        assert not report.ok, host
-        assert any(issue.variable == "REPORT_SERVER_HOST" for issue in report.errors)
-
-
-def test_loopback_variants_are_accepted() -> None:
-    for host in ("127.0.0.1", "127.0.0.53", "localhost", "::1"):
-        report = validate_env_values(_env(REPORT_SERVER_HOST=host))
-        assert report.ok, host
-
-
-def test_invalid_public_base_url_is_rejected() -> None:
-    for base_url in ("javascript:alert(1)", "ftp://x.com", "https://x.com/path?q=1"):
-        report = validate_env_values(_env(REPORT_PUBLIC_BASE_URL=base_url))
-        assert not report.ok, base_url
-
-
-def test_empty_public_base_url_is_a_warning_not_an_error() -> None:
-    """Estado legítimo enquanto não há domínio (Caddy/DuckDNS são CL.9+)."""
-    report = validate_env_values(_env(REPORT_PUBLIC_BASE_URL=""))
-    assert report.ok
-    assert any(issue.variable == "REPORT_PUBLIC_BASE_URL" for issue in report.warnings)
-
-
-def test_production_gate_turns_the_empty_base_url_into_an_error() -> None:
-    """Gate 1: preparação do host pode passar sem URL pública; um START DE
-    PRODUÇÃO não pode. Sem ela, `build_bot()` (CL.5) falha no boot e o
-    supervisor trata como crash — o gate bloqueia até a CL.9.
-    """
-    values = _env(REPORT_PUBLIC_BASE_URL="")
-
-    host_prep = validate_env_values(values)
-    assert host_prep.ok
-    assert any(i.variable == "REPORT_PUBLIC_BASE_URL" for i in host_prep.warnings)
-
-    production = validate_env_values(values, require_public_base_url=True)
-    assert not production.ok
-    assert any(i.variable == "REPORT_PUBLIC_BASE_URL" for i in production.errors)
-
-
-def test_production_gate_passes_once_a_valid_base_url_exists() -> None:
+def test_retired_report_settings_are_ignored_in_every_env() -> None:
     report = validate_env_values(
-        _env(REPORT_PUBLIC_BASE_URL="https://exemplo.duckdns.org"),
-        require_public_base_url=True,
-    )
-    assert report.ok
-
-
-def test_production_gate_does_not_weaken_cl5_url_validation() -> None:
-    """Nos DOIS modos, uma URL presente é validada pela mesma função da
-    CL.5 — o gate só muda o tratamento da URL AUSENTE.
-    """
-    for require in (False, True):
-        report = validate_env_values(
-            _env(REPORT_PUBLIC_BASE_URL="javascript:alert(1)"),
-            require_public_base_url=require,
+        _env(
+            REPORT_SERVER_HOST="0.0.0.0",
+            REPORT_SERVER_PORT="invalid",
+            REPORT_PUBLIC_BASE_URL="javascript:alert(1)",
         )
-        assert not report.ok, require
-
-
-def test_production_gate_still_reports_missing_credentials() -> None:
-    report = validate_env_values(
-        _env(DISCORD_TOKEN="", REPORT_PUBLIC_BASE_URL=""), require_public_base_url=True
     )
-    variables = {i.variable for i in report.errors}
-    assert {"DISCORD_TOKEN", "REPORT_PUBLIC_BASE_URL"} <= variables
+    assert report.ok
+    assert not any(issue.variable.startswith("REPORT_") for issue in report.issues)
 
 
 def test_relative_data_dir_is_a_warning() -> None:
@@ -210,16 +153,10 @@ def test_posix_absolute_data_dir_is_accepted_even_when_validating_on_windows() -
     assert not any(issue.variable == "DATA_DIR" for issue in report.warnings)
 
 
-def test_invalid_report_server_port_is_rejected() -> None:
-    for port in ("not-a-number", "0", "70000"):
-        report = validate_env_values(_env(REPORT_SERVER_PORT=port))
-        assert not report.ok, port
-
-
 def test_env_issues_never_carry_the_variable_value() -> None:
     """A garantia central: o diagnóstico é seguro para imprimir/logar."""
     secret = "super-secret-token-value-9f2b"
-    report = validate_env_values(_env(DISCORD_TOKEN=secret, REPORT_SERVER_HOST="0.0.0.0"))
+    report = validate_env_values(_env(DISCORD_TOKEN=""))
     blob = " ".join(f"{i.variable} {i.message}" for i in report.issues)
     assert secret not in blob
     for value in _VALID_ENV.values():
@@ -252,14 +189,9 @@ def test_shipped_env_example_template_is_rejected_until_filled(tmp_path: Path) -
     assert not report.ok
 
 
-def test_shipped_env_example_keeps_the_report_server_on_loopback() -> None:
+def test_shipped_env_example_has_no_retired_report_settings() -> None:
     values = parse_env_file(DEPLOY_DIR / "env.example")
-    assert values["REPORT_SERVER_HOST"] == "127.0.0.1"
-
-
-def test_shipped_env_example_does_not_invent_a_public_base_url() -> None:
-    values = parse_env_file(DEPLOY_DIR / "env.example")
-    assert values["REPORT_PUBLIC_BASE_URL"] == ""
+    assert not any(name.startswith("REPORT_") for name in values)
 
 
 def test_shipped_env_example_contains_no_real_secret() -> None:
@@ -654,34 +586,6 @@ def test_systemd_unit_check_fails_when_absent(tmp_path: Path) -> None:
     assert check_systemd_unit(tmp_path).status is CheckStatus.FAILED
 
 
-def test_bind_check_uses_loopback_and_frees_the_port() -> None:
-    """Prova a capacidade de bind sem expor nada: porta 0 é rejeitada como
-    não-verificável, e uma porta livre é liberada imediatamente.
-    """
-    first = check_report_server_bind("127.0.0.1", 0)
-    assert first.status is CheckStatus.WARNING
-
-    import socket as _socket
-
-    with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as probe:
-        probe.bind(("127.0.0.1", 0))
-        free_port = probe.getsockname()[1]
-
-    result = check_report_server_bind("127.0.0.1", free_port)
-    assert result.status is CheckStatus.OK
-
-
-def test_bind_check_fails_on_an_occupied_port() -> None:
-    import socket as _socket
-
-    with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as taken:
-        taken.bind(("127.0.0.1", 0))
-        taken.listen(1)
-        port = taken.getsockname()[1]
-        result = check_report_server_bind("127.0.0.1", port)
-    assert result.status is CheckStatus.FAILED
-
-
 def test_exit_code_is_nonzero_only_on_failure() -> None:
     from botgitgud.ops.preflight import CheckResult
 
@@ -701,8 +605,6 @@ def test_full_preflight_run_fails_when_env_is_missing(tmp_path: Path) -> None:
         data_dir=data_dir,
         env_path=tmp_path / "absent.env",
         repo_root=REPO_ROOT,
-        report_server_host="127.0.0.1",
-        report_server_port=0,
     )
     assert exit_code_for(results) == 1
 
@@ -719,14 +621,11 @@ def test_full_preflight_run_passes_with_a_valid_setup(tmp_path: Path) -> None:
         data_dir=data_dir,
         env_path=env_file,
         repo_root=REPO_ROOT,
-        report_server_host="127.0.0.1",
-        report_server_port=0,
     )
     assert exit_code_for(results) == 0
 
 
-def test_preflight_host_preparation_passes_without_a_public_base_url(tmp_path: Path) -> None:
-    """Gate 1, lado permissivo: o host pode ficar pronto antes da CL.9."""
+def test_preflight_ignores_retired_report_settings(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     _populate_data_dir(data_dir)
     env_file = tmp_path / ".env"
@@ -738,30 +637,8 @@ def test_preflight_host_preparation_passes_without_a_public_base_url(tmp_path: P
         data_dir=data_dir,
         env_path=env_file,
         repo_root=REPO_ROOT,
-        report_server_host="127.0.0.1",
-        report_server_port=0,
     )
     assert exit_code_for(results) == 0
-
-
-def test_preflight_production_mode_fails_without_a_public_base_url(tmp_path: Path) -> None:
-    """Gate 1, lado estrito: o MESMO host reprova no modo de produção."""
-    data_dir = tmp_path / "data"
-    _populate_data_dir(data_dir)
-    env_file = tmp_path / ".env"
-    env_file.write_text(
-        "\n".join(f"{k}={v}" for k, v in _env(REPORT_PUBLIC_BASE_URL="").items()),
-        encoding="utf-8",
-    )
-    results = run_preflight(
-        data_dir=data_dir,
-        env_path=env_file,
-        repo_root=REPO_ROOT,
-        report_server_host="127.0.0.1",
-        report_server_port=0,
-        require_public_base_url=True,
-    )
-    assert exit_code_for(results) == 1
 
 
 def test_preflight_output_never_contains_a_credential_value(tmp_path: Path) -> None:
@@ -777,8 +654,6 @@ def test_preflight_output_never_contains_a_credential_value(tmp_path: Path) -> N
         data_dir=data_dir,
         env_path=env_file,
         repo_root=REPO_ROOT,
-        report_server_host="127.0.0.1",
-        report_server_port=0,
     )
     blob = " ".join(f"{r.name} {r.detail}" for r in results)
     assert secret not in blob

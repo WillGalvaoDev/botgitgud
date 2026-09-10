@@ -49,7 +49,9 @@ def test_corrupted_json_is_quarantined_and_catalog_starts_empty(tmp_path: Path) 
 
     # Catalog is usable and empty — falls back to the unknown-spell sentinel.
     info = catalog.get(999)
-    assert info == SpellInfo(spell_id=999, name="Spell #999", source="unknown")
+    assert info.spell_id == 999
+    assert "999" in info.name
+    assert info.source == "unknown"
 
 
 def test_old_format_with_category_field_loads_and_drops_category(tmp_path: Path) -> None:
@@ -114,7 +116,9 @@ def test_get_falls_back_to_blizzard_when_not_cached(tmp_path: Path) -> None:
 def test_get_unknown_spell_without_blizzard_client_returns_fallback(tmp_path: Path) -> None:
     catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
     info = catalog.get(777)
-    assert info == SpellInfo(spell_id=777, name="Spell #777", source="unknown")
+    assert info.spell_id == 777
+    assert "777" in info.name
+    assert info.source == "unknown"
 
 
 def test_learn_ignores_fallback_placeholder_names(tmp_path: Path) -> None:

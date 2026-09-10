@@ -511,8 +511,8 @@ def test_insufficient_band_data_is_not_silently_discarded() -> None:
         (50.0, "p50-75", False),
         (75.0, "p75-95", False),
         (95.0, "p95-99", False),
-        (99.0, None, True),  # fora de toda banda aprovada
-        (100.0, None, True),
+        (99.0, "p99-100", False),
+        (100.0, "p99-100", False),
         (0.0, None, True),
     ],
 )

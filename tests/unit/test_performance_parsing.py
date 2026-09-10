@@ -8,6 +8,7 @@ from botgitgud.ingest.performance_parsing import (
     parse_aura_uptimes,
     parse_death_events,
     parse_resource_waste,
+    parse_resource_waste_by_ability,
     pet_ids_for_owner,
 )
 
@@ -33,6 +34,27 @@ def test_parse_aura_uptimes_falls_back_to_spell_number_name() -> None:
     data = {"totalTime": 100.0, "auras": [{"guid": 5, "totalUptime": 10.0}]}
     result = parse_aura_uptimes(data)
     assert result[0].name == "Spell #5"
+
+
+def test_parse_aura_uptimes_preserves_total_uses_and_band_order() -> None:
+    data = {
+        "totalTime": 1000,
+        "auras": [
+            {
+                "guid": 5,
+                "name": "Buff",
+                "totalUptime": 300,
+                "totalUses": 12,
+                "bands": [
+                    {"startTime": 200, "endTime": 300},
+                    {"startTime": 10, "endTime": 20},
+                ],
+            }
+        ],
+    }
+    aura = parse_aura_uptimes(data)[0]
+    assert aura.total_uses == 12
+    assert [(b.start_ms, b.end_ms) for b in aura.bands] == [(200, 300), (10, 20)]
 
 
 # -- parse_death_events / compute_downtime_s ---------------------------------
@@ -115,3 +137,33 @@ def test_parse_resource_waste_sums_by_type_for_player_only() -> None:
     ]
     waste = parse_resource_waste(events, 6)
     assert waste == {7: 5.0, 0: 10.0}
+
+
+def test_parse_resource_waste_by_ability_reconciles_with_type_total() -> None:
+    events = [
+        {
+            "type": "resourcechange",
+            "sourceID": 6,
+            "resourceChangeType": 7,
+            "abilityGameID": 10,
+            "waste": 3,
+        },
+        {
+            "type": "resourcechange",
+            "sourceID": 6,
+            "resourceChangeType": 7,
+            "abilityGameID": 11,
+            "waste": 2,
+        },
+        {
+            "type": "resourcechange",
+            "sourceID": 13,
+            "resourceChangeType": 7,
+            "abilityGameID": 10,
+            "waste": 100,
+        },
+    ]
+    aggregate = parse_resource_waste(events, 6)
+    detail = parse_resource_waste_by_ability(events, 6)
+    assert detail == {7: {10: 3.0, 11: 2.0}}
+    assert sum(detail[7].values()) == aggregate[7]

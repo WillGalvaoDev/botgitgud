@@ -61,6 +61,7 @@ def fetch_ranking_candidates(
     class_name: str,
     spec_name: str,
     partition: int,
+    difficulty: int,
     target_duration_s: float | None,
 ) -> list[RankingCandidate]:
     """Pages through characterRankings for the given (current) partition.
@@ -88,6 +89,7 @@ def fetch_ranking_candidates(
             "specName": clean_spec,
             "page": page,
             "partition": partition,
+            "difficulty": difficulty,
         }
         try:
             res_json = client.query(QUERY_RANKINGS_PAGE, variables, op_name="fetch_rankings_page")
@@ -135,6 +137,7 @@ def fetch_ranking_candidates(
                 f"apenas {len(candidates)} logs de referência dentro da banda de "
                 f"±{int(SANITY_BAND_PCT * 100)}% de duração (mínimo: {COHORT_MIN_HARD})"
             )
+        msg += f"; difficulty exigida={difficulty}"
         raise InsufficientCohort(msg, n_members=len(candidates), minimum_required=COHORT_MIN_HARD)
 
     return candidates[:COHORT_MAX]
@@ -146,8 +149,34 @@ def fetch_cohort_logs(
     *,
     max_workers: int,
     expected_partition: int | None = None,
+    expected_difficulty: int | None = None,
 ) -> list[PlayerLog]:
     refs = [LogRequest(c.report_code, c.fight_id, c.player_name) for c in candidates]
     if expected_partition is None:
-        return fetcher.fetch_many(refs, max_workers=max_workers)
-    return fetcher.fetch_many(refs, max_workers=max_workers, expected_partition=expected_partition)
+        fetched = fetcher.fetch_many(refs, max_workers=max_workers)
+    else:
+        fetched = fetcher.fetch_many(
+            refs, max_workers=max_workers, expected_partition=expected_partition
+        )
+    if expected_difficulty is None:
+        return fetched
+    kept, discarded = partition_logs_by_difficulty(expected_difficulty, fetched)
+    if discarded:
+        log.warning(
+            "rankings.difficulty_mismatch_discarded",
+            expected_difficulty=expected_difficulty,
+            discarded=len(discarded),
+        )
+    return kept
+
+
+def partition_logs_by_difficulty(
+    expected_difficulty: int, logs: list[PlayerLog]
+) -> tuple[list[PlayerLog], list[PlayerLog]]:
+    """Split a pool by difficulty without mutating or reordering it."""
+    kept: list[PlayerLog] = []
+    discarded: list[PlayerLog] = []
+    for player_log in logs:
+        destination = kept if player_log.fight.difficulty == expected_difficulty else discarded
+        destination.append(player_log)
+    return kept, discarded

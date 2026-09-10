@@ -4,7 +4,7 @@
 **Wired into `render_report` (RP.2)** — `report/text.py` calls
 `render_setup_section` directly; `setup=None` (the default on every
 existing call site) still renders nothing, so no pre-RP.2 caller's output
-changed. `report/html_report.py` does NOT import `render_setup_section` —
+changed. Other renderers do not import `render_setup_section` —
 it has its own, genuinely separate HTML rendering
 (`_render_setup_html`), reusing only this module's pure data-extraction
 helpers (`subject_label`/`render_observation_text`/`prevalence_fragment`/
@@ -24,7 +24,7 @@ strings are invented here that bypass that guard.
 `render_header_and_top3` (report/text.py) is what actually reaches a
 Discord message as inline text; the full HTML report only ever goes out as
 a file attachment (`bot/discord_bot.py`/`bot/worker.py`'s
-`render_html_report` call), never as raw message text. A renderer that
+renderer call), never as raw message text. A renderer that
 emits `<strong>`/`<br>` tags into that inline-text path would show up to
 the user as literal angle-bracket garbage — Discord does not interpret
 arbitrary HTML. This module NEVER emits an HTML tag; guarded by test
@@ -115,7 +115,7 @@ def render_setup_section(setup: SetupAnalysis | None) -> list[str]:
     if not visible:
         return []
 
-    lines = ["", "🧩 **SETUP**", _SEPARATOR]
+    lines = ["", "🛠️ **8 SETUP**", _SEPARATOR]
     for finding in visible:
         lines.append(_render_finding_line(finding))
 

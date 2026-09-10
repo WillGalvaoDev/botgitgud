@@ -45,12 +45,14 @@ def _normalized_set(pairs: tuple[tuple[str, str], ...]) -> frozenset[tuple[str, 
     return frozenset((_normalize(c), _normalize(s)) for c, s in pairs)
 
 
-# 25 DPS specs — the tool's entire scope. Codified as data, not a heuristic.
+# 26 DPS specs — Midnight adds Demon Hunter/Devourer (reviewed 2026-09-04).
+# The tool's entire scope remains codified as data, not a heuristic.
 _SUPPORTED = _normalized_set(
     (
         ("Death Knight", "Frost"),
         ("Death Knight", "Unholy"),
         ("Demon Hunter", "Havoc"),
+        ("Demon Hunter", "Devourer"),
         ("Druid", "Balance"),
         ("Druid", "Feral"),
         ("Evoker", "Devastation"),

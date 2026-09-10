@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
+from botgitgud.domain.damage_scope import DamageScopeVersion
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
@@ -463,7 +464,15 @@ def test_fetch_ignores_other_players_deaths(tmp_path: Path) -> None:
 
 def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: Path) -> None:
     responses = _default_responses()
-    responses["meta"] = [_meta_response(actors=[{"id": 16, "petOwner": 6}])]
+    meta = _meta_response(
+        actors=[
+            {"id": 16, "petOwner": 6},
+            {"id": 100, "name": "Encounter Target", "subType": "Boss"},
+        ]
+    )
+    damage_entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    damage_entry.update({"total": 700, "targets": [{"name": "Encounter Target", "type": "Boss"}]})
+    responses["meta"] = [meta]
     responses["damage_events"] = [
         _events_response(
             [
@@ -501,6 +510,152 @@ def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: P
     assert result.damage_by_ability[104318].casts == 0  # player never cast the pet's ability
     assert 999 not in result.damage_by_ability
     assert result.avg_targets_per_cast[104316] == 1.0  # 1 distinct target / 1 cast
+    assert result.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
+
+
+def test_incomplete_damage_stream_retains_legacy_scope(tmp_path: Path) -> None:
+    responses = _default_responses()
+    meta = _meta_response(actors=[{"id": 100, "name": "Target", "subType": "Boss"}])
+    entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    entry.update({"total": 100, "targets": [{"name": "Target", "type": "Boss"}]})
+    responses["meta"] = [meta]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": 100,
+                    "abilityGameID": 1,
+                    "amount": 80,
+                    "subtractsFromSupportedActor": True,
+                    "supportID": 6,
+                }
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_scope is DamageScopeVersion.LEGACY_UNSCOPED
+    assert result.support_subtracted_damage == 0.0
+
+
+def test_missing_damage_table_retains_legacy_scope(tmp_path: Path) -> None:
+    responses = _default_responses()
+    meta = _meta_response(actors=[{"id": 100, "name": "Target", "subType": "Boss"}])
+    report = meta["data"]["reportData"]["report"]
+    report.pop("damageTable")
+    responses["meta"] = [meta]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": 100,
+                    "abilityGameID": 1,
+                    "amount": 100,
+                }
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_scope is DamageScopeVersion.LEGACY_UNSCOPED
+
+
+def test_empty_damage_table_targets_retain_legacy_scope(tmp_path: Path) -> None:
+    responses = _default_responses()
+    meta = _meta_response(actors=[{"id": 100, "name": "Target", "subType": "Boss"}])
+    entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    entry.update({"total": 100, "targets": []})
+    responses["meta"] = [meta]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": 100,
+                    "abilityGameID": 1,
+                    "amount": 100,
+                }
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_scope is DamageScopeVersion.LEGACY_UNSCOPED
+
+
+def test_complete_stream_with_incomplete_scope_fails_closed(tmp_path: Path) -> None:
+    responses = _default_responses()
+    meta = _meta_response(
+        actors=[
+            {"id": 100, "name": "Included", "subType": "Boss"},
+            {"id": 200, "name": "Missing", "subType": "NPC"},
+        ]
+    )
+    entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    entry.update({"total": 100, "targets": [{"name": "Included", "type": "Boss"}]})
+    responses["meta"] = [meta]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": target_id,
+                    "abilityGameID": 1,
+                    "amount": amount,
+                }
+                for target_id, amount in ((100, 80), (200, 20))
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_scope is DamageScopeVersion.UNRECONCILED
+
+
+def test_damaging_ambiguous_scope_resolution_fails_closed(tmp_path: Path) -> None:
+    responses = _default_responses()
+    meta = _meta_response(
+        actors=[
+            {"id": 100, "name": "Twin", "subType": "NPC"},
+            {"id": 101, "name": "Twin", "subType": "NPC"},
+        ]
+    )
+    entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    entry.update({"total": 100, "targets": [{"name": "Twin", "type": "NPC"}]})
+    responses["meta"] = [meta]
+    responses["damage_events"] = [
+        _events_response(
+            [
+                {
+                    "type": "damage",
+                    "sourceID": 6,
+                    "targetID": target_id,
+                    "abilityGameID": 1,
+                    "amount": 50,
+                }
+                for target_id in (100, 101)
+            ]
+        )
+    ]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert result.damage_scope is DamageScopeVersion.UNRECONCILED
 
 
 def test_fetch_populates_uptimes_from_buffs_and_debuffs(tmp_path: Path) -> None:
@@ -633,7 +788,34 @@ def test_fetch_learns_spell_names_into_catalog(tmp_path: Path) -> None:
 
     info = fetcher._catalog.get(104316)
     assert info.name == "Call Dreadstalkers"
-    assert info.source == "wcl"
+    assert info.source == "wcl_table"
+
+
+def test_fetch_learns_damage_table_names_without_extra_queries(tmp_path: Path) -> None:
+    baseline_fetcher, baseline_transport, _ = _make_fetcher(
+        tmp_path / "baseline", _default_responses()
+    )
+    baseline_fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    responses = _default_responses()
+    meta = responses["meta"][0]
+    damage_entry = meta["data"]["reportData"]["report"]["damageTable"]["data"]["entries"][0]
+    damage_entry["abilities"] = [{"guid": 104318, "name": "Fel Firebolt"}]
+    damage_entry["pets"] = [
+        {
+            "guid": 55659,
+            "name": "Wild Imp",
+            "abilities": [{"guid": 267997, "name": "Demonic Assault"}],
+        }
+    ]
+    fetcher, transport, _ = _make_fetcher(tmp_path / "damage-names", responses)
+
+    fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    assert fetcher._catalog.get(104318).name == "Fel Firebolt"
+    assert fetcher._catalog.get(267997).name == "Demonic Assault"
+    assert fetcher._catalog.identity(55659).resolution_status == "unresolved"
+    assert transport.calls == baseline_transport.calls
 
 
 def test_missing_fight_raises_fight_not_found(tmp_path: Path) -> None:

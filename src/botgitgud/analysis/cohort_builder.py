@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import cast
 
 import structlog
 
@@ -73,31 +72,42 @@ def build_cohorts(
     just the one containing `duration_bucket_s` when given. Raises
     RateLimitBudgetExceeded if the budget runs out mid-batch.
     """
-    # An explicit READY bucket is a pure cache hit: do not spend even a
-    # budget refresh merely to discover that no rebuild is needed.
+    # An explicit READY bucket still requires the live partition lookup:
+    # partition is part of the canonical identity, so registry attributes
+    # cannot establish that the requested cohort already exists.
+    partition: int | None = None
     if duration_bucket_s is not None:
         requested_bucket = duration_bucket_id(duration_bucket_s)
-        for ready in deps.store.list_ready_cohorts():
-            if (
-                ready["encounter_id"] == encounter_id
-                and ready["difficulty"] == difficulty
-                and ready["class_name"] == class_name
-                and ready["spec_name"] == spec_name
-                and duration_bucket_id(cast(float, ready["duration_min_s"])) == requested_bucket
-            ):
-                return [
-                    BucketBuildResult(
-                        bucket_id=requested_bucket,
-                        duration_min_s=cast(float, ready["duration_min_s"]),
-                        duration_max_s=cast(float, ready["duration_max_s"]),
-                        n_members=cast(int, ready["n_members"]),
-                        cohort_id=str(ready["cohort_id"]),
-                    )
-                ]
+        bucket_lo, bucket_hi = duration_bucket_bounds(requested_bucket)
+        partition = get_current_partition(deps.client, encounter_id)
+        criteria = CohortCriteria(
+            encounter_id=encounter_id,
+            difficulty=difficulty,
+            partition=partition,
+            class_name=class_name,
+            spec_name=spec_name,
+            metric="dps",
+            duration_min_s=bucket_lo,
+            duration_max_s=bucket_hi,
+        )
+        cohort_id = criteria.cohort_id()
+        existing = deps.store.read_candidate_pool(cohort_id)
+        if existing is not None:
+            log.info("cohort_builder.bucket_already_ready", cohort_id=cohort_id)
+            return [
+                BucketBuildResult(
+                    bucket_id=requested_bucket,
+                    duration_min_s=bucket_lo,
+                    duration_max_s=bucket_hi,
+                    n_members=len(existing),
+                    cohort_id=cohort_id,
+                )
+            ]
 
     # The batch identity is refined to canonical cohort_ids after partition
-    # and duration buckets are known. This gate intentionally precedes even
-    # those discovery calls: a deferred batch makes zero construction calls.
+    # and duration buckets are known. For a batch, this gate precedes those
+    # discovery calls; an explicit miss has already resolved its partition so
+    # it can distinguish the requested identity from historical pools.
     # Prewarm usa a politica de batch (piso da API, sem reserva interativa) e
     # avanca incrementalmente: exigir que ~100 logs caibam numa unica janela
     # horaria excede o proprio teto da conta — ver docs/production-readiness-
@@ -110,13 +120,15 @@ def build_cohorts(
         references=1,
         execution=ColdBuildExecution.RESUMABLE_INCREMENTAL,
     )
-    partition = get_current_partition(deps.client, encounter_id)
+    if partition is None:
+        partition = get_current_partition(deps.client, encounter_id)
     candidates = fetch_ranking_candidates(
         deps.client,
         encounter_id=encounter_id,
         class_name=class_name,
         spec_name=spec_name,
         partition=partition,
+        difficulty=difficulty,
         target_duration_s=None,
     )
 

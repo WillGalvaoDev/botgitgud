@@ -3,6 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from botgitgud.analysis.comparison import SpellComparison, compare_spell_usage
+from botgitgud.analysis.feature_availability import FeatureKind
+from botgitgud.analysis.grading import QuantileStats
+from botgitgud.analysis.performance_features import PerformanceFindings, ScalarFinding
+from botgitgud.analysis.pipeline import CoreAbilityReport, ExternalDpsContext
+from botgitgud.analysis.proc_analysis import ProcAnalysis, ProcMetrics
 from botgitgud.analysis.setup_analysis import SetupAnalysis
 from botgitgud.analysis.setup_finding import (
     BenchmarkSampleRef,
@@ -13,8 +18,10 @@ from botgitgud.analysis.setup_finding import (
     Publicability,
     SetupFinding,
 )
+from botgitgud.domain.ability_role import AbilityRole
 from botgitgud.domain.models import RunManifest
 from botgitgud.domain.spells import SpellInfo
+from botgitgud.report.contract import ConfidenceSummary
 from botgitgud.report.text import ReportHeader, render_report
 
 
@@ -316,9 +323,81 @@ def test_reference_count_shown_explicitly() -> None:
     assert "47 logs" in text
 
 
-def test_empty_comparisons_still_renders_header_and_notice() -> None:
+def test_empty_comparisons_omit_timeline_section() -> None:
     text = render_report(_header(), [])
-    assert "Nenhum Major/Minor CD elegível encontrado" in text
+    assert text.startswith("=" * 42)
+    assert "\n1 RESULTADO\n" not in text
+    assert "TOP 3 PRIORIDADES" in text
+    assert "TIMELINE OFENSIVA" not in text
+
+
+def test_all_data_backed_sections_are_present_non_empty_and_ordered() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Summon Demonic Tyrant"),
+        presence=0.9,
+        user_times=[10.0],
+        ref_times=[10.0],
+        n_usages_median=1.0,
+        reference_n=20,
+    )
+    stats = QuantileStats(n=20, p10=0.0, p25=0.0, p50=0.0, p75=1.0, p90=1.0)
+    scalar = ScalarFinding("green", 0.5, 0.0, stats, None, "lower_better")
+    performance = PerformanceFindings(
+        active_time=None,
+        deaths=scalar,
+        downtime=scalar,
+        uptimes=(),
+        resource_waste=(),
+    )
+    core = CoreAbilityReport("Demonic Tyrant", AbilityRole.CORE_DAMAGE, (FeatureKind.CAST_COUNT,))
+    proc = ProcMetrics(
+        42,
+        AbilityRole.SELF_OFFENSIVE_PROC,
+        "available",
+        (),
+        0.25,
+        2,
+        0.4,
+        (),
+        None,
+        None,
+        0,
+    )
+    external = ExternalDpsContext("Breath of Eons", AbilityRole.EXTERNAL_OFFENSIVE, 1234.0)
+    confidence = ConfidenceSummary(50, 20, (), (), ())
+    setup = _setup_analysis(_setup_finding())
+    manifest = _manifest()
+    kwargs = {
+        "manifest": manifest,
+        "performance": performance,
+        "setup": setup,
+        "confidence": confidence,
+        "core_abilities": (core,),
+        "proc_analysis": ProcAnalysis("available", (), (proc,)),
+        "external_dps_context": (external,),
+    }
+    text = render_report(_header(), [comparison], **kwargs)  # type: ignore[arg-type]
+
+    text_markers = (
+        "GITGUD MAJOR CD ANALYSIS",
+        "TOP 3 PRIORIDADES",
+        "3 ANALISE POR HABILIDADE",
+        "4 SELF BUFFS & PROCS",
+        "5 EFICIENCIA DE RECURSO",
+        "6 TIMELINE OFENSIVA",
+        "7 CONTEXTO DE DPS EXTERNO",
+        "8 SETUP",
+        "9 COORTE & CONFIANCA",
+    )
+    assert len(text_markers) == 9
+    assert [text.index(marker) for marker in text_markers] == sorted(
+        text.index(marker) for marker in text_markers
+    )
+    for marker in text_markers[2:]:
+        tail = text.split(marker, 1)[1].lstrip("*\n-")
+        assert tail and tail.splitlines()[0].strip()
+    assert "Mortes:" in text and "Downtime:" in text
+    assert "Cohort:" in text and "deadbeefdeadbeef" in text
 
 
 # -- T1.5: manifest footer -----------------------------------------------------

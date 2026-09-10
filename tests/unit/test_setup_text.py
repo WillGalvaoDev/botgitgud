@@ -261,16 +261,16 @@ def test_render_setup_section_never_contains_html_tags() -> None:
         assert ">" not in line
 
 
-# -- not wired into render_report/render_html_report yet (RP.2's job) ---------------
+# -- renderer ownership -----------------------------------------------------------
 
 
 def test_render_report_is_wired_to_the_setup_section() -> None:
     """RP.2: `render_report` (report/text.py) now actually calls this
-    module — the integration this docstring's RP.1 version explicitly
-    deferred. `render_html_report` uses its own separate HTML rendering
-    (RP.1's own design principle: no shared tag-generation code), so it
-    imports `setup_text`'s pure data helpers, never `render_setup_section`
-    itself.
+        module — the integration this docstring's RP.1 version explicitly
+    deferred. Other formats use their own rendering
+        (RP.1's own design principle: no shared tag-generation code), so it
+        imports `setup_text`'s pure data helpers, never `render_setup_section`
+        itself.
     """
     import botgitgud.report.text as text_module
 

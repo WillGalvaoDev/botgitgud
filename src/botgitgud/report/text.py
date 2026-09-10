@@ -25,26 +25,28 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
-from botgitgud.analysis.findings import Finding
+from botgitgud.analysis.findings import TopPriorities
 from botgitgud.analysis.performance_features import PerformanceFindings
+from botgitgud.analysis.proc_analysis import ProcAnalysis
 from botgitgud.analysis.setup_analysis import SetupAnalysis
 from botgitgud.domain.models import RunManifest
 from botgitgud.report.cd_sections_text import render_cd_sections
 from botgitgud.report.dps_gap_text import render_dps_gap_section
-from botgitgud.report.performance_text import (
-    render_active_time_section,
-    render_deaths_downtime_section,
-    render_resource_waste_section,
-    render_uptimes_section,
-)
+from botgitgud.report.performance_text import render_resource_efficiency_section
 from botgitgud.report.setup_text import render_setup_section
 from botgitgud.report.top_actions_text import render_top_actions_section
 
+if TYPE_CHECKING:
+    from botgitgud.analysis.pipeline import CoreAbilityReport, ExternalDpsContext
+    from botgitgud.report.contract import ConfidenceSummary
+
 _SEPARATOR = "=" * 42
+_EMPTY_TOP_PRIORITIES = TopPriorities()
 
 # T2.1: display labels for analysis/cohort_match.py's covariate names.
 _COVARIATE_LABELS: dict[str, str] = {
@@ -86,7 +88,15 @@ def _fmt_dps(value: float | None) -> str:
 
 
 def _fmt_percentile(value: float | None) -> str:
-    return f"{value:.0f}" if value is not None else "n/d"
+    if value is None:
+        return "n/d"
+    if value == 100.0:
+        return "100"
+
+    rendered = f"{value:.1f}"
+    if value < 100.0 and rendered == "100.0":
+        return "99.9"
+    return rendered.removesuffix(".0")
 
 
 def _render_covariates_line(header: ReportHeader) -> str | None:
@@ -166,8 +176,12 @@ def render_report(
     manifest: RunManifest | None = None,
     performance: PerformanceFindings | None = None,
     dps_gap: DpsGapReport | None = None,
-    top_actions: Sequence[Finding] = (),
+    top_actions: TopPriorities = _EMPTY_TOP_PRIORITIES,
     setup: SetupAnalysis | None = None,
+    confidence: ConfidenceSummary | None = None,
+    core_abilities: Sequence[CoreAbilityReport] = (),
+    proc_analysis: ProcAnalysis | None = None,
+    external_dps_context: Sequence[ExternalDpsContext] = (),
 ) -> str:
     """T3.3's normative report structure: 1. Cabeçalho 2. Top 3 ações
     (`top_actions`) 3. De onde veio o gap de DPS (T3.2, `dps_gap`) 4. SETUP
@@ -189,38 +203,82 @@ def render_report(
     renders nothing, so every EXISTING call site that doesn't pass it is
     byte-for-byte unaffected.
     """
-    lines: list[str] = list(_render_header(header))
+    lines: list[str] = _render_header(header)
     lines.extend(render_top_actions_section(top_actions))
-
     if dps_gap is not None:
         lines.extend(render_dps_gap_section(dps_gap))
 
-    lines.extend(render_setup_section(setup))
+    if core_abilities:
+        lines.extend(["", "🧩 **3 ANALISE POR HABILIDADE**", "-" * 42])
+        labels = {
+            "damage_share": "dano",
+            "cast_count": "usos",
+            "casts_per_minute": "usos/min",
+            "cast_timeline": "timeline observada",
+            "uptime": "uptime",
+        }
+        for ability in core_abilities[:10]:
+            features = ", ".join(labels[item.value] for item in ability.available_features)
+            lines.append(f"**{ability.name}**: {features}")
+
+    if proc_analysis is not None and proc_analysis.metrics:
+        lines.extend(["", "✨ **4 SELF BUFFS & PROCS**", "-" * 42])
+        for metric in proc_analysis.metrics:
+            details = [f"{metric.procs} proc(s)"]
+            if metric.uptime_frac is not None:
+                details.append(f"uptime {metric.uptime_frac * 100:.1f}%")
+            if metric.possibly_wasted_bands is not None:
+                details.append(
+                    f"janelas possivelmente desperdiçadas: {metric.possibly_wasted_bands}"
+                )
+            lines.append(f"**Spell {metric.spell_id}**: " + " | ".join(details))
 
     if performance is not None:
-        lines.extend(render_deaths_downtime_section(performance.deaths, performance.downtime))
-        lines.extend(render_active_time_section(performance.active_time))
-        lines.extend(render_uptimes_section(performance.uptimes))
-        lines.extend(render_resource_waste_section(performance.resource_waste))
+        lines.extend(render_resource_efficiency_section(performance))
 
-    if not comparisons:
-        lines.append("")
-        lines.append("⚡ Nenhum Major/Minor CD elegível encontrado.")
-        lines.extend(_render_manifest_footer(manifest))
-        lines.append(_SEPARATOR)
-        return "\n".join(lines)
+    if comparisons:
+        lines.extend(["", "⏱️ **6 TIMELINE OFENSIVA**", "-" * 42])
+        lines.extend(render_cd_sections(comparisons))
 
-    lines.extend(render_cd_sections(comparisons))
+    if external_dps_context:
+        lines.extend(["", "🌐 **7 CONTEXTO DE DPS EXTERNO**", "-" * 42])
+        lines.append("Estes efeitos vêm de fora e não representam a execução do jogador.")
+        for item in external_dps_context:
+            suffix = f": {item.damage:,.0f} dano" if item.damage > 0 else ""
+            lines.append(f"**{item.name}**{suffix}")
+
+    lines.extend(render_setup_section(setup))
+
+    if confidence is not None and any(
+        (
+            confidence.reference_pool_members is not None,
+            confidence.matched_cohort_members is not None,
+            confidence.cohort_warnings,
+            confidence.matched_covariates,
+            confidence.relaxed_covariates,
+        )
+    ):
+        lines.extend(["", "📊 **9 COORTE & CONFIANCA**", "-" * 42])
+        if confidence.reference_pool_members is not None:
+            lines.append(f"Pool de referência: {confidence.reference_pool_members} logs")
+        if confidence.matched_cohort_members is not None:
+            lines.append(f"Coorte pareada: {confidence.matched_cohort_members} logs")
+        if confidence.matched_covariates:
+            lines.append(f"Covariáveis pareadas: {', '.join(confidence.matched_covariates)}")
+        if confidence.relaxed_covariates:
+            lines.append(f"Covariáveis relaxadas: {', '.join(confidence.relaxed_covariates)}")
+        lines.extend(f"Aviso: {warning}" for warning in confidence.cohort_warnings)
+
     lines.extend(_render_manifest_footer(manifest))
     lines.append("")
     lines.append(_SEPARATOR)
     return "\n".join(lines)
 
 
-def render_header_and_top3(header: ReportHeader, top_actions: Sequence[Finding]) -> str:
+def render_header_and_top3(header: ReportHeader, top_actions: TopPriorities) -> str:
     """T3.4: "Discord passa a enviar: cabeçalho + Top 3 em texto, e o HTML
-    como anexo" — the short text message that accompanies the HTML
-    attachment (report/html_report.py), instead of the full report.
+        como anexo" — the short text message that accompanies the HTML
+    separate artifact, instead of the full report.
     """
     lines = list(_render_header(header))
     lines.extend(render_top_actions_section(top_actions))
