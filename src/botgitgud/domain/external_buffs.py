@@ -28,3 +28,9 @@ EXTERNAL_BUFF_IDS: frozenset[int] = frozenset(
         342246,  # Darkness (Demon Hunter)
     }
 )
+
+# Only these external buffs have offensive evidence in the current catalog.
+EXTERNAL_OFFENSIVE_IDS: frozenset[int] = frozenset({10060}) | AUGMENTATION_BUFF_IDS
+EXTERNAL_NON_OFFENSIVE_IDS: frozenset[int] = (
+    EXTERNAL_BUFF_IDS | AUGMENTATION_BUFF_IDS
+) - EXTERNAL_OFFENSIVE_IDS

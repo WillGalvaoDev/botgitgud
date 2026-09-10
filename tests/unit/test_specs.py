@@ -10,6 +10,7 @@ _SUPPORTED_SPECS = [
     ("Death Knight", "Frost"),
     ("Death Knight", "Unholy"),
     ("Demon Hunter", "Havoc"),
+    ("Demon Hunter", "Devourer"),
     ("Druid", "Balance"),
     ("Druid", "Feral"),
     ("Evoker", "Devastation"),
@@ -35,8 +36,8 @@ _SUPPORTED_SPECS = [
 ]
 
 
-def test_all_25_supported_specs_classify_as_supported() -> None:
-    assert len(_SUPPORTED_SPECS) == 25
+def test_all_supported_specs_classify_as_supported() -> None:
+    assert len(_SUPPORTED_SPECS) == 26
     for class_name, spec_name in _SUPPORTED_SPECS:
         result = classify_spec(SpecId(class_name=class_name, spec_name=spec_name))
         assert result == SpecSupport.SUPPORTED, f"{class_name}/{spec_name} deveria ser SUPPORTED"
@@ -52,6 +53,23 @@ def test_supported_specs_use_wcl_no_space_convention_too() -> None:
     hunter = SpecId(class_name="Hunter", spec_name="BeastMastery")
     assert classify_spec(dh) == SpecSupport.SUPPORTED
     assert classify_spec(hunter) == SpecSupport.SUPPORTED
+
+
+def test_devourer_accepts_wcl_readable_and_normalized_forms() -> None:
+    variants = (
+        SpecId(class_name="DemonHunter", spec_name="Devourer"),
+        SpecId(class_name="Demon Hunter", spec_name="Devourer"),
+        SpecId(class_name="  dEmOn  HuNtEr  ", spec_name="  dEvOuReR  "),
+    )
+
+    assert all(classify_spec(spec) == SpecSupport.SUPPORTED for spec in variants)
+
+
+def test_demon_hunter_vengeance_remains_out_of_scope_tank() -> None:
+    assert (
+        classify_spec(SpecId(class_name="DemonHunter", spec_name="Vengeance"))
+        == SpecSupport.OUT_OF_SCOPE_TANK
+    )
 
 
 def test_augmentation_evoker_is_out_of_scope_support_with_specific_message() -> None:

@@ -15,6 +15,8 @@ were never recorded, and ReplayTransport would fail the test outright.
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -24,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "fixtures"))
 from httpx_cassette_transport import ReplayTransport
 
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
-from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
 from botgitgud.config import Settings
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.ingest.log_fetcher import LogFetcher
@@ -37,12 +38,20 @@ FIXTURE_FIGHT_ID = 1
 FIXTURE_CHARACTER = "Zarad"
 
 REPO_SPELLS_JSON = Path(__file__).resolve().parents[2] / "spells.json"
+SPELL_IDENTITY_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "spell_identity_seed.json"
+)
 
 
 def _build_deps(tmp_path: Path) -> Deps:
     isolated_spells = tmp_path / "spells.json"
     if REPO_SPELLS_JSON.exists():
         shutil.copy(REPO_SPELLS_JSON, isolated_spells)
+    seed = (
+        json.loads(isolated_spells.read_text(encoding="utf-8")) if isolated_spells.exists() else {}
+    )
+    seed.update(json.loads(SPELL_IDENTITY_FIXTURE.read_text(encoding="utf-8")))
+    isolated_spells.write_text(json.dumps(seed, indent=2), encoding="utf-8")
 
     settings = Settings(
         _env_file=None,  # type: ignore[call-arg]
@@ -60,11 +69,7 @@ def _build_deps(tmp_path: Path) -> Deps:
         WclClientConfig(client_id="test-id", client_secret="test-secret"),
         transport=ReplayTransport(),
     )
-    blizzard = BlizzardClient(
-        BlizzardClientConfig(client_id="test-id", client_secret="test-secret"),
-        transport=ReplayTransport(),
-    )
-    catalog = SpellCatalog(isolated_spells, blizzard=blizzard)
+    catalog = SpellCatalog(isolated_spells, blizzard=None)
     store = Store(tmp_path / "data")
     fetcher = LogFetcher(client, store, catalog)
     return Deps(client=client, fetcher=fetcher, store=store, catalog=catalog, settings=settings)
@@ -93,6 +98,34 @@ def _run_new_pipeline(tmp_path: Path) -> str:
 def test_new_pipeline_report_matches_golden_snapshot(tmp_path: Path, snapshot: Any) -> None:
     report_text = _run_new_pipeline(tmp_path)
     assert report_text == snapshot
+
+
+def test_zarad_fixture_exercises_eight_fundamental_abilities(tmp_path: Path) -> None:
+    deps = _build_deps(tmp_path)
+    req = AnalysisRequest(
+        report_code=FIXTURE_REPORT_CODE, fight_id=FIXTURE_FIGHT_ID, character_name=FIXTURE_CHARACTER
+    )
+    result = run_analysis(req, deps)
+
+    assert {ability.name for ability in result.core_abilities} == {
+        "Call Dreadstalkers",
+        "Demonbolt",
+        "Grimoire: Imp Lord",
+        "Hand of Gul'dan",
+        "Implosion",
+        "Ruination",
+        "Summon Demonic Tyrant",
+        "Summon Felguard",
+    }
+
+
+def test_new_pipeline_has_no_raw_ability_ids(tmp_path: Path) -> None:
+    report_text = _run_new_pipeline(tmp_path)
+
+    assert re.search(r"Spell #\d+", report_text) is None
+    assert re.search(r"Nome de spell não resolvido \(ID: \d+\)", report_text) is None
+    assert re.search(r"ID: \d+", report_text) is None
+    assert re.search(r"Ability \d+", report_text) is None
 
 
 def test_new_pipeline_differs_from_legacy_and_shows_missed_usage(tmp_path: Path) -> None:

@@ -1,5 +1,16 @@
 # Política do warehouse — v1.0
 
+## Compatibilidade do schema aditivo
+
+Sinais novos são adicionados em colunas JSON opcionais. Parquets anteriores continuam legíveis e
+produzem detalhes vazios (dados incompletos, não semanticamente inválidos); não são migrados nem
+reconstruídos. Parquets enriquecidos mantêm todas as colunas antigas, portanto leitores anteriores
+ignoram as colunas extras com segurança. O rollback é feito por `git revert`, sem alterar dados.
+
+O corpus pré-M6 contém 1.274 Parquets e deve ser validado integralmente, sem amostragem. Os sinais
+aditivos são o dano por fonte dentro de cada habilidade, desperdício por tipo e habilidade, e os
+usos/bandas de cada aura; sua ausência em registros históricos representa somente incompletude.
+
 Baseline em 2026-08-24: `data/` tem 172.491.349 bytes, `warehouse.duckdb` 134.492.160
 bytes e 741 Parquets somando 37.999.189 bytes (≈51 KiB/log). A solução proporcional é uma cópia
 local consistente e verificada; destino permanente externo continua sendo escolha humana.

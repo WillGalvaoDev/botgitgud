@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ from test_log_fetcher import (
     _report_rankings_response,
 )
 
+import botgitgud.analysis.pipeline as pipeline_module
 from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget
 from botgitgud.analysis.benchmark_aggregate import (
     CANONICAL_SECONDARY_STATS,
@@ -296,6 +298,99 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.phase4_resolution.status is ResolutionStatus.UNAVAILABLE
 
 
+def test_analysis_result_execution_findings_defaults_to_empty_tuple() -> None:
+    """RB-3: `execution_findings` is a new AnalysisResult field with an
+    empty default so building one by hand (tests, or any future caller
+    that doesn't pass it) never breaks.
+    """
+    import dataclasses
+
+    field = next(
+        f
+        for f in dataclasses.fields(pipeline_module.AnalysisResult)
+        if f.name == "execution_findings"
+    )
+    assert field.default == ()
+
+    remediation_field = next(
+        f for f in dataclasses.fields(pipeline_module.AnalysisResult) if f.name == "remediations"
+    )
+    assert remediation_field.default == ()
+
+
+def test_run_analysis_execution_findings_nonvacuous_with_a_material_death(tmp_path: Path) -> None:
+    """M27 acceptance, end-to-end (not just build_findings in isolation):
+    deaths/active_time (paired with downtime)/resource_waste reach
+    `AnalysisResult.execution_findings` when material. Needs a cohort of
+    at least MIN_N_FOR_GRADING (15) all-zero-death references so the
+    player's single death actually grades red/yellow instead of
+    "insufficient" — the small N_REFS=8 happy-path fixture above stays
+    below that floor by design (COHORT_MIN_HARD=8) and would prove
+    nothing about materiality, same reasoning as the golden Zarad fixture
+    itself (matched n=10, insufficient) in test_findings.py's non-vacuity
+    test.
+    """
+    n_refs = 20
+    meta = [
+        _meta_response(
+            class_name="Warlock",
+            spec_name="Demonology",
+            combatant_info=_SHARED_COMBATANT_INFO,
+            death_events=[{"id": 6, "deathTime": 500.0}],
+        )
+    ]
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+
+    for i in range(n_refs):
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                damage_total=900_000.0,
+                combatant_info=_SHARED_COMBATANT_INFO,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, f"REFCODE{i:09d}", 1))
+
+    responses: dict[str, Any] = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "rankings": [_rankings_response(n_refs)],
+        "partition": _zone_partitions_response(),
+    }
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.matched_cohort_members is not None and result.matched_cohort_members >= 15
+    assert result.execution_findings != ()
+    assert any(f.category == "DEATH" for f in result.execution_findings)
+    from botgitgud.analysis.remediation import RemediationBasis, RemediationKind
+
+    death = next(f for f in result.execution_findings if f.category == "DEATH")
+    associated = next(item for item in result.remediations if item.finding is death)
+    assert associated.coaching_eligible
+    assert associated.remediation.kind is RemediationKind.DIRECT_ACTION
+    assert associated.remediation.basis is RemediationBasis.OBSERVED_DEATH
+    assert associated.remediation.condition is None
+    assert all(item.remediation.provenance is None for item in result.remediations)
+    assert not any(
+        hasattr(f.finding, "estimated_gain_pct")
+        for f in result.execution_findings  # RB-1
+    )
+
+
 # -- RP.2: Setup Analysis integration --------------------------------------------
 
 
@@ -432,6 +527,7 @@ def test_setup_analysis_never_flows_into_execution_computations() -> None:
         "build_cd_reference_profile",
         "match_cohort",
         "select_top_actions",
+        "select_top_priorities",
     }
     tree = ast.parse(inspect.getsource(pipeline_module))
     for node in ast.walk(tree):
@@ -462,7 +558,14 @@ def test_reference_logs_reuse_criteria_partition_without_report_rankings(tmp_pat
     assert reference_rows == [(3, 5)]
 
 
-def test_run_analysis_exposes_ready_capability_without_running_inference(tmp_path: Path) -> None:
+def test_run_analysis_exposes_ready_capability_without_running_inference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        pipeline_module,
+        "CohortCriteria",
+        partial(pipeline_module.CohortCriteria, matching_policy_version="v1"),
+    )
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
     registry = Phase4ModelRegistry(deps.store)
@@ -488,15 +591,22 @@ def test_run_analysis_exposes_ready_capability_without_running_inference(tmp_pat
     assert result.manifest.cohort_id
     assert result.manifest.wcl_partition == 3
     assert "has_augmentation" in result.header.matched_covariates
-    assert "item_level" in result.header.matched_covariates
+    assert "external_buffs" in result.header.matched_covariates
 
 
-def test_player_without_augmentation_gets_an_augmentation_free_cohort(tmp_path: Path) -> None:
+def test_player_without_augmentation_gets_an_augmentation_free_cohort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """T2.1 acceptance: a player without Augmentation in the raid gets a
     cohort of ONLY non-Augmentation logs, as long as n >= COHORT_MIN_HARD
     without needing to relax has_augmentation — 8 clean candidates plus 4
     Augmentation-buffed ones are offered; only the 8 clean ones survive.
     """
+    monkeypatch.setattr(
+        pipeline_module,
+        "CohortCriteria",
+        partial(pipeline_module.CohortCriteria, matching_policy_version="v1"),
+    )
     n_clean = N_REFS
     n_augmented = 4
     meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]  # primary: no augment
@@ -560,11 +670,18 @@ def test_player_without_augmentation_gets_an_augmentation_free_cohort(tmp_path: 
     assert "has_augmentation" not in result.header.relaxed_covariates
 
 
-def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(tmp_path: Path) -> None:
+def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """T2.1 acceptance: when the only way to reach COHORT_MIN_HARD is to
     admit Augmentation-buffed candidates, the RENDERED report carries the
     support-buff warning.
     """
+    monkeypatch.setattr(
+        pipeline_module,
+        "CohortCriteria",
+        partial(pipeline_module.CohortCriteria, matching_policy_version="v1"),
+    )
     n_clean = 3  # below COHORT_MIN_HARD alone — forces has_augmentation to relax
     n_augmented = 8
     meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
@@ -696,6 +813,19 @@ def test_allow_cold_build_false_still_uses_an_existing_warm_candidate_pool(tmp_p
 
     assert "rankings" not in transport.calls
     assert result.header.reference_n == N_REFS
+
+
+def test_devourer_passes_scope_gate_offline(tmp_path: Path) -> None:
+    transport = _DispatchTransport(
+        _happy_path_responses(class_name="DemonHunter", spec_name="Devourer")
+    )
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.header.class_name == "DemonHunter"
+    assert result.header.spec == "Devourer"
+    assert "rankings" in transport.calls
 
 
 def test_scope_rejection_triggers_zero_ranking_queries(tmp_path: Path) -> None:
@@ -904,3 +1034,118 @@ def test_a_second_analysis_of_a_ready_cohort_spends_no_reference_queries(
     assert transport.calls.count("rankings") == 1
     assert len(transport.calls) < calls_after_cold * 2
     deps.store.close()
+
+
+# -- M29: materiality/conclusion propagation on AnalysisResult --------------
+
+
+def test_analysis_result_conclusion_and_positive_observation_default_to_none() -> None:
+    """M29: `conclusion`/`positive_observation` are additive fields — an
+    `AnalysisResult` built by hand (every non-`run_analysis` test in this
+    file does this implicitly through `run_analysis`, but future callers
+    might not) must never require them."""
+    import dataclasses
+
+    fields_by_name = {f.name: f for f in dataclasses.fields(pipeline_module.AnalysisResult)}
+    assert fields_by_name["conclusion"].default is None
+    assert fields_by_name["positive_observation"].default is None
+    assert fields_by_name["material_priorities"].default == ()
+
+
+def test_run_analysis_populates_conclusion_end_to_end(tmp_path: Path) -> None:
+    """RB-4, wired through the real pipeline (not just materiality.py in
+    isolation): `conclusion.standing` is graded against the PAIRED
+    cohort's DPS values while `conclusion.percentile` carries the SAME
+    WCL ranking percentile already on the header — two facts, kept
+    separate, both reachable from one `run_analysis` call. Needs a cohort
+    of at least MIN_N_FOR_GRADING (15) for `standing` to actually grade
+    instead of `insufficient` — same reasoning as the M27 execution-
+    findings non-vacuity test above.
+    """
+    n_refs = 20
+    meta = [
+        _meta_response(
+            class_name="Warlock", spec_name="Demonology", combatant_info=_SHARED_COMBATANT_INFO
+        )
+    ]
+    primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
+    events = [_events_response([primary_cast])]
+    percentile = [_percentile_response(71.0, PRIMARY_REPORT, PRIMARY_FIGHT)]
+
+    for i in range(n_refs):
+        meta.append(
+            _meta_response(
+                player_id=100 + i,
+                player_name=f"Ref{i}",
+                class_name="Warlock",
+                spec_name="Demonology",
+                damage_total=900_000.0,
+                combatant_info=_SHARED_COMBATANT_INFO,
+            )
+        )
+        events.append(
+            _events_response(
+                [{"sourceID": 100 + i, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}]
+            )
+        )
+        percentile.append(_percentile_response(None, f"REFCODE{i:09d}", 1))
+
+    responses: dict[str, Any] = {
+        "meta": meta,
+        "events": events,
+        "percentile": percentile,
+        "rankings": [_rankings_response(n_refs)],
+        "partition": _zone_partitions_response(),
+    }
+    transport = _DispatchTransport(responses)
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert result.matched_cohort_members is not None and result.matched_cohort_members >= 15
+    assert result.conclusion is not None
+    assert result.conclusion.standing.direction == "higher_better"
+    assert result.conclusion.standing.user_value == result.header.player_dps
+    assert result.conclusion.percentile == result.header.player_percentile
+    assert result.conclusion.sample.matched_n == result.matched_cohort_members
+    assert result.conclusion.material_count >= 0
+    assert isinstance(result.conclusion.material_count, int)
+    assert isinstance(result.material_priorities, tuple)
+    assert len(result.material_priorities) <= 3
+
+
+def test_top_actions_unaffected_by_materiality_wiring(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TEST_PLAN item 9 ("fixação user-facing"): `select_top_priorities`
+    (findings.py — out of scope for this unit, RB-6) must still be called
+    with EXACTLY the two arguments it always took, and its return value
+    must still be exactly what `AnalysisResult.top_actions` carries. This
+    is the guard that the new materiality/conclusion layer sits strictly
+    AFTER that call, never as a filter in front of it.
+    """
+    from botgitgud.analysis.findings import select_top_priorities as real_select_top_priorities
+
+    captured: dict[str, object] = {}
+
+    def _spy(
+        findings: object, relevance_findings: object, **kwargs: object
+    ) -> pipeline_module.TopPriorities:
+        captured["findings"] = list(findings)  # type: ignore[call-overload]
+        captured["relevance_findings"] = list(relevance_findings)  # type: ignore[call-overload]
+        captured["kwargs"] = kwargs
+        return real_select_top_priorities(findings, relevance_findings, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pipeline_module, "select_top_priorities", _spy)
+
+    transport = _DispatchTransport(_happy_path_responses())
+    deps = _build_deps(tmp_path, transport)
+
+    result = run_analysis(_req(), deps)
+
+    assert captured["kwargs"] == {}
+    expected = real_select_top_priorities(
+        captured["findings"],  # type: ignore[arg-type]
+        captured["relevance_findings"],  # type: ignore[arg-type]
+    )
+    assert result.top_actions == expected

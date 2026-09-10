@@ -108,6 +108,8 @@ def _build_uptime_findings(
 
     findings: list[UptimeFinding] = []
     for spell_id in sorted(spell_ids):
+        if catalog.identity(spell_id).resolution_status == "unresolved":
+            continue
         presence = sum(1 for rl in matched_logs if spell_id in rl.uptimes) / n
         if presence < UPTIME_PRESENCE_THRESHOLD:
             continue

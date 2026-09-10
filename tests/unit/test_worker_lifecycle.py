@@ -14,12 +14,10 @@ from typing import Any
 import discord
 import pytest
 
-from botgitgud.bot.delivery import ReportDeliveryConfig
+from botgitgud.analysis.findings import TopPriorities
 from botgitgud.bot.discord_bot import WorkerSupervisor, _notify_outcome, _run_one_job
 from botgitgud.bot.job_models import BudgetStatus
 from botgitgud.bot.jobs import JobQueue
-from botgitgud.bot.report_links import ReportLinkStore
-from botgitgud.bot.report_store import persist_report
 from botgitgud.bot.worker import JobOutcome
 from botgitgud.ingest.store import Store
 from botgitgud.report.contract import ConfidenceSummary, ExecutionSection, ReportContract
@@ -52,7 +50,7 @@ def _contract() -> ReportContract:
         resultado=ReportHeader("Zilbag", "Boss", "DeathKnight", "Unholy", 20, 300.0, 360.0),
         setup=None,
         execucao=ExecutionSection(comparisons=(), performance=None, dps_gap=None),
-        top_actions=(),
+        top_actions=TopPriorities(),
         confianca=ConfidenceSummary(
             reference_pool_members=40,
             matched_cohort_members=20,
@@ -61,14 +59,6 @@ def _contract() -> ReportContract:
             relaxed_covariates=(),
         ),
         manifest=None,
-    )  # type: ignore[arg-type]
-
-
-def _delivery_config(tmp_path: Path) -> ReportDeliveryConfig:
-    return ReportDeliveryConfig(
-        link_store=ReportLinkStore(Store(tmp_path)),
-        data_dir=tmp_path,
-        public_base_url="https://botgitgud.duckdns.org",
     )
 
 
@@ -93,26 +83,18 @@ def _claim_one(queue: JobQueue) -> Any:
 # -- RC.8: regressao exata do incidente ------------------------------------------
 
 
-def test_zilbag_like_forbidden_preserves_report_and_records_delivery_failure(
+def test_zilbag_like_forbidden_preserves_completion_and_records_delivery_failure(
     tmp_path: Path,
 ) -> None:
     with Store(tmp_path) as store:
         queue = JobQueue(store)
         job = _claim_one(queue)
         assert job is not None
-        report = persist_report(tmp_path, job.job_id, "<html>Zilbag</html>")
-        queue.mark_done(job.job_id, report_path=str(report))
+        queue.mark_done(job.job_id, report_path=None)
 
         channel = _Channel(fail=_forbidden())
-        outcome = JobOutcome(
-            job,
-            True,
-            "resumo",
-            html_report="<html>Zilbag</html>",
-            report_path=str(report),
-            report_contract=_contract(),
-        )
-        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue, _delivery_config(tmp_path)))
+        outcome = JobOutcome(job, True, "resumo", report_contract=_contract())
+        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue))
 
         stored = queue.get(job.job_id)
         assert stored is not None
@@ -120,8 +102,7 @@ def test_zilbag_like_forbidden_preserves_report_and_records_delivery_failure(
         assert stored.analysis_completed is True
         assert stored.delivery_status == "failed"
         assert stored.delivery_error is not None
-        assert stored.report_path == str(report)
-        assert report.is_file()
+        assert stored.report_path is None
 
 
 def test_successful_delivery_is_recorded(tmp_path: Path) -> None:
@@ -129,9 +110,9 @@ def test_successful_delivery_is_recorded(tmp_path: Path) -> None:
         queue = JobQueue(store)
         job = _claim_one(queue)
         assert job is not None
-        queue.mark_done(job.job_id, report_path=str(persist_report(tmp_path, job.job_id, "<h/>")))
-        outcome = JobOutcome(job, True, "r", html_report="<h/>", report_contract=_contract())
-        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue, _delivery_config(tmp_path)))
+        queue.mark_done(job.job_id, report_path=None)
+        outcome = JobOutcome(job, True, "r", report_contract=_contract())
+        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.delivery_status == "delivered"
@@ -144,7 +125,7 @@ def test_analysis_failure_stays_distinct_from_delivery_failure(tmp_path: Path) -
         assert job is not None
         queue.mark_failed(job.job_id, error="InsufficientCohort")
         outcome = JobOutcome(job, False, "sem coorte")
-        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue, _delivery_config(tmp_path)))
+        asyncio.run(_notify_outcome(_Bot(_Channel()), outcome, queue))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.status == "failed"
@@ -157,13 +138,48 @@ def test_http_exception_does_not_escape_notify(tmp_path: Path) -> None:
         queue = JobQueue(store)
         job = _claim_one(queue)
         assert job is not None
-        queue.mark_done(job.job_id, report_path=str(persist_report(tmp_path, job.job_id, "<h/>")))
+        queue.mark_done(job.job_id, report_path=None)
         channel = _Channel(fail=_http_error())
-        outcome = JobOutcome(job, True, "r", html_report="<h/>", report_contract=_contract())
-        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue, _delivery_config(tmp_path)))
+        outcome = JobOutcome(job, True, "r", report_contract=_contract())
+        asyncio.run(_notify_outcome(_Bot(channel), outcome, queue))
         stored = queue.get(job.job_id)
         assert stored is not None
         assert stored.delivery_status == "failed"
+
+
+def test_status_reports_worker_running_and_stopped(tmp_path: Path) -> None:
+    import botgitgud.bot.discord_bot as discord_module
+
+    class _Ctx:
+        def __init__(self) -> None:
+            self.sent: list[str] = []
+
+        async def send(self, content: str, **_kwargs: Any) -> None:
+            self.sent.append(content)
+
+    async def scenario() -> None:
+        with Store(tmp_path) as store:
+            deps = SimpleNamespace(
+                store=store,
+                client=SimpleNamespace(),
+                settings=SimpleNamespace(data_dir=tmp_path, bot_stop_poll_interval_s=1.0),
+            )
+            bot = discord_module.build_bot(deps)  # type: ignore[arg-type]
+            command = bot.get_command("status")
+            assert command is not None
+            status: Any = command.callback
+
+            stopped = _Ctx()
+            await status(stopped)
+            assert "parado" in stopped.sent[0]
+
+            bot.loop = asyncio.get_running_loop()
+            await bot.__getattribute__("on_ready")()
+            running = _Ctx()
+            await status(running)
+            assert "rodando" in running.sent[0]
+
+    asyncio.run(scenario())
 
 
 # -- RC.4: um job nunca mata o consumidor ----------------------------------------
@@ -183,7 +199,7 @@ def test_unexpected_job_exception_is_logged_and_job_is_not_left_running(tmp_path
                 raise RuntimeError("bug inesperado")
 
             loop.run_in_executor = boom  # type: ignore[method-assign]
-            await _run_one_job(_Bot(_Channel()), deps, queue, job, _delivery_config(tmp_path))  # type: ignore[arg-type]
+            await _run_one_job(_Bot(_Channel()), deps, queue, job)  # type: ignore[arg-type]
 
         asyncio.run(invoke())
         stored = queue.get(job.job_id)
@@ -205,7 +221,7 @@ def test_cancellation_is_never_swallowed(tmp_path: Path) -> None:
                 raise asyncio.CancelledError
 
             loop.run_in_executor = cancelled  # type: ignore[method-assign]
-            await _run_one_job(_Bot(_Channel()), deps, queue, job, _delivery_config(tmp_path))  # type: ignore[arg-type]
+            await _run_one_job(_Bot(_Channel()), deps, queue, job)  # type: ignore[arg-type]
 
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(invoke())

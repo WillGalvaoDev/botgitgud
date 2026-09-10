@@ -191,7 +191,13 @@ def test_same_identity_upserts_and_preserves_created_at(tmp_path: Path) -> None:
 
 def test_different_policy_version_coexists(tmp_path: Path) -> None:
     bstore, _ = _store(tmp_path)
-    target_v1 = TARGET
+    target_v1 = EncounterBenchmarkTarget(
+        spec=TARGET.spec,
+        encounter_id=TARGET.encounter_id,
+        difficulty=TARGET.difficulty,
+        partition=TARGET.partition,
+        benchmark_policy_version="v1",
+    )
     target_v2 = EncounterBenchmarkTarget(
         spec=TARGET.spec,
         encounter_id=TARGET.encounter_id,
@@ -199,7 +205,11 @@ def test_different_policy_version_coexists(tmp_path: Path) -> None:
         partition=TARGET.partition,
         benchmark_policy_version="v2",
     )
-    b1, p1, o1 = _benchmark(target=target_v1)
+    b1, p1, o1 = _benchmark(
+        _observations(target=target_v1),
+        target=target_v1,
+        policy=BenchmarkPolicy(policy_version="v1"),
+    )
     b2, p2, o2 = _benchmark(
         _observations(target=target_v2),
         target=target_v2,

@@ -72,7 +72,7 @@ def _timing_comparison() -> SpellComparison:
     )
 
 
-def test_section_order_matches_the_normative_t31_sequence() -> None:
+def test_resource_efficiency_precedes_offensive_timeline() -> None:
     text = render_report(
         _header(),
         [_timing_comparison()],
@@ -89,23 +89,18 @@ def test_section_order_matches_the_normative_t31_sequence() -> None:
         ),
     )
 
-    order = [
-        "MORTES E DOWNTIME",
-        "ACTIVE TIME",
-        "UPTIMES",
-        "WASTE DE RECURSO",
-        "MINOR CDS / BURST UTILITIES",
-    ]
+    order = ["5 EFICIENCIA DE RECURSO", "Mortes:", "Tempo ativo:", "Mana", "6 TIMELINE OFENSIVA"]
     positions = [text.index(marker) for marker in order]
     assert positions == sorted(positions)
 
 
 def test_performance_sections_render_even_with_no_cd_comparisons() -> None:
     text = render_report(_header(), [], performance=_performance())
-    assert "MORTES E DOWNTIME" in text
-    assert "ACTIVE TIME" in text
-    assert "Nenhum Major/Minor CD elegível encontrado." in text
-    assert text.index("MORTES E DOWNTIME") < text.index("Nenhum Major/Minor CD")
+    assert "5 EFICIENCIA DE RECURSO" in text
+    assert "Mortes:" in text
+    assert "Downtime:" in text
+    assert "Tempo ativo:" in text
+    assert "TIMELINE OFENSIVA" not in text
 
 
 def test_active_time_finding_precedes_any_cd_timing_section() -> None:
@@ -116,7 +111,7 @@ def test_active_time_finding_precedes_any_cd_timing_section() -> None:
     text = render_report(
         _header(), [_timing_comparison()], performance=_performance(active_time_grade="red")
     )
-    assert text.index("ACTIVE TIME") < text.index("MINOR CDS / BURST UTILITIES")
+    assert text.index("Tempo ativo:") < text.index("MINOR CDS / BURST UTILITIES")
 
 
 def test_uptime_and_waste_sections_absent_when_empty() -> None:
@@ -128,6 +123,13 @@ def test_uptime_and_waste_sections_absent_when_empty() -> None:
 def test_grade_emoji_rendered_for_deaths_and_active_time() -> None:
     text = render_report(_header(), [], performance=_performance())
     assert "🔴" in text
+
+
+def test_section_five_absorbs_the_old_performance_subheadings() -> None:
+    text = render_report(_header(), [], performance=_performance())
+    assert "MORTES E DOWNTIME" not in text
+    assert "ACTIVE TIME" not in text
+    assert text.index("5 EFICIENCIA DE RECURSO") < text.index("Mortes:")
 
 
 def test_no_performance_sections_when_performance_is_none() -> None:

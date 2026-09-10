@@ -460,8 +460,8 @@ def test_benchmark_build_stays_lowest_priority(tmp_path: Path) -> None:
 
 def test_worker_path_enqueues_without_making_the_report_wait(tmp_path: Path) -> None:
     """19 (worker path) + 4 (a primeira análise não espera o benchmark) +
-    5 (o relatório continua entregável): `run_claimed_job` roda a análise
-    inteira offline, devolve summary+HTML+report_path, e SÓ então deixa um
+    5 (a resposta continua entregável): `run_claimed_job` roda a análise
+    inteira offline, devolve o contrato de coaching, e SÓ então deixa um
     `benchmark_build` `queued` — nunca executado dentro desta chamada.
     """
     from test_pipeline import _build_deps, _DispatchTransport, _happy_path_responses
@@ -486,8 +486,8 @@ def test_worker_path_enqueues_without_making_the_report_wait(tmp_path: Path) -> 
     outcome = run_claimed_job(queue, job, deps)
 
     assert outcome.ok is True
-    assert outcome.html_report is not None
-    assert outcome.report_path is not None
+    assert outcome.report_contract is not None
+    assert not (deps.settings.data_dir / "reports").exists()
 
     queued = [j for j in queue.list_recent() if j.job_type == "benchmark_build"]
     assert len(queued) == 1

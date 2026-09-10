@@ -9,7 +9,7 @@
 #
 # O que este script deliberadamente NAO faz:
 #   - nao escreve segredo nenhum, nem inventa valor de .env;
-#   - nao abre porta, nao mexe em firewall, nao instala/configura Caddy;
+#   - nao abre porta nem mexe em firewall;
 #   - nao altera configuracao de SSH;
 #   - nao inicia o servico (isso e install-systemd.sh, e so apos preflight);
 #   - nao migra dados reais.
@@ -143,7 +143,7 @@ log "arvore do repositorio validada em ${REPO_DIR}"
 
 # Mesma lista de PERSISTENT_DIRNAMES em src/botgitgud/ops/deploy.py -- o
 # preflight reprova se divergirem, entao a duplicacao nao passa despercebida.
-for sub in "" raw reports logs control ops ops/analysis-runs; do
+for sub in "" raw logs control ops ops/analysis-runs; do
     target="${DATA_DIR}${sub:+/$sub}"
     if [ -d "${target}" ]; then
         log "diretorio ja existe: ${target}"
@@ -159,7 +159,7 @@ log "ajustando ownership de ${REPO_DIR} para ${SERVICE_USER}:${SERVICE_GROUP}"
 chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${REPO_DIR}"
 
 # 750: o servico le/escreve; o grupo le; ninguem mais entra. data/ guarda o
-# warehouse e os relatorios ja emitidos -- nada disso e publico.
+# warehouse e dados operacionais -- nada disso e publico.
 chmod 750 "${REPO_DIR}"
 chmod -R 750 "${DATA_DIR}"
 

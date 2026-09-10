@@ -273,6 +273,7 @@ def test_compare_all_spells_uses_a_curated_base_cooldown_for_classification(
         )
     }
     catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(spell_id, "Known ability", "wcl")
 
     comparisons = compare_all_spells(
         player_log, profile, [spell_id], catalog=catalog, reference_n=1
@@ -329,6 +330,7 @@ def test_compare_all_spells_gap_penalty_reaches_the_real_alignment(tmp_path: Pat
         )
     }
     catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(spell_id, "Known ability", "wcl")
 
     small_penalty = compare_all_spells(
         player_log, profile, [spell_id], catalog=catalog, reference_n=1, gap_penalty=10.0
@@ -341,3 +343,62 @@ def test_compare_all_spells_gap_penalty_reaches_the_real_alignment(tmp_path: Pat
     # MATCH with a huge one — same logic as align()'s own configurability.
     assert small_penalty.alignment.n_matched == 0
     assert large_penalty.alignment.n_matched == 1
+
+
+def test_compare_all_spells_omits_unresolved_abilities(tmp_path: Path) -> None:
+    resolved_id = 111
+    unresolved_id = 222
+    intervals = derive_phase_intervals([], fight_start_ms=0, fight_end_ms=100)
+    fight = FightRef(
+        report_code="ABCDEFGHIJKLMNOP",
+        fight_id=1,
+        encounter_id=3179,
+        boss_name="Fallen-King Salhadaar",
+        difficulty=5,
+        duration_s=100.0,
+        kill=True,
+        phase_intervals=intervals,
+    )
+    build = PlayerBuild(
+        character_name="Ref",
+        server="Azralon",
+        class_name="Warlock",
+        spec_name="Demonology",
+        role="dps",
+        item_level=283.0,
+        talent_hash=None,
+        tier_pieces=None,
+    )
+    player_log = PlayerLog(
+        fight=fight,
+        build=build,
+        dps=100_000.0,
+        percentile=50.0,
+        cast_timeline={resolved_id: (10.0,), unresolved_id: (10.0,)},
+        phase_cast_timeline={
+            resolved_id: {(0, 0): (10.0,)},
+            unresolved_id: {(0, 0): (10.0,)},
+        },
+    )
+    profile = {
+        spell_id: SpellProfile(
+            spell_id=spell_id,
+            presence=1.0,
+            ref_times=(10.0,),
+            n_usages_median=1.0,
+            phase_ref_times={(0, 0): (10.0,)},
+        )
+        for spell_id in (resolved_id, unresolved_id)
+    }
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(resolved_id, "Known ability", "wcl")
+
+    comparisons = compare_all_spells(
+        player_log,
+        profile,
+        [resolved_id, unresolved_id],
+        catalog=catalog,
+        reference_n=1,
+    )
+
+    assert {comparison.spell.spell_id for comparison in comparisons} == {resolved_id}

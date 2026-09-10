@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from botgitgud.ingest.damage_aggregation import aggregate_damage_by_ability, parse_damage_events
+from botgitgud.ingest.damage_aggregation import (
+    aggregate_damage_by_ability,
+    parse_damage_events,
+    scope_total,
+    support_subtracted_total,
+)
 
 PLAYER_ID = 6
 PET_ID = 16
@@ -105,3 +110,66 @@ def test_avg_targets_per_cast_omitted_for_zero_cast_abilities() -> None:
     parsed = parse_damage_events(events, frozenset({PET_ID}))
     _damage_by_ability, avg_targets = aggregate_damage_by_ability(parsed, cast_counts={})
     assert 2 not in avg_targets
+
+
+def test_damage_breakdown_by_source_reconciles_with_aggregate() -> None:
+    events = [
+        {"type": "damage", "sourceID": PLAYER_ID, "targetID": 1, "abilityGameID": 9, "amount": 10},
+        {"type": "damage", "sourceID": PET_ID, "targetID": 1, "abilityGameID": 9, "amount": 7},
+        {"type": "damage", "sourceID": PET_ID, "targetID": 2, "abilityGameID": 9, "amount": 3},
+    ]
+    parsed = parse_damage_events(events, frozenset({PLAYER_ID, PET_ID}))
+    damage, _targets = aggregate_damage_by_ability(parsed, cast_counts={9: 1})
+
+    ability = damage[9]
+    assert sum(source.total for source in ability.by_source.values()) == ability.total
+    assert sum(source.hits for source in ability.by_source.values()) == ability.hits
+    assert ability.by_source[PLAYER_ID].total == 10.0
+    assert ability.by_source[PET_ID].total == 10.0
+
+
+def test_target_scope_filters_without_deduplicating_raw_events() -> None:
+    repeated = {
+        "type": "damage",
+        "sourceID": PLAYER_ID,
+        "targetID": 100,
+        "abilityGameID": 9,
+        "amount": 10,
+    }
+    events = [repeated.copy(), repeated.copy(), {**repeated, "targetID": 270, "amount": 99}]
+    parsed = parse_damage_events(events, frozenset({PLAYER_ID}), frozenset({100}))
+    damage, _ = aggregate_damage_by_ability(parsed, {})
+    assert damage[9].hits == 2
+    assert damage[9].total == 20
+
+
+def test_support_subtraction_is_a_total_term_not_an_ability() -> None:
+    own = parse_damage_events(
+        [
+            {
+                "type": "damage",
+                "sourceID": PLAYER_ID,
+                "targetID": 100,
+                "abilityGameID": 9,
+                "amount": 80,
+            }
+        ],
+        frozenset({PLAYER_ID}),
+        frozenset({100}),
+    )
+    damage, _ = aggregate_damage_by_ability(own, {})
+    support_events = [
+        {
+            "type": "damage",
+            "sourceID": OTHER_PLAYER_ID,
+            "targetID": 100,
+            "abilityGameID": 999,
+            "amount": 20,
+            "subtractsFromSupportedActor": True,
+            "supportID": PET_ID,
+        }
+    ]
+    subtracted = support_subtracted_total(support_events, PLAYER_ID, {PET_ID: PLAYER_ID})
+    assert subtracted == 20
+    assert 999 not in damage
+    assert scope_total(damage, subtracted) == 60

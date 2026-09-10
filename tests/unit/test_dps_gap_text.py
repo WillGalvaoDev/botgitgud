@@ -12,10 +12,10 @@ _STATS = QuantileStats(n=20, p10=0, p25=0, p50=0, p75=0, p90=0)
 def _gap(**overrides: object) -> AbilityGap:
     defaults: dict[str, object] = {
         "spell": SpellInfo(spell_id=1, name="Chaos Strike", source="wcl"),
-        "c_u": 8.0,
+        "n_u": 8.0,
         "d_u": 800.0,
         "p_u": 100.0,
-        "c_r": 10.0,
+        "n_r": 10.0,
         "d_r": 1000.0,
         "p_r": 100.0,
         "delta_d": -200.0,
@@ -27,6 +27,7 @@ def _gap(**overrides: object) -> AbilityGap:
         "efficiency_dps_pct": 0.0,
         "diagnosis": "usos_perdidos_excedentes",
         "confidence": "alta",
+        "unit_kind": "CAST",
     }
     defaults.update(overrides)
     return AbilityGap(**defaults)  # type: ignore[arg-type]
@@ -41,6 +42,7 @@ def _report(**overrides: object) -> DpsGapReport:
         "abilities": (_gap(),),
         "other_pct": -0.6,
         "n_other": 11,
+        "measured_dps": 1_090_000.0,
     }
     defaults.update(overrides)
     return DpsGapReport(**defaults)  # type: ignore[arg-type]
@@ -98,7 +100,7 @@ def test_missing_cohort_median_degrades_gracefully() -> None:
 
 def test_dps_gap_section_renders_right_after_header_in_full_report() -> None:
     text = render_report(_header(), [], dps_gap=_report())
-    assert text.index("DE ONDE VEIO O GAP DE DPS") < text.index("Nenhum Major/Minor CD")
+    assert text.index("TOP 3 PRIORIDADES") < text.index("DE ONDE VEIO O GAP DE DPS")
 
 
 def test_dps_gap_section_absent_when_not_provided() -> None:

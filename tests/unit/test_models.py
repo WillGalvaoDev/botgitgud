@@ -147,8 +147,8 @@ def test_cohort_id_is_a_16_char_hex_string() -> None:
 # -- EC.2: matching_policy_version --------------------------------------------------
 
 
-def test_matching_policy_version_defaults_to_v1() -> None:
-    assert _criteria().matching_policy_version == "v1"
+def test_matching_policy_version_defaults_to_v2() -> None:
+    assert _criteria().matching_policy_version == "v2"
 
 
 def test_v1_cohort_id_is_byte_identical_to_before_ec2() -> None:
@@ -170,6 +170,7 @@ def test_v1_cohort_id_is_byte_identical_to_before_ec2() -> None:
         ilvl_min=280.0,
         ilvl_max=None,
         talent_cluster="abc123",
+        matching_policy_version="v1",
     )
     assert criteria_a.cohort_id() == "218423c4e7bcf385"
 
@@ -182,6 +183,7 @@ def test_v1_cohort_id_is_byte_identical_to_before_ec2() -> None:
         metric="dps",
         duration_min_s=240.0,
         duration_max_s=360.0,
+        matching_policy_version="v1",
     )
     assert criteria_b.cohort_id() == "2f5ae39c68eb3e11"
 
@@ -199,7 +201,7 @@ def test_v2_cohort_id_is_deterministic() -> None:
 
 
 def test_cohort_id_changes_when_matching_policy_version_changes() -> None:
-    base = _criteria().cohort_id()
+    base = _criteria(matching_policy_version="v1").cohort_id()
     assert _criteria(matching_policy_version="v2").cohort_id() != base
 
 

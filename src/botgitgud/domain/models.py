@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Literal
 
+from botgitgud.domain.damage_scope import DamageScopeVersion
+
 PhaseKey = tuple[int, int]  # (phase_id, occurrence) — see PhaseInterval
 
 
@@ -150,11 +152,31 @@ class PlayerBuild:
 
 
 @dataclass(frozen=True, slots=True)
+class AbilitySourceDamage:
+    source_id: int
+    total: float
+    hits: int
+
+
+@dataclass(frozen=True, slots=True)
 class AbilityDamage:
     spell_id: int
     total: float
     hits: int
     casts: int
+    by_source: Mapping[int, AbilitySourceDamage] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class AuraBand:
+    start_ms: int
+    end_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class AuraDetail:
+    total_uses: int
+    bands: tuple[AuraBand, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +190,8 @@ class PlayerLog:
     damage_by_ability: Mapping[int, AbilityDamage] = field(default_factory=dict)
     uptimes: Mapping[int, float] = field(default_factory=dict)
     resource_waste: Mapping[str, float] = field(default_factory=dict)
+    resource_waste_by_ability: Mapping[int, Mapping[int, float]] = field(default_factory=dict)
+    aura_details: Mapping[int, AuraDetail] = field(default_factory=dict)
     deaths: int = 0
     # T3.1: seconds spent dead — from each Summary.deathEvents entry to
     # whichever comes first, this player's next own cast or fight end (no
@@ -184,13 +208,19 @@ class PlayerLog:
     phase_cast_timeline: Mapping[int, Mapping[PhaseKey, tuple[float, ...]]] = field(
         default_factory=dict
     )
+    # M22: historical rows omit this field and therefore retain their
+    # original, explicitly versioned semantics.
+    damage_scope: DamageScopeVersion = DamageScopeVersion.LEGACY_UNSCOPED
+    # WCL support attribution is a term of the V1 aggregate, not an
+    # ability. It is always zero for legacy/unreconciled logs: applying the
+    # term without the target scope would create an undeclared third
+    # population semantics.
+    support_subtracted_damage: float = 0.0
 
 
-# EC.2: a política de matching v1 (talent_cluster como critério de
-# inclusão) é a única que já existia antes desta versão explícita. Uma v2
-# (EC.3: remove talent_cluster do matching) coexiste sem invalidar caches
-# v1 — ver `CohortCriteria.cohort_id()`.
-DEFAULT_MATCHING_POLICY_VERSION = "v1"
+# EC.2/M4: a política histórica v1 coexiste com a v2 sem invalidar caches;
+# a identidade retrocompatível está em `CohortCriteria.cohort_id()`.
+DEFAULT_MATCHING_POLICY_VERSION = "v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,8 +230,8 @@ class CohortCriteria:
 
     `matching_policy_version` (EC.2): versiona a POLÍTICA de matching em
     si (quais campos contam como critério de inclusão), separado de
-    qualquer campo individual mudar de valor. Default `"v1"` — a política
-    que já existia.
+    qualquer campo individual mudar de valor. Default `"v2"`; a política
+    histórica v1 continua endereçável explicitamente.
     """
 
     encounter_id: int
@@ -221,7 +251,7 @@ class CohortCriteria:
         """`sha256`, 16 hex chars — mesmo formato de antes do EC.2.
 
         Compatibilidade retroativa DELIBERADA: para `matching_policy_version
-        == DEFAULT_MATCHING_POLICY_VERSION` ("v1"), o campo é removido do
+        == "v1"`, o campo é removido do
         payload ANTES de hashear, então o `cohort_id()` de uma criteria v1
         é BYTE-A-BYTE idêntico ao que este método produzia antes deste
         campo existir — nenhum cache/pool/parquet v1 existente fica
@@ -231,7 +261,9 @@ class CohortCriteria:
         genuinely diferente — v1 e v2 nunca colidem nem se confundem.
         """
         payload = asdict(self)
-        if self.matching_policy_version == DEFAULT_MATCHING_POLICY_VERSION:
+        # v1 predates this field, so its serialized identity always omits it.
+        # This must not depend on which policy is currently the live default.
+        if self.matching_policy_version == "v1":
             del payload["matching_policy_version"]
         payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload_json.encode()).hexdigest()[:16]

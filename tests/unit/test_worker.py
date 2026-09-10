@@ -19,15 +19,11 @@ from test_pipeline import _build_deps, _DispatchTransport, _happy_path_responses
 
 import botgitgud.bot.discord_bot as discord_module
 import botgitgud.bot.worker as worker_module
-from botgitgud.bot.delivery import ReportDeliveryConfig
 from botgitgud.bot.job_models import BudgetStatus, Job, now_utc_naive
 from botgitgud.bot.jobs import JobQueue
-from botgitgud.bot.report_links import ReportLinkStore
 from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
 from botgitgud.ingest.store import Store
-from botgitgud.report.html_report import render_html_report
-from botgitgud.report.text import render_header_and_top3
 
 ENCOUNTER_ID = 3179
 
@@ -64,7 +60,7 @@ def _claimed_build_cohort_job(dedup_key: str) -> Job:
     )
 
 
-def test_run_claimed_analyze_job_returns_summary_and_html(tmp_path: Path) -> None:
+def test_run_claimed_analyze_job_returns_coaching_contract(tmp_path: Path) -> None:
     transport = _DispatchTransport(_happy_path_responses())
     deps = _build_deps(tmp_path, transport)
     store = Store(tmp_path / "queue_data")
@@ -74,13 +70,7 @@ def test_run_claimed_analyze_job_returns_summary_and_html(tmp_path: Path) -> Non
     outcome = run_claimed_job(queue, job, deps)
 
     assert outcome.ok is True
-    assert "Zarad" in outcome.message
-    assert "TOP 3 AÇÕES COM GANHO" in outcome.message
-    assert outcome.html_report is not None
-    assert "<html" in outcome.html_report
-    assert "DE ONDE VEIO O GAP DE DPS" not in outcome.message
-    # CL.5: o resumo compacto do Discord (report/discord_summary.py) é
-    # renderizado a partir DESTE contrato na entrega — nunca reconstruído.
+    assert outcome.message == "Análise concluída."
     assert outcome.report_contract is not None
     assert outcome.report_contract.resultado.char_name == "Zarad"
     store.close()
@@ -96,22 +86,13 @@ def test_queue_and_hot_path_render_the_same_delivery_contract(
         allow_cold_build=True,
     )
     monkeypatch.setattr(worker_module, "run_analysis", lambda *_args, **_kwargs: result)
-    summary, html, returned = worker_module._run_analyze(_claimed_analyze_job(), deps)
+    message, returned = worker_module._run_analyze(_claimed_analyze_job(), deps)
     # EB.6: `_run_analyze` tambem devolve o `AnalysisResult`, para
     # `run_claimed_job` poder decidir sobre o benchmark DEPOIS de concluir o
     # job — mesmo objeto, nunca um recalculo.
     assert returned is result
-    assert summary == render_header_and_top3(result.header, result.top_actions)
-    assert html == render_html_report(
-        result.header,
-        result.comparisons,
-        manifest=result.manifest,
-        performance=result.performance,
-        dps_gap=result.dps_gap,
-        top_actions=result.top_actions,
-        duration_s=result.header.duration_max_s,
-        setup=result.setup_analysis,
-    )
+    assert message == "Análise concluída."
+    assert worker_module.contract_for(result).resultado.char_name == "Zarad"
 
 
 def test_run_claimed_analyze_job_marks_queue_entry_done_when_enqueued_first(
@@ -392,12 +373,11 @@ def test_a_deferred_job_resumes_as_the_same_job_and_finally_delivers(
     final_outcome = run_claimed_job(queue, resumed, deps)
 
     assert final_outcome.ok is True
-    assert final_outcome.html_report is not None
     assert final_outcome.deferred is False
     done = queue.get(original_job_id)
     assert done is not None
     assert done.status == "done"
-    assert done.report_path is not None
+    assert done.report_path is None
     store.close()
 
 
@@ -477,16 +457,9 @@ def test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop(
     monkeypatch.setattr(discord_module.asyncio, "sleep", real_time_ticks)
     bot = SimpleNamespace(get_channel=lambda _id: None)
 
-    report_delivery = ReportDeliveryConfig(
-        link_store=ReportLinkStore(deps.store),
-        data_dir=deps.settings.data_dir,
-        public_base_url="https://botgitgud.duckdns.org",
-    )
     try:
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(
-                discord_module._worker_loop(bot, deps, queue, report_delivery)  # type: ignore[arg-type]
-            )
+            asyncio.run(discord_module._worker_loop(bot, deps, queue))  # type: ignore[arg-type]
     finally:
         structlog.reset_defaults()
 
@@ -500,7 +473,7 @@ def test_synthetic_end_to_end_expired_deferral_resumes_via_the_real_worker_loop(
     assert final.dedup_key == "ABCDEFGHIJKLMNOP:1:Zarad"  # mesma dedup_key
     assert final.status == "done"  # cohort READY -> analysis -> job done
     assert final.defer_count == 1  # incrementado uma vez, nunca resetado
-    assert final.report_path is not None
+    assert final.report_path is None
 
     # EB.6: o loop real agora tambem executa o `benchmark_build` que a
     # analise concluida enfileirou — filtrar por job_type mantem esta

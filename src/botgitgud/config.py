@@ -172,18 +172,6 @@ class Settings(BaseSettings):
     # hold (achado 3.6) — grading is quantile-relative now (analysis/grading.py),
     # not a Settings-tunable absolute value.
 
-    # -- CL.5: local report server + capability link delivery ------------------
-    # Bind sempre loopback (bot/report_server.py, CL.3) — nunca 0.0.0.0. O
-    # Caddy futuro fala com a Internet e encaminha para 127.0.0.1:<port>.
-    report_server_host: str = "127.0.0.1"
-    report_server_port: int = 8080
-    # Sem default de produção — nunca inventar um domínio (DuckDNS ou outro).
-    # `None` é o estado honesto de "não configurado ainda"; `build_bot()`
-    # valida (bot/report_url.py) e falha alto no startup se a entrega de
-    # link estiver ativa e isto continuar ausente/inválido — nunca produz
-    # links quebrados silenciosamente.
-    report_public_base_url: str | None = None
-
     # -- T0.8: cohort duration bands and size thresholds -----------------------
     # Values as measured/revised against the live API (see module docstring).
     sanity_band_pct: float = 0.35

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any, cast
 
+import httpx
+import httpx_cassette_transport as cassette_transport
 import pytest
+from http_cassette import Cassette
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, MAX_RANKING_PAGES
 from botgitgud.errors import DataError, InsufficientCohort, RateLimitBudgetExceeded
@@ -13,6 +17,7 @@ from botgitgud.ingest.rankings import (
     fetch_ranking_candidates,
     get_current_partition,
 )
+from botgitgud.wcl.queries import QUERY_RANKINGS_PAGE
 
 
 def _ranking(
@@ -55,6 +60,7 @@ def _fetch(client: Any, **overrides: Any) -> list[RankingCandidate]:
         "class_name": "Warlock",
         "spec_name": "Demonology",
         "partition": 3,
+        "difficulty": 5,
         "target_duration_s": 300.0,
     }
     defaults.update(overrides)
@@ -124,6 +130,71 @@ def test_partition_is_passed_through_to_the_query() -> None:
     client = _FakeClient([_page([_ranking(f"P{i}", 300.0) for i in range(8)], has_more=False)])
     _fetch(client, partition=7)
     assert client.last_variables["partition"] == 7
+
+
+def test_difficulty_is_passed_through_to_the_query() -> None:
+    client = _FakeClient([_page([_ranking(f"P{i}", 300.0) for i in range(8)], has_more=False)])
+    _fetch(client, difficulty=4)
+    assert client.last_variables["difficulty"] == 4
+
+
+def test_difficulty_is_a_required_argument() -> None:
+    client = _FakeClient([_page([], has_more=False)])
+    with pytest.raises(TypeError):
+        fetch_ranking_candidates(  # type: ignore[call-arg]
+            client,
+            encounter_id=3179,
+            class_name="Warlock",
+            spec_name="Demonology",
+            partition=3,
+            target_duration_s=300.0,
+        )
+
+
+def _ranking_cassette_request(difficulty: int) -> httpx.Request:
+    return httpx.Request(
+        "POST",
+        "https://www.warcraftlogs.com/api/v2/client",
+        content=json.dumps(
+            {
+                "query": QUERY_RANKINGS_PAGE,
+                "variables": {
+                    "encounterID": 3179,
+                    "className": "Warlock",
+                    "specName": "Demonology",
+                    "page": 1,
+                    "partition": 3,
+                    "difficulty": difficulty,
+                },
+            }
+        ).encode(),
+    )
+
+
+def test_rankings_cassette_shim_resolves_mythic_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    def load(_key: str) -> Cassette | None:
+        # Only the legacy shape exists: no variable and no query argument.
+        return Cassette("POST", "unused", None, {}, 200, {"legacy": True}) if calls > 1 else None
+
+    calls = 0
+
+    def counting_load(key: str) -> Cassette | None:
+        nonlocal calls
+        calls += 1
+        return load(key)
+
+    monkeypatch.setattr(cassette_transport, "load_cassette", counting_load)
+    response = cassette_transport.ReplayTransport().handle_request(_ranking_cassette_request(5))
+    assert response.json() == {"legacy": True}
+    assert calls == 2
+
+
+def test_rankings_cassette_shim_fails_closed_for_heroic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cassette_transport, "load_cassette", lambda _key: None)
+    with pytest.raises(pytest.fail.Exception, match="Cassete ausente"):
+        cassette_transport.ReplayTransport().handle_request(_ranking_cassette_request(4))
 
 
 def test_rate_limit_budget_exceeded_propagates_not_swallowed_as_page_failure() -> None:

@@ -8,17 +8,22 @@ antes deste arquivo ser escrito.
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
+import pytest
 from fake_wcl_backend import FakeBudgetClient, FakePlayer, FakeWclBackend
 
-from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget
+from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget, PercentileBand
+from botgitgud.analysis.benchmark_aggregate import build_encounter_benchmark
 from botgitgud.analysis.benchmark_build_budget import protected_floor
 from botgitgud.analysis.benchmark_build_progress import BenchmarkBuildProgressStore
 from botgitgud.analysis.benchmark_builder import (
     BenchmarkBuildState,
+    LocalBenchmarkRebuildError,
     advance_benchmark_build,
     build_benchmark_until_budget,
+    rebuild_benchmark_from_local_progress,
 )
 from botgitgud.analysis.benchmark_store import BenchmarkStore
 from botgitgud.config import Settings
@@ -69,6 +74,100 @@ def _candidates_for(backend: FakeWclBackend) -> list[RankingCandidate]:
 
 def _ample_client() -> FakeBudgetClient:
     return FakeBudgetClient(points_remaining=1_000_000.0)
+
+
+def test_local_cross_version_rebuild_preserves_population_and_v1(tmp_path: Path) -> None:
+    _store, bstore, pstore = _env(tmp_path)
+    source = EncounterBenchmarkTarget(
+        spec=TARGET.spec,
+        encounter_id=TARGET.encounter_id,
+        difficulty=TARGET.difficulty,
+        partition=TARGET.partition,
+        benchmark_policy_version="v1",
+    )
+    old_policy = BenchmarkPolicy(
+        policy_version="v1",
+        bands=(
+            PercentileBand("p50-75", 50.0, 75.0),
+            PercentileBand("p75-95", 75.0, 95.0),
+            PercentileBand("p95-99", 95.0, 99.0),
+        ),
+    )
+    setup = SetupProfile(talents=(TalentNode(100, 1),), gear=(), stats={})
+    observation = PlayerLog(
+        fight=FightRef("local", 1, 3179, "Boss", 5, 300.0, True, partition=3),
+        build=PlayerBuild(
+            character_name="Player",
+            server="Realm",
+            class_name="Warlock",
+            spec_name="Demonology",
+            role="dps",
+            item_level=300.0,
+            talent_hash=None,
+            tier_pieces=None,
+            setup=setup,
+        ),
+        dps=None,
+        percentile=99.0,
+        cast_timeline={},
+    )
+    candidate = RankingCandidate("local", 1, "Player", 300.0)
+    pstore.register_candidates(source.benchmark_id, [candidate])
+    pstore.mark_fetched(
+        source.benchmark_id,
+        "local",
+        1,
+        "Player",
+        band="outside_policy_bands",
+        rank_percent=99.0,
+        duration_s=300.0,
+        item_level=300.0,
+        class_name="Warlock",
+        spec_name="Demonology",
+        server="Realm",
+        partition=3,
+        setup=setup,
+    )
+    old_benchmark = build_encounter_benchmark([observation], target=source, policy=old_policy)
+    bstore.write_benchmark(old_benchmark, policy=old_policy, observations=[observation])
+
+    result = rebuild_benchmark_from_local_progress(
+        progress_store=pstore,
+        benchmark_store=bstore,
+        source_target=source,
+        target=TARGET,
+        policy=BenchmarkPolicy.default(),
+    )
+
+    assert result.observations_reused == 1
+    assert result.before_by_band == {"outside_policy_bands": 1}
+    assert result.after_by_band == {"p99-100": 1}
+    assert bstore.read_benchmark(source.benchmark_id) == old_benchmark
+    rebuilt = bstore.read_benchmark(TARGET.benchmark_id)
+    assert rebuilt is not None
+    assert rebuilt.bands["p99-100"].sample_size == 1
+
+
+def test_local_rebuild_has_no_network_inputs_and_rejects_missing_source(tmp_path: Path) -> None:
+    parameters = inspect.signature(rebuild_benchmark_from_local_progress).parameters
+    assert "query_fn" not in parameters
+    assert "client" not in parameters
+    _, bstore, pstore = _env(tmp_path)
+    source = EncounterBenchmarkTarget(
+        spec=TARGET.spec,
+        encounter_id=3179,
+        difficulty=5,
+        partition=3,
+        benchmark_policy_version="v1",
+    )
+    with pytest.raises(LocalBenchmarkRebuildError, match="does not exist"):
+        rebuild_benchmark_from_local_progress(
+            progress_store=pstore,
+            benchmark_store=bstore,
+            source_target=source,
+            target=TARGET,
+            policy=BenchmarkPolicy.default(),
+        )
 
 
 # -- 1-4: cache local (Store.read_log) ---------------------------------------

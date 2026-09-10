@@ -10,6 +10,7 @@ key format shared with the recorder (tests/fixtures/record.py).
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures"))
 from dir_snapshot import diff_snapshots, snapshot_directory
 from http_cassette import cassette_key, load_cassette
+from real_corpus import CORPUS_ROOT, require_real_corpus
 from synthetic import build_synthetic_cohort, build_synthetic_user_timeline
 
 
@@ -88,6 +90,26 @@ def synthetic_user_timeline() -> dict[int, list[float]]:
 def synthetic_cohort() -> list[dict[str, Any]]:
     """10 reference players with known presence/variance; see tests/fixtures/synthetic.py."""
     return build_synthetic_cohort()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _protect_real_data_raw() -> Iterator[None]:
+    """M0: o snapshot de sessão cerca inclusive o setup que carrega o corpus.
+
+    A dependência explícita de `real_corpus` garante que esta medição aconteça
+    antes da primeira leitura. O teardown ocorre depois de todos os testes, de
+    modo que a carga e qualquer consumidor posterior ficam dentro da prova.
+    """
+    before = snapshot_directory(CORPUS_ROOT)
+    yield
+    violations = diff_snapshots(before, snapshot_directory(CORPUS_ROOT))
+    assert not violations, f"a suíte mutou {CORPUS_ROOT} (corpus real): {violations}"
+
+
+@pytest.fixture(scope="session")
+def real_corpus(_protect_real_data_raw: None) -> list[Any]:
+    """O corpus local é opcional no CI, mas obrigatório para provas de fidelidade."""
+    return require_real_corpus()
 
 
 @pytest.fixture(autouse=True, scope="session")

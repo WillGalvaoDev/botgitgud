@@ -195,13 +195,18 @@ def test_changing_policy_body_without_bumping_version_does_not_change_target_id(
 # -- policy: bandas padrão ---------------------------------------------------
 
 
-def test_default_policy_has_exactly_the_three_approved_bands() -> None:
+def test_default_policy_has_new_top_band_and_preserves_old_bands() -> None:
     """10."""
     policy = BenchmarkPolicy.default()
-    assert [b.name for b in policy.bands] == ["p50-75", "p75-95", "p95-99"]
-    assert policy.policy_version == DEFAULT_BENCHMARK_POLICY_VERSION
+    assert [b.name for b in policy.bands] == ["p50-75", "p75-95", "p95-99", "p99-100"]
+    assert policy.policy_version == DEFAULT_BENCHMARK_POLICY_VERSION == "v2"
     by_name = {b.name: (b.low, b.high) for b in DEFAULT_BANDS}
-    assert by_name == {"p95-99": (95.0, 99.0), "p75-95": (75.0, 95.0), "p50-75": (50.0, 75.0)}
+    assert by_name == {
+        "p99-100": (99.0, 100.0),
+        "p95-99": (95.0, 99.0),
+        "p75-95": (75.0, 95.0),
+        "p50-75": (50.0, 75.0),
+    }
 
 
 # -- policy: fronteiras (achado central do ticket) --------------------------
@@ -218,8 +223,8 @@ def test_default_policy_has_exactly_the_three_approved_bands() -> None:
         (94.999, "p75-95"),
         (95.0, "p95-99"),  # idem: 95 entra em p95-99, não em p75-95
         (98.999, "p95-99"),
-        (99.0, None),  # gap documentado: 99 e 100 não têm banda aprovada
-        (100.0, None),
+        (99.0, "p99-100"),
+        (100.0, "p99-100"),  # topo do domínio é inclusivo
     ],
 )
 def test_band_boundaries_are_unambiguous(percentile: float, expected_band: str | None) -> None:
@@ -258,7 +263,12 @@ def test_contiguous_bands_touching_at_the_boundary_are_allowed() -> None:
 def test_bands_are_canonicalized_regardless_of_construction_order() -> None:
     """13."""
     reversed_order = BenchmarkPolicy(bands=tuple(reversed(DEFAULT_BANDS)))
-    assert [b.name for b in reversed_order.bands] == ["p50-75", "p75-95", "p95-99"]
+    assert [b.name for b in reversed_order.bands] == [
+        "p50-75",
+        "p75-95",
+        "p95-99",
+        "p99-100",
+    ]
 
 
 def test_invalid_band_is_rejected_at_construction() -> None:

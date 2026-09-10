@@ -165,18 +165,12 @@ class JobOutcome:
     job: Job
     ok: bool
     message: str
-    html_report: str | None = None
     requeued: bool = False
-    report_path: str | None = None
     # B2: adiado por orcamento. `ok=False` porque nao ha relatorio ainda, mas
     # NAO e falha: o job continua elegivel e retoma sozinho.
     deferred: bool = False
     deferred_until: str | None = None
-    # CL.5: o MESMO ReportContract que produziu `html_report` — a entrega por
-    # link (bot/delivery.py::deliver_completed_report) precisa dele para
-    # renderizar o resumo compacto (report/discord_summary.py). Nasce em
-    # worker.py via `report.render.contract_for(analysis)`, reusando o
-    # construtor canônico (RP.0) em vez de recalcular achados aqui.
+    # Contrato canônico consumido pela resposta de coaching.
     report_contract: ReportContract | None = None
 
 

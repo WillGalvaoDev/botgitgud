@@ -19,6 +19,8 @@ from botgitgud.ingest.damage_aggregation import (
     RawDamageEvent,
     aggregate_damage_by_ability,
     parse_damage_events,
+    scope_total,
+    support_subtracted_total,
 )
 from botgitgud.ingest.performance_parsing import parse_resource_waste
 from botgitgud.wcl.queries import QUERY_PLAYER_DAMAGE_EVENTS, QUERY_PLAYER_RESOURCE_EVENTS
@@ -92,6 +94,49 @@ def fetch_damage_and_targets(
     )
     raw_events: list[RawDamageEvent] = parse_damage_events(raw_events_json, source_ids)
     return aggregate_damage_by_ability(raw_events, cast_counts)
+
+
+def fetch_scoped_damage_and_targets(
+    query_fn: QueryFn,
+    *,
+    report_code: str,
+    fight_id: int,
+    start_time_ms: float,
+    end_time_ms: float,
+    player_id: int,
+    source_ids: frozenset[int],
+    target_ids: frozenset[int],
+    pet_owner_by_actor: Mapping[int, int],
+    cast_counts: Mapping[int, int],
+) -> tuple[dict, dict[int, float], float, float, float, frozenset[int]]:
+    """Fetch raw events once and return V1 decomposition and total terms."""
+    events = _paginate_events(
+        query_fn,
+        QUERY_PLAYER_DAMAGE_EVENTS,
+        report_code=report_code,
+        fight_id=fight_id,
+        start_time_ms=start_time_ms,
+        end_time_ms=end_time_ms,
+        op_name="fetch_player_damage_events",
+    )
+    unscoped_events = parse_damage_events(events, source_ids)
+    unscoped_own = sum(event.amount for event in unscoped_events)
+    scoped_events = parse_damage_events(events, source_ids, target_ids)
+    damage_by_ability, avg_targets = aggregate_damage_by_ability(scoped_events, cast_counts)
+    support_subtracted = support_subtracted_total(events, player_id, pet_owner_by_actor, target_ids)
+    damaged_target_ids = frozenset(
+        int(event["targetID"])
+        for event in events
+        if event.get("type") == "damage" and isinstance(event.get("targetID"), int)
+    )
+    return (
+        damage_by_ability,
+        avg_targets,
+        support_subtracted,
+        scope_total(damage_by_ability, support_subtracted),
+        unscoped_own,
+        damaged_target_ids,
+    )
 
 
 def fetch_resource_waste(

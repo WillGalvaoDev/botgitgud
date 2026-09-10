@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from botgitgud.analysis.cadence import classify_cd_type, compute_cadence, is_eligible
@@ -117,7 +118,10 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     exibe o rótulo de um `SetupFinding` de categoria `TRINKET`/
     `TRINKET_PAIR` usando `subject.item_id` (inteiro) — só exibição, mesma
     identidade por ID já auditada nas exceções anteriores, nenhuma
-    comparação de nome. Não existe sequer um campo de nome de item em
+    comparação de nome. M30 introduziu a nona: `report/coaching_answer.py`
+    contém "trinket" somente nas frases fechadas de Setup apresentadas ao
+    jogador; o arquivo não compara nomes para decidir elegibilidade. Não
+    existe sequer um campo de nome de item em
     `GearPiece`/`TalentNode` (domain/models.py) para filtrar por ele. O
     intento do guard (nada de decisão lexical sobre spells) continua
     valendo em todo o resto de `src/`, incluindo `analysis/` fora dessas
@@ -126,6 +130,20 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
     src_root = Path(__file__).resolve().parents[2] / "src"
     banned_words = ("potion", "healthstone", "trinket")
     reviewed_exceptions = {
+        # M17's ninth reviewed exception selects exclusively by exact integer
+        # ID.  A decima e curated_family_roles.py, chaveada por tupla
+        # (class, spec, canonical_name): o nome e a CHAVE de uma decisao humana
+        # revisada, comparada por igualdade exata de tupla, nunca por substring.
+        # 'Create Healthstone' contem uma palavra banida por ser o nome real da
+        # ability; remover o nome apagaria a propria decisao.  Guardada por
+        # test_the_reviewed_curated_family_roles_exception_never_matches_text.
+        # ID. Observed names in non_spec_effects.py are audit comments only:
+        # no comparison, membership test, prefix match, regex, or
+        # normalization touches text. Removing them would erase the human
+        # GATE-M5 decision's auditability without reducing any lexical risk.
+        src_root / "botgitgud" / "domain" / "non_spec_effects.py",
+        src_root / "botgitgud" / "domain" / "curated_family_roles.py",
+        src_root / "botgitgud" / "domain" / "contextual_spec_roles.py",
         src_root / "botgitgud" / "domain" / "models.py",
         src_root / "botgitgud" / "analysis" / "benchmark_aggregate.py",
         src_root / "botgitgud" / "analysis" / "benchmark_store_models.py",
@@ -134,6 +152,7 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         src_root / "botgitgud" / "analysis" / "setup_trinkets.py",
         src_root / "botgitgud" / "analysis" / "setup_analysis.py",
         src_root / "botgitgud" / "report" / "setup_text.py",
+        src_root / "botgitgud" / "report" / "coaching_answer.py",
     }
 
     offenders = []
@@ -144,6 +163,100 @@ def test_no_lexical_filters_anywhere_in_src() -> None:
         if any(word in text for word in banned_words):
             offenders.append(path)
     assert offenders == []
+
+
+def test_the_reviewed_non_spec_effects_exception_selects_only_by_integer_id() -> None:
+    """M17's ninth exception uses exact IDs; names remain audit comments only."""
+    from botgitgud.domain.non_spec_effects import NON_SPEC_EFFECT_ROLES
+
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "domain" / "non_spec_effects.py"
+    )
+    text = path.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+
+    assert all(type(spell_id) is int for spell_id in NON_SPEC_EFFECT_ROLES)
+    assert not any(isinstance(node, ast.Compare) for node in ast.walk(tree))
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"lower", "casefold", "startswith", "endswith", "match", "search"}
+        for node in ast.walk(tree)
+    )
+
+
+def test_the_reviewed_curated_family_roles_exception_never_matches_text() -> None:
+    """A decima excecao usa a tupla como chave; nenhuma operacao de texto a decide."""
+    from botgitgud.domain.curated_family_roles import CURATED_FAMILY_ROLES
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "botgitgud"
+        / "domain"
+        / "curated_family_roles.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    assert all(
+        isinstance(key, tuple) and len(key) == 3 and all(isinstance(part, str) for part in key)
+        for key in CURATED_FAMILY_ROLES
+    )
+    assert not any(isinstance(node, ast.Compare) for node in ast.walk(tree))
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr
+        in {"lower", "casefold", "startswith", "endswith", "match", "search", "find"}
+        for node in ast.walk(tree)
+    )
+
+
+def test_the_reviewed_contextual_spec_roles_exception_never_matches_text() -> None:
+    from botgitgud.domain.contextual_spec_roles import CONTEXTUAL_SPEC_ROLES
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "botgitgud"
+        / "domain"
+        / "contextual_spec_roles.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    assert all(
+        isinstance(key, tuple)
+        and len(key) == 3
+        and isinstance(key[0], str)
+        and isinstance(key[1], str)
+        and type(key[2]) is int
+        for key in CONTEXTUAL_SPEC_ROLES
+    )
+    assert not any(isinstance(node, ast.Compare) for node in ast.walk(tree))
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"lower", "casefold", "startswith", "endswith", "match", "search"}
+        for node in ast.walk(tree)
+    )
+
+
+def test_damage_scope_guard_contains_no_lexical_or_comparison_heuristic() -> None:
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "botgitgud"
+        / "analysis"
+        / "damage_scope_guard.py"
+    )
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    assert not any(isinstance(node, ast.Compare) for node in ast.walk(tree))
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"lower", "casefold", "startswith", "endswith", "match", "search"}
+        for node in ast.walk(tree)
+    )
 
 
 def test_the_reviewed_trinket_exception_selects_by_slot_never_by_name() -> None:
@@ -291,6 +404,19 @@ def test_the_reviewed_setup_text_exception_labels_trinkets_by_item_id() -> None:
     assert "subject.item_id" in text
     assert "spell" not in text.lower()
     assert "item_name" not in text.lower()
+
+
+def test_the_reviewed_coaching_answer_exception_only_renders_trinket_text() -> None:
+    """M30: "trinket" é texto de apresentação, nunca filtro de nome."""
+    path = (
+        Path(__file__).resolve().parents[2] / "src" / "botgitgud" / "report" / "coaching_answer.py"
+    )
+    text = path.read_text(encoding="utf-8")
+
+    assert '"Setup: vale revisar seu trinket' in text
+    assert "name.lower" not in text
+    assert "name.casefold" not in text
+    assert "trinket in" not in text.lower()
 
 
 # -- classification branches --------------------------------------------------

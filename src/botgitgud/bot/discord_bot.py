@@ -33,7 +33,6 @@ from botgitgud.bot.benchmark_trigger import maybe_enqueue_benchmark_build
 from botgitgud.bot.delivery import (
     ChannelResolver,
     DeliveryContext,
-    ReportDeliveryConfig,
     context_from_discord,
     deliver_completed_report,
     send_text,
@@ -41,14 +40,6 @@ from botgitgud.bot.delivery import (
 from botgitgud.bot.job_models import BudgetStatus, EnqueueResult, Job, JobOutcome
 from botgitgud.bot.jobs import JobQueue
 from botgitgud.bot.ops_snapshot import write_snapshot
-from botgitgud.bot.report_links import ReportLinkStore
-from botgitgud.bot.report_server import ReportServer
-from botgitgud.bot.report_store import (
-    ReportPersistenceError,
-    interactive_artifact_id,
-    persist_report,
-)
-from botgitgud.bot.report_url import validate_report_public_base_url
 from botgitgud.bot.worker import run_claimed_job
 from botgitgud.errors import (
     ApiError,
@@ -59,7 +50,7 @@ from botgitgud.errors import (
     ScopeRejected,
 )
 from botgitgud.ops.control import stop_request_path_for
-from botgitgud.report.render import render_analysis
+from botgitgud.report.render import contract_for
 
 log = structlog.get_logger(__name__)
 
@@ -105,7 +96,6 @@ async def _notify_outcome(
     bot: ChannelResolver,
     outcome: JobOutcome,
     queue: JobQueue,
-    report_delivery: ReportDeliveryConfig,
 ) -> None:
     """RC.3 — fronteira de entrega. Nenhuma excecao do Discord sai daqui: a
     camada bot/delivery.py classifica cada falha e devolve um DeliveryOutcome,
@@ -161,29 +151,16 @@ async def _notify_outcome(
         result = await send_text(
             channel, content=f"{mention} ✅ {outcome.message}", context=context
         )
-    elif outcome.html_report is None:
-        log.error("discord_bot.analyze_outcome_missing_html", job_id=job.job_id)
-        result = await send_text(
-            channel, content=f"{mention} ❌ relatório HTML indisponível.", context=context
-        )
     elif outcome.report_contract is None:
-        # Nunca deveria divergir de html_report (os dois nascem do mesmo
-        # render_analysis/contract_for em worker.py) — mas um guard
-        # explícito aqui, como o de html_report acima, nunca tenta montar
-        # um resumo compacto a partir de um contrato ausente.
         log.error("discord_bot.analyze_outcome_missing_contract", job_id=job.job_id)
         result = await send_text(
             channel, content=f"{mention} ❌ relatório indisponível.", context=context
         )
     else:
-        # CL.5: job.job_id É o artifact_id (mesma identidade que worker.py
-        # usa para persistir — ver persist_report(deps.settings.data_dir,
-        # job.job_id, html_report)).
         result = await deliver_completed_report(
             channel,
             contract=outcome.report_contract,
             artifact_id=job.job_id,
-            config=report_delivery,
             context=context,
         )
 
@@ -193,9 +170,7 @@ async def _notify_outcome(
         queue.mark_delivery_failed(job.job_id, error=result.error or "falha de entrega")
 
 
-async def _worker_loop(
-    bot: commands.Bot, deps: Deps, queue: JobQueue, report_delivery: ReportDeliveryConfig
-) -> None:
+async def _worker_loop(bot: commands.Bot, deps: Deps, queue: JobQueue) -> None:
     last_points: float | None = None
     last_limit: float | None = None
     while True:
@@ -236,7 +211,7 @@ async def _worker_loop(
             defer_count=job.defer_count,
             points_remaining=budget.points_remaining,
         )
-        await _run_one_job(bot, deps, queue, job, report_delivery)
+        await _run_one_job(bot, deps, queue, job)
 
 
 async def _run_one_job(
@@ -244,7 +219,6 @@ async def _run_one_job(
     deps: Deps,
     queue: JobQueue,
     job: Job,
-    report_delivery: ReportDeliveryConfig,
 ) -> None:
     """RC.4 — ultima fronteira de isolamento: um job nunca pode matar o
     consumidor da fila. CancelledError passa direto (shutdown continua
@@ -254,7 +228,7 @@ async def _run_one_job(
     try:
         loop = asyncio.get_running_loop()
         outcome = await loop.run_in_executor(None, run_claimed_job, queue, job, deps)
-        await _notify_outcome(bot, outcome, queue, report_delivery)
+        await _notify_outcome(bot, outcome, queue)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -375,69 +349,76 @@ async def _stop_request_watcher(bot: commands.Bot, data_dir: Path, poll_interval
 
 
 class BotGitGudBot(commands.Bot):
-    """CL.5 — liga o lifecycle do `ReportServer` (CL.3) ao MESMO loop de
-    eventos assíncrono que `discord.py` já gerencia por baixo de
-    `bot.run()` (`asyncio.run(runner())`, onde `runner()` faz `async with
-    self: await self.start(...)`). Iniciar o servidor a partir de fora
-    exigiria um segundo loop — e um `ReportServer` iniciado num loop não
-    pode ser corretamente fechado depois que ESSE loop específico já
-    terminou. `setup_hook()` roda dentro de `login()`, ANTES de qualquer
-    conexão ao gateway — uma falha de bind (porta ocupada) interrompe o
-    startup aqui, antes do bot sequer tentar falar com o Discord.
-    """
-
-    def __init__(self, *, report_server: ReportServer, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._report_server = report_server
-
-    async def setup_hook(self) -> None:
-        await self._report_server.start()
-        log.info("discord_bot.report_server_started", port=self._report_server.port)
-
-    async def close(self) -> None:
-        # Ordem: ReportServer para ENQUANTO o loop que o iniciou ainda está
-        # vivo — antes de `super().close()` derrubar o websocket/HTTP
-        # client do bot. `ReportServer.stop()` já é um no-op seguro se
-        # `start()` nunca chegou a rodar (setup_hook falhou antes).
-        await self._report_server.stop()
-        log.info("discord_bot.report_server_stopped")
-        await super().close()
+    """Discord bot runtime; no auxiliary HTTP service is started."""
 
 
 def build_bot(deps: Deps) -> commands.Bot:
-    # Config -> Store (deps.store já existe) -> ReportLinkStore -> ReportServer
-    # -> Discord runtime (ordem de startup pedida pelo CL.5). A validação da
-    # base pública roda ANTES de qualquer objeto de rede ser construído: um
-    # `report_public_base_url` ausente/inválido falha aqui, claramente, nunca
-    # produzindo um bot operacional com links quebrados.
-    public_base_url = validate_report_public_base_url(deps.settings.report_public_base_url)
-    # MESMA Store que o resto do bot usa (deps.store) — nunca uma segunda
-    # conexão DuckDB só para os capability links.
-    link_store = ReportLinkStore(deps.store)
-    report_server = ReportServer(
-        link_store=link_store,
-        data_dir=deps.settings.data_dir,
-        host=deps.settings.report_server_host,
-        port=deps.settings.report_server_port,
-    )
-    report_delivery = ReportDeliveryConfig(
-        link_store=link_store,
-        data_dir=deps.settings.data_dir,
-        public_base_url=public_base_url,
-    )
-
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = BotGitGudBot(report_server=report_server, command_prefix="!", intents=intents)
+    bot = BotGitGudBot(command_prefix="!", intents=intents)
     queue = JobQueue(deps.store)
     supervisor = WorkerSupervisor()
     stop_watcher_started = False
+
+    @bot.command(name="update")
+    @commands.is_owner()
+    async def cmd_update(ctx: commands.Context) -> None:
+        """Uso: !update — atualiza referencias de rotacao (dono da aplicacao)."""
+        # Only this administrative command imports the network adapter. M28 will
+        # consume knowledge.store, whose transitive imports contain no HTTP client.
+        from botgitgud.knowledge.store import KnowledgeStore
+        from botgitgud.knowledge.wowhead_source import format_update_results, update_references
+
+        store = KnowledgeStore(deps.settings.data_dir / "rotation_knowledge")
+        results = await asyncio.to_thread(update_references, store)
+        await ctx.send(format_update_results(results))
 
     @bot.event
     async def on_connect() -> None:
         # Anterior ao `on_ready`: separa "o socket subiu" de "o bot esta
         # utilizavel". Numa reconexao noturna de soak os dois nao coincidem.
         log.info("discord_bot.gateway_connected")
+
+    @bot.event
+    async def on_command_error(ctx: commands.Context, error: Exception) -> None:
+        """CORE.1 — sem isto, `!analisar Zarad` (sem o link) levantava
+        `MissingRequiredArgument`, que o discord.py registra no seu próprio
+        logger e o usuário NUNCA vê: o erro mais provável de quem digita o
+        comando pela primeira vez era respondido com silêncio.
+
+        Deliberadamente estreito, e não um framework de erros: só falhas de
+        USO viram resposta no canal, e a resposta vem do docstring do próprio
+        comando (`short_doc`), para nunca divergir da assinatura real. Todo o
+        resto é registrado com traceback e NÃO produz mensagem — um bug de
+        verdade não pode ser convertido em texto amigável, e traceback nunca
+        vaza para o Discord.
+        """
+        if isinstance(error, commands.CommandNotFound):
+            # `!` é prefixo comum em servidores com vários bots; responder a
+            # todo comando desconhecido seria spam.
+            return
+
+        if isinstance(error, commands.NotOwner):
+            await ctx.send(str(error))
+            return
+
+        command_name = "?" if ctx.command is None else ctx.command.name
+        if isinstance(error, commands.UserInputError):
+            log.info(
+                "discord_bot.command_usage_error",
+                command=command_name,
+                error_type=type(error).__name__,
+            )
+            usage = None if ctx.command is None else ctx.command.short_doc
+            await ctx.send(f"❌ {usage}" if usage else "❌ Comando usado de forma inválida.")
+            return
+
+        log.error(
+            "discord_bot.command_failed",
+            command=command_name,
+            error_type=type(error).__name__,
+            exc_info=error,
+        )
 
     @bot.event
     async def on_ready() -> None:
@@ -447,7 +428,7 @@ def build_bot(deps: Deps) -> commands.Bot:
             log.info("discord_bot.crash_recovery", n_reverted=n_reverted)
         # RC.5/RC.7: reconexao com worker vivo nao cria um segundo; worker morto
         # (crash anterior) e recriado aqui em vez de ficar sem consumidor.
-        if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue, report_delivery)):
+        if supervisor.ensure_running(lambda: _worker_loop(bot, deps, queue)):
             # D-34: publica já no boot, para que `ops-status` responda desde o
             # primeiro segundo em vez de esperar o primeiro tick do worker.
             _publish_snapshot(deps, queue, queue.list_active(), None, None)
@@ -464,7 +445,7 @@ def build_bot(deps: Deps) -> commands.Bot:
 
     @bot.command(name="analisar")
     async def cmd_analisar(ctx: commands.Context, char_name: str, report_link: str) -> None:
-        """Uso: !analisar NomeDoPlayer LinkDoWCL"""
+        """Uso: !analisar <NomeDoPlayer> <LinkDoWCL>"""
         code, fight_id = parse_report_input(report_link)
         if not code or not fight_id:
             await ctx.send(
@@ -549,59 +530,19 @@ def build_bot(deps: Deps) -> commands.Bot:
             run.hot_path = True
             record_analysis_result(run, result)
 
-            # RP.3: HTML + ReportContract saem do MESMO render_analysis — este
-            # caminho não tem acesso aos renderizadores por fora dele. CL.5:
-            # `rendered.contract` alimenta o resumo compacto na entrega
-            # abaixo; `rendered.summary` (texto longo) não é mais usado para
-            # entrega, só `rendered.html` continua persistido como hoje.
-            rendered = render_analysis(result)
-            html_report = rendered.html
-            # A.3: persistir e condicao ANTERIOR a rede. O primeiro RC so cobriu o
-            # caminho da fila; o smoke seguinte mostrou o interativo perdendo o
-            # relatorio num 403 e ainda dizendo ao usuario que o preservara.
-            artifact_id = interactive_artifact_id(code, fight_id, char_name)
+            contract = contract_for(result)
+            artifact_id = f"{code}:{fight_id}:{char_name}"
             # ctx satisfaz Sendable/o extrator de contexto em runtime; as sobrecargas
             # de Context.send do discord.py nao casam nominalmente com o Protocol.
             context = context_from_discord(ctx, job_id=artifact_id)
-            try:
-                persist_report(deps.settings.data_dir, artifact_id, html_report)
-            except ReportPersistenceError as e:
-                run.final_status = "report_persistence_failed"
-                run.error_type = type(e).__name__
-                run.error_message = str(e)
-                run.report_path_exists = False
-                # A.5: sem artefato, nao se tenta anexar nada e nao se afirma
-                # preservacao. O processo segue saudavel.
-                log.error(
-                    "discord_bot.interactive_report_persistence_failed",
-                    error=str(e),
-                    **context.fields(),
-                )
-                await send_text(
-                    ctx,  # type: ignore[arg-type]
-                    content=(
-                        "⚠️ A análise foi concluída, mas não consegui guardar o relatório "
-                        "neste servidor. Refaça a análise para obtê-lo."
-                    ),
-                    context=context,
-                )
-                return
-            log.info("discord_bot.interactive_report_persisted", **context.fields())
-            run.report_artifact_id = artifact_id
-            run.report_path_exists = True
-            run.report_persisted_at = now_iso()
             run.channel_id = context.channel_id
             run.guild_id = context.guild_id
 
             run.delivery_started_at = now_iso()
-            # CL.5: artifact_id É o mesmo id que acabou de ser persistido
-            # acima — mesma identidade que a entrega usa para emitir/reusar
-            # a capability (bot/report_links.py, CL.2).
             outcome = await deliver_completed_report(
                 ctx,  # type: ignore[arg-type]
-                contract=rendered.contract,
+                contract=contract,
                 artifact_id=artifact_id,
-                config=report_delivery,
                 context=context,
             )
             run.delivery_finished_at = now_iso()

@@ -105,7 +105,7 @@ def test_working_directory_matches_the_venv_prefix_used_by_exec_start() -> None:
     assert exec_start.startswith(working_dir + "/")
 
 
-def test_report_server_port_is_never_exposed_via_systemd_socket_activation() -> None:
+def test_service_has_no_inbound_socket_activation() -> None:
     text = UNIT_PATH.read_text(encoding="utf-8")
     assert "ListenStream" not in text
     assert "8080" not in text
@@ -115,7 +115,7 @@ def test_timeout_stop_sec_is_comfortably_above_the_default_supervisor_grace() ->
     """.env.example's SUPERVISOR_STOP_GRACE_S default is 30s (see that file) —
     TimeoutStopSec must leave systemd's own SIGKILL escalation strictly
     after the supervisor's own graceful-stop window, or the bot child never
-    gets the chance to run ReportServer.stop()/close its DuckDB connection.
+    gets the chance to close its Discord and DuckDB connections.
     """
     service = _parse_unit()["Service"]
     timeout_stop_sec = int(service["TimeoutStopSec"])
@@ -167,9 +167,9 @@ def test_deploy_doc_exists() -> None:
     assert DOC_PATH.is_file()
 
 
-def test_deploy_doc_documents_the_healthz_endpoint() -> None:
+def test_deploy_doc_documents_no_inbound_http_surface() -> None:
     text = DOC_PATH.read_text(encoding="utf-8")
-    assert "127.0.0.1:8080/healthz" in text
+    assert "No inbound port" in text
 
 
 def test_deploy_doc_documents_backup() -> None:

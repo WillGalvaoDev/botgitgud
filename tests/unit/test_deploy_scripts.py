@@ -294,20 +294,16 @@ def test_install_is_idempotent_about_copying() -> None:
     assert "cmp -s" in _read("install-systemd.sh")
 
 
-def test_install_start_uses_the_production_env_gate() -> None:
-    """Gate 1: `--start` é um start de PRODUÇÃO, então valida com
-    `--production` (exige REPORT_PUBLIC_BASE_URL). Sem a flag, um host sem
-    domínio subiria direto para um crash-loop.
-    """
+def test_install_start_uses_the_environment_gate() -> None:
     code = _code("install-systemd.sh")
     assert "deploy-validate-env" in code
-    assert "--production" in code
+    assert "--production" not in code
 
 
-def test_install_explains_that_the_production_start_waits_for_cl9() -> None:
+def test_install_has_no_public_report_start_gate() -> None:
     text = _read("install-systemd.sh")
-    assert "REPORT_PUBLIC_BASE_URL" in text
-    assert "CL.9" in text
+    assert "REPORT_PUBLIC_BASE_URL" not in text
+    assert "Caddy" not in text
 
 
 def test_install_never_invents_a_public_base_url() -> None:
@@ -461,7 +457,6 @@ def test_doc_documents_the_full_cl8_flow() -> None:
         "preflight",
         "backup",
         "restore",
-        "healthz",
     ):
         assert step in text, f"docs/linux-deployment.md não cobre {step}"
 

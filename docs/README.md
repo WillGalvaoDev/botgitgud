@@ -15,8 +15,7 @@ Estes são os documentos operacionais vigentes.
 | Documento | O que responde |
 |---|---|
 | [`runbook.md`](runbook.md) | **Comece aqui para operar.** Runbook operacional: incidentes, saúde, backup, e links para os contratos específicos. |
-| [`linux-deployment.md`](linux-deployment.md) | Deployment atual: systemd, supervisor, bootstrap, preflight, backup/restore, Caddy. O que está pronto vs. o que depende da VM. |
-| [`activation-runbook.md`](activation-runbook.md) | Sequência canônica para transformar uma VM provisionada em endpoint HTTPS público, plano de validação externa e rollback. Nada aqui foi executado ainda. |
+| [`linux-deployment.md`](linux-deployment.md) | Deployment atual: systemd, supervisor, bootstrap, preflight e backup/restore. |
 | [`credential-rotation-checklist.md`](credential-rotation-checklist.md) | Gate humano de rotação das cinco credenciais. |
 | [`warehouse-policy.md`](warehouse-policy.md) | Política do warehouse DuckDB (dono único, o que pode e o que não pode tocar o arquivo). |
 
@@ -74,7 +73,7 @@ Registros de estados passados, preservados como evidência. **Não são procedim
 - **Arquitetura atual do produto:** [`../README.md`](../README.md) (visão geral) + os contratos em
   [Arquitetura e contratos técnicos](#arquitetura-e-contratos-técnicos-reference).
 - **Deployment atual:** [`linux-deployment.md`](linux-deployment.md).
-- **Activation runbook atual:** [`activation-runbook.md`](activation-runbook.md).
+- **Runbook de ativação aposentado:** [`archive/activation-runbook.md`](archive/activation-runbook.md), preservado apenas como histórico.
 - **Decisões:** [`desvios.md`](desvios.md) (desvios em curso) e
   [`fase4-architecture-decision.md`](fase4-architecture-decision.md) (decisão da Fase 4).
 - **Experimentos Phase 4:** seção [Experimentos](#experimentos--fase-4-experimental).

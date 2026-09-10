@@ -6,7 +6,7 @@ import inspect
 import pytest
 
 from botgitgud.analysis.dps_gap import DpsGapReport
-from botgitgud.analysis.findings import Finding
+from botgitgud.analysis.findings import Finding, RelevanceFinding, TopPriorities
 from botgitgud.analysis.pipeline import AnalysisResult
 from botgitgud.analysis.setup_analysis import SetupAnalysis
 from botgitgud.analysis.setup_finding import (
@@ -88,6 +88,10 @@ def _result(**overrides: object) -> AnalysisResult:
     return AnalysisResult(**defaults)  # type: ignore[arg-type]
 
 
+def _relevance() -> RelevanceFinding:
+    return RelevanceFinding("UPTIME", "uptime", "detail", 0.2, 0.9, "alta")
+
+
 # -- 5-section structure ----------------------------------------------------------
 
 
@@ -156,6 +160,14 @@ def test_manifest_carried_through() -> None:
     assert contract.manifest is manifest
 
 
+def test_coaching_objects_are_additive_and_carried_through() -> None:
+    result = _result(material_priorities=())
+    contract = build_report_contract(result)
+    assert contract.conclusion is result.conclusion
+    assert contract.positive_observation is result.positive_observation
+    assert contract.material_priorities == result.material_priorities
+
+
 # -- setup section: additive, optional, RP.2's job to populate for real -------------
 
 
@@ -192,25 +204,39 @@ def test_pipeline_now_calls_analyze_setup() -> None:
 
 def test_top_actions_passthrough_when_all_are_findings() -> None:
     findings = (_finding(title="a"), _finding(title="b"))
-    contract = build_report_contract(_result(top_actions=findings))
-    assert contract.top_actions == findings
+    priorities = TopPriorities(level1=findings)
+    contract = build_report_contract(_result(top_actions=priorities))
+    assert contract.top_actions == priorities
 
 
 def test_top_actions_rejects_a_setup_finding_at_runtime() -> None:
-    bad = _result(top_actions=(_setup_finding(),))
+    # Intentionally illegal value: exercises the runtime guard behind the static type.
+    priorities = TopPriorities(level1=(_setup_finding(),))  # type: ignore[arg-type]
+    bad = _result(top_actions=priorities)
     with pytest.raises(ReportContractError):
         build_report_contract(bad)
 
 
 def test_top_actions_rejects_setup_finding_mixed_with_real_findings() -> None:
-    mixed = _result(top_actions=(_finding(), _setup_finding()))
+    # Intentionally illegal value: exercises the runtime guard behind the static type.
+    priorities = TopPriorities(
+        level2=(_relevance(), _setup_finding())  # type: ignore[arg-type]
+    )
+    mixed = _result(top_actions=priorities)
     with pytest.raises(ReportContractError):
         build_report_contract(mixed)
 
 
+def test_relevance_finding_is_rejected_from_level1() -> None:
+    # Intentionally illegal value: exercises the runtime guard behind the static type.
+    priorities = TopPriorities(level1=(_relevance(),))  # type: ignore[arg-type]
+    bad = _result(top_actions=priorities)
+    with pytest.raises(ReportContractError):
+        build_report_contract(bad)
+
+
 def test_setup_finding_has_no_estimated_gain_pct_structurally() -> None:
-    """The type-level guarantee `top_actions: tuple[Finding, ...]` relies
-    on: SetupFinding simply has no such field to select on."""
+    """Setup findings remain structurally outside both priority levels."""
     sf = _setup_finding()
     assert not hasattr(sf, "estimated_gain_pct")
 

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from botgitgud.analysis.phases import find_interval
+from botgitgud.domain.ability_identity import IdentitySource
 from botgitgud.domain.models import (
     GearPiece,
     PhaseInterval,
@@ -202,17 +203,97 @@ def extract_damage_total(damage_done: list[dict[str, Any]], player_id: int) -> f
     return None
 
 
+def extract_scope_target_ids(
+    damage_entries: Sequence[dict[str, Any]], actors: Sequence[dict[str, Any]]
+) -> frozenset[int]:
+    """Resolve DamageDone's structural ``(target name, type)`` population."""
+    target_keys = {
+        (target.get("name"), target.get("type"))
+        for entry in damage_entries
+        for target in (entry.get("targets") or [])
+        if isinstance(target, dict)
+        and isinstance(target.get("name"), str)
+        and isinstance(target.get("type"), str)
+    }
+    return frozenset(
+        int(actor["id"])
+        for actor in actors
+        if isinstance(actor, dict)
+        and isinstance(actor.get("id"), int)
+        and (actor.get("name"), actor.get("subType")) in target_keys
+    )
+
+
+def extract_ambiguous_scope_target_groups(
+    damage_entries: Sequence[dict[str, Any]], actors: Sequence[dict[str, Any]]
+) -> tuple[frozenset[int], ...]:
+    """Return non-injective structural target resolutions for reconciliation."""
+    target_ids = extract_scope_target_ids(damage_entries, actors)
+    ids_by_key: dict[tuple[object, object], set[int]] = {}
+    for actor in actors:
+        actor_id = actor.get("id") if isinstance(actor, dict) else None
+        if not isinstance(actor_id, int) or actor_id not in target_ids:
+            continue
+        key = (actor.get("name"), actor.get("subType"))
+        ids_by_key.setdefault(key, set()).add(actor_id)
+    return tuple(frozenset(ids) for ids in ids_by_key.values() if len(ids) > 1)
+
+
+def extract_damage_table_total(
+    damage_entries: Sequence[dict[str, Any]], player_id: int
+) -> float | None:
+    """Read the authoritative encounter aggregate for one player."""
+    for entry in damage_entries:
+        if entry.get("id") == player_id:
+            total = entry.get("total")
+            return float(total) if total is not None else None
+    return None
+
+
 def learn_spells_from_casts_table(
     casts_entries: list[dict[str, Any]], player_id: int, catalog: SpellCatalog
 ) -> None:
-    for entry in casts_entries:
-        if entry.get("id") != player_id:
-            continue
-        for ab in entry.get("abilities", []):
-            guid = ab.get("guid") or ab.get("id")
-            name = ab.get("name")
+    _learn_spells_from_table_entries(
+        casts_entries,
+        catalog,
+        accept_legacy_id=True,
+    )
+
+
+def learn_spells_from_damage_table(
+    damage_entries: list[dict[str, Any]], catalog: SpellCatalog
+) -> None:
+    """Learn every free name already present in WCL's DamageDone table."""
+    _learn_spells_from_table_entries(damage_entries, catalog)
+
+
+def _learn_spells_from_table_entries(
+    entries: list[dict[str, Any]],
+    catalog: SpellCatalog,
+    *,
+    accept_legacy_id: bool = False,
+) -> None:
+    for entry in entries:
+        ability_nodes = list(entry.get("abilities") or [])
+        for pet in entry.get("pets") or []:
+            if isinstance(pet, dict):
+                ability_nodes.extend(pet.get("abilities") or [])
+        for ability in ability_nodes:
+            if not isinstance(ability, dict):
+                continue
+            guid = ability.get("guid") or (ability.get("id") if accept_legacy_id else None)
+            name = ability.get("name")
             if guid and name:
-                catalog.learn(int(guid), name, "wcl")
+                catalog.learn(int(guid), name, IdentitySource.WCL_TABLE)
+
+
+def learn_spells_from_master_data(abilities: list[dict[str, Any]], catalog: SpellCatalog) -> None:
+    """Learn the report-wide primary identity table using WCL's canonical gameID."""
+    for ability in abilities:
+        game_id = ability.get("gameID")
+        name = ability.get("name")
+        if isinstance(game_id, int) and isinstance(name, str) and name:
+            catalog.learn(game_id, name, IdentitySource.WCL_REPORT_MASTER_DATA)
 
 
 def find_matching_rank_percent(

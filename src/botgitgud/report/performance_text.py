@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from botgitgud.analysis.performance_features import ScalarFinding, UptimeFinding, WasteFinding
+from botgitgud.analysis.performance_features import (
+    PerformanceFindings,
+    ScalarFinding,
+    UptimeFinding,
+    WasteFinding,
+)
 
 _GRADE_EMOJI: dict[str, str] = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
 
@@ -65,4 +70,36 @@ def render_resource_waste_section(findings: Sequence[WasteFinding]) -> list[str]
         if wf.finding.stats.p50 is not None:
             line += f" (coorte mediana: {wf.finding.stats.p50:.0f})"
         lines.append(f"{line} {_status(wf.finding)}")
+    return lines
+
+
+def render_resource_efficiency_section(performance: PerformanceFindings) -> list[str]:
+    """Render M12 section 5 as one cohesive, non-empty section."""
+    lines = ["", "📈 **5 EFICIENCIA DE RECURSO**", "-" * 42]
+
+    deaths = performance.deaths
+    death_line = f"Mortes: {int(deaths.user_value)}"
+    if deaths.stats.p50 is not None:
+        death_line += f" (coorte mediana: {deaths.stats.p50:.1f})"
+    lines.append(f"{death_line} {_status(deaths)}")
+
+    downtime = performance.downtime
+    downtime_line = f"Downtime: {downtime.user_value:.1f}s"
+    if downtime.stats.p50 is not None:
+        downtime_line += f" (coorte mediana: {downtime.stats.p50:.1f}s)"
+    lines.append(f"{downtime_line} {_status(downtime)}")
+
+    if performance.active_time is not None:
+        active = performance.active_time
+        active_line = f"Tempo ativo: {active.user_value * 100:.1f}%"
+        if active.stats.p50 is not None:
+            active_line += f" (coorte mediana: {active.stats.p50 * 100:.1f}%)"
+        lines.append(f"{active_line} {_status(active)}")
+
+    for waste in performance.resource_waste:
+        finding = waste.finding
+        waste_line = f"**{waste.resource_type}**: {finding.user_value:.0f}"
+        if finding.stats.p50 is not None:
+            waste_line += f" (coorte mediana: {finding.stats.p50:.0f})"
+        lines.append(f"{waste_line} {_status(finding)}")
     return lines

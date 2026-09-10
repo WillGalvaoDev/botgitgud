@@ -8,52 +8,32 @@ Incidente 2 (mesmo documento, secao "Segundo smoke"): o caminho interativo
 tinha uma implementacao separada e menos resiliente — nao persistia o relatorio
 e ainda assim dizia ao usuario que o resultado fora preservado.
 
-Incidente 3 (soak real, pos-EB.6/RP.3): o Discord passou a fazer PREVIEW do
-`.html` anexado como texto puro (discord.py 2.7.1's `discord.File` nao expõe
-`content_type`; o Discord infere pela extensão e mostra o markup cru). CL.5
-elimina ESTRUTURALMENTE esse vetor: nenhuma função deste módulo anexa
-arquivo — `test_delivery.py` prova isso por AST toda vez que os testes
-rodam, nunca só por revisão manual.
-
-O produto agora é: HTML persistido (report_store.py) -> capability link
-(report_links.py, CL.2) -> resumo compacto (report/discord_summary.py, CL.4)
-+ link -> UMA mensagem. `bot/report_server.py` (CL.3) serve o HTML atrás do
-link; nada aqui conhece HTTP.
+Incidente 3 (soak real, pos-EB.6/RP.3): anexos geravam preview de texto cru.
+Nenhuma função deste módulo anexa arquivo; `test_delivery.py` prova isso por
+AST toda vez que os testes rodam.
 
 Regras desta camada:
 
 1. **Nenhuma excecao da API do Discord atravessa daqui para cima.** Toda falha
    vira um `DeliveryOutcome` explicito, classificado e logado.
-2. **Falha de link/URL/render é SEMPRE terminal e explícita** (política do
-   ticket CL.5) — nunca mascarada como "relatório indisponível" e nunca
-   rebaixada para um attachment. Só uma falha do PRÓPRIO envio ao Discord
-   usa a semântica de retry já existente (a capability persistida sobrevive
-   ao retry — CL.2 já é idempotente por artifact_id).
-3. **Todo evento carrega o contexto do canal** (`DeliveryContext`) e NUNCA o
-   token/URL completos — só `artifact_id`/`token_fingerprint` (ver
-   `bot/report_links.py::_fingerprint`).
+2. **Falha de render na análise é explícita** e nunca rebaixada para anexo.
+3. **Todo evento carrega o contexto do canal** (`DeliveryContext`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Protocol
 
 import discord
 import structlog
 
 from botgitgud.bot.job_models import DeliveryStatus, Job
-from botgitgud.bot.report_links import (
-    ReportLinkError,
-    ReportLinkStore,
-    _fingerprint,
-    issue_report_link,
+from botgitgud.report.coaching_answer import (
+    MAX_DISCORD_COACHING_ANSWER,
+    render_coaching_answer,
 )
-from botgitgud.bot.report_store import ReportPersistenceError
-from botgitgud.bot.report_url import ReportPublicBaseUrlError, build_report_url
 from botgitgud.report.contract import ReportContract
-from botgitgud.report.discord_summary import MAX_DISCORD_REPORT_SUMMARY, render_discord_summary
 
 log = structlog.get_logger(__name__)
 
@@ -108,22 +88,6 @@ class DeliveryOutcome:
         return self.status == "delivered"
 
 
-@dataclass(frozen=True, slots=True)
-class ReportDeliveryConfig:
-    """CL.5 — o que a entrega de relatório precisa para ir de `artifact_id`
-    a URL pública. `link_store` embrulha a MESMA `Store` (uma conexão
-    DuckDB por processo) que o resto do bot usa — nunca uma segunda
-    conexão criada aqui. `public_base_url` já vem validada
-    (`bot/report_url.py`) no momento em que o bot sobe (`build_bot`),
-    então uma entrega individual nunca descobre uma configuração inválida
-    tarde demais.
-    """
-
-    link_store: ReportLinkStore
-    data_dir: Path
-    public_base_url: str
-
-
 def context_from_discord(channel: Any, *, job_id: str | None = None) -> DeliveryContext:
     """Extrai ids do objeto do Discord sem exigir um tipo concreto — funciona
     para `Context` (interativo) e para um canal resolvido (fila).
@@ -166,62 +130,13 @@ async def send_text(
     return DeliveryOutcome("delivered")
 
 
-def _issue_link_url(
-    config: ReportDeliveryConfig, *, artifact_id: str, context: DeliveryContext
-) -> tuple[str, None] | tuple[None, DeliveryOutcome]:
-    """Passos A+B da política de falha do CL.5: emitir/reusar a capability
-    (CL.2, idempotente por `artifact_id`) e construir a URL pública. Uma
-    falha em qualquer um dos dois é SEMPRE terminal — nunca mascarada como
-    "relatório indisponível", nunca some para um attachment.
-    """
-    try:
-        link = issue_report_link(
-            config.link_store, data_dir=config.data_dir, artifact_id=artifact_id
-        )
-    except (ReportPersistenceError, ReportLinkError) as e:
-        log.error(
-            "report_delivery.link_issue_failed",
-            artifact_id=artifact_id,
-            error=str(e),
-            error_type=type(e).__name__,
-            **context.fields(),
-        )
-        return None, DeliveryOutcome(
-            "failed", error=f"falha ao emitir link do relatório: {type(e).__name__}"
-        )
-
-    log.info(
-        "report_delivery.link_ready",
-        artifact_id=artifact_id,
-        token_fingerprint=_fingerprint(link.token),
-        **context.fields(),
-    )
-
-    try:
-        report_url = build_report_url(config.public_base_url, link.token)
-    except ReportPublicBaseUrlError as e:
-        log.error(
-            "report_delivery.url_build_failed",
-            artifact_id=artifact_id,
-            error=str(e),
-            **context.fields(),
-        )
-        return None, DeliveryOutcome(
-            "failed", error=f"falha ao construir URL do relatório: {type(e).__name__}"
-        )
-
-    return report_url, None
-
-
 async def _send_one_message(
     channel: Sendable, content: str, *, artifact_id: str, context: DeliveryContext
 ) -> DeliveryOutcome:
     """O ÚNICO `channel.send` de uma entrega de relatório bem-sucedida —
     sempre com `allowed_mentions=AllowedMentions.none()` (obrigatório no
-    CL.5: a sanitização textual de CL.4 é defesa em profundidade, não
-    substituto). Falha aqui usa a semântica de retry já existente: a
-    capability já foi persistida antes desta chamada, então um retry
-    reusa a MESMA URL (CL.2).
+    CL.5: a sanitização textual é defesa em profundidade, não substituto).
+    Falha aqui usa a semântica de retry já existente.
     """
     log.info("report_delivery.started", artifact_id=artifact_id, **context.fields())
     try:
@@ -258,25 +173,11 @@ async def deliver_completed_report(
     *,
     contract: ReportContract,
     artifact_id: str,
-    config: ReportDeliveryConfig,
     context: DeliveryContext,
 ) -> DeliveryOutcome:
-    """CL.5 — o caminho único de entrega para uma análise concluída. HTML
-    JÁ persistido é pré-condição do chamador (worker.py/discord_bot.py
-    persistem antes de chamar isto, como já faziam desde RC.1/A.3).
-
-    Ordem: emitir/reusar link -> montar URL -> renderizar resumo -> UM
-    `channel.send`. Falha em qualquer um dos três primeiros passos é
-    terminal e explícita (política A/B/C do ticket); só a falha do send
-    em si (D) usa retry.
-    """
-    report_url, failure = _issue_link_url(config, artifact_id=artifact_id, context=context)
-    if failure is not None:
-        return failure
-    assert report_url is not None
-
+    """Entrega uma resposta de coaching em uma mensagem, sem anexo ou URL."""
     try:
-        content = render_discord_summary(contract, report_url=report_url)
+        content = render_coaching_answer(contract)
     except Exception as e:
         log.error(
             "report_delivery.render_failed",
@@ -287,64 +188,11 @@ async def deliver_completed_report(
             **context.fields(),
         )
         return DeliveryOutcome(
-            "failed", error=f"falha ao renderizar resumo compacto: {type(e).__name__}"
+            "failed", error=f"falha ao renderizar resposta de coaching: {type(e).__name__}"
         )
 
-    # CL.4 já prova isto por teste de propriedade; cinto-e-suspensório
-    # aqui garante que uma regressão futura em discord_summary.py nunca
-    # chega ao Discord sem ser notada.
-    assert len(content) <= MAX_DISCORD_REPORT_SUMMARY
+    # O renderizador prova o teto por orçamento de campo; esta checagem na
+    # fronteira impede que uma regressão futura chegue ao Discord.
+    assert len(content) <= MAX_DISCORD_COACHING_ANSWER
 
     return await _send_one_message(channel, content, artifact_id=artifact_id, context=context)
-
-
-_REDELIVERY_NOTICE_DEFAULT = "🔄 Reenvio do relatório desta análise."
-
-
-async def deliver_report_link(
-    channel: Sendable,
-    *,
-    artifact_id: str,
-    config: ReportDeliveryConfig,
-    context: DeliveryContext,
-    notice: str | None = None,
-) -> DeliveryOutcome:
-    """RC.10 — reenvio de um relatório JÁ persistido, sem reanálise. Ao
-    contrário de `deliver_completed_report`, não recebe (nem reconstrói)
-    um `ReportContract` — o texto renderizado nunca é persistido à parte
-    do HTML, então um reenvio puro reemite/reusa a MESMA capability (CL.2
-    é idempotente por `artifact_id`) e reenvia o MESMO link que o usuário
-    já teria recebido, com um aviso curto no lugar do resumo completo.
-    `issue_report_link` já falha alto (`ReportArtifactNotFoundError`,
-    subclasse de `ReportPersistenceError`) se o `.html` não existir mais.
-    """
-    report_url, failure = _issue_link_url(config, artifact_id=artifact_id, context=context)
-    if failure is not None:
-        return failure
-    assert report_url is not None
-
-    text = notice or _REDELIVERY_NOTICE_DEFAULT
-    content = f"{text}\n🔗 [Ver relatório completo]({report_url})"
-    return await _send_one_message(channel, content, artifact_id=artifact_id, context=context)
-
-
-async def deliver_existing_report(
-    channel: Sendable,
-    *,
-    job: Job,
-    config: ReportDeliveryConfig,
-    notice: str | None = None,
-) -> DeliveryOutcome:
-    """Reenvio a partir de um job da fila — `job.job_id` É o `artifact_id`
-    (mesma identidade que `worker.py` usa para persistir, ver
-    `report_path_for`).
-    """
-    if not job.report_path:
-        return DeliveryOutcome("failed", error="job sem report_path persistido")
-    return await deliver_report_link(
-        channel,
-        artifact_id=job.job_id,
-        config=config,
-        context=DeliveryContext.from_job(job),
-        notice=notice,
-    )

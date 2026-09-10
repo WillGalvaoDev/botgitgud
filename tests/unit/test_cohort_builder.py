@@ -13,11 +13,23 @@ import pytest
 from test_log_fetcher import _events_response, _meta_response, _percentile_response
 from test_pipeline import _build_deps, _DispatchTransport, _zone_partitions_response
 
+from botgitgud.analysis.cohort import duration_bucket_bounds, duration_bucket_id
 from botgitgud.analysis.cohort_builder import build_cohorts
 from botgitgud.analysis.cold_build import ImpossibleColdBuildPolicy
+from botgitgud.domain.models import CohortCriteria, RankingCandidate
 from botgitgud.errors import CohortDeferredBudget, RateLimitBudgetExceeded
+from botgitgud.ingest.rankings import partition_logs_by_difficulty
 
 ENCOUNTER_ID = 3179
+
+
+def test_inv_cohort_diff_for_heroic_encounter_3421(real_corpus: list[Any]) -> None:
+    mixed = [log for log in real_corpus if log.fight.encounter_id == 3421]
+    assert any(log.fight.difficulty == 4 for log in mixed)
+    kept, discarded = partition_logs_by_difficulty(4, mixed)
+    assert kept
+    assert discarded  # proves the corpus actually exercises the old mixed pool
+    assert all(log.fight.difficulty == 4 for log in kept)
 
 
 def test_budget_defer_makes_zero_construction_queries(tmp_path: Path) -> None:
@@ -44,9 +56,84 @@ def test_budget_defer_makes_zero_construction_queries(tmp_path: Path) -> None:
             class_name="Warlock",
             spec_name="Demonology",
             difficulty=5,
-            duration_bucket_s=100.0,
+            duration_bucket_s=None,
         )
     assert transport.calls == []
+
+
+def _criteria_for(duration_s: float, *, policy: str) -> CohortCriteria:
+    bucket_lo, bucket_hi = duration_bucket_bounds(duration_bucket_id(duration_s))
+    return CohortCriteria(
+        encounter_id=ENCOUNTER_ID,
+        difficulty=5,
+        partition=3,
+        class_name="Warlock",
+        spec_name="Demonology",
+        metric="dps",
+        duration_min_s=bucket_lo,
+        duration_max_s=bucket_hi,
+        matching_policy_version=policy,
+    )
+
+
+def _seed_candidates(duration_s: float) -> list[RankingCandidate]:
+    return [
+        RankingCandidate(
+            report_code=f"HIST{i:011d}"[:16],
+            fight_id=1,
+            player_name=f"Historical{i}",
+            duration_s=duration_s,
+        )
+        for i in range(8)
+    ]
+
+
+def test_explicit_build_does_not_treat_matching_v1_pool_as_current(tmp_path: Path) -> None:
+    duration_s = 100.0
+    transport = _DispatchTransport(_responses_for({duration_s: 8}))
+    deps = _build_deps(tmp_path, transport)
+    v1_criteria = _criteria_for(duration_s, policy="v1")
+    current_criteria = _criteria_for(duration_s, policy="v2")
+    historical = _seed_candidates(duration_s)
+    assert v1_criteria.cohort_id() != current_criteria.cohort_id()
+    deps.store.write_candidate_pool(v1_criteria.cohort_id(), historical, criteria=v1_criteria)
+
+    results = build_cohorts(
+        deps,
+        encounter_id=ENCOUNTER_ID,
+        class_name="Warlock",
+        spec_name="Demonology",
+        difficulty=5,
+        duration_bucket_s=duration_s,
+    )
+
+    assert [result.cohort_id for result in results] == [current_criteria.cohort_id()]
+    assert deps.store.read_candidate_pool(v1_criteria.cohort_id()) == historical
+    assert deps.store.read_candidate_pool(current_criteria.cohort_id()) is not None
+
+
+def test_explicit_build_short_circuits_for_current_identity(tmp_path: Path) -> None:
+    duration_s = 100.0
+    transport = _DispatchTransport(_responses_for({duration_s: 8}))
+    deps = _build_deps(tmp_path, transport)
+    current_criteria = _criteria_for(duration_s, policy="v2")
+    current = _seed_candidates(duration_s)
+    deps.store.write_candidate_pool(
+        current_criteria.cohort_id(), current, criteria=current_criteria
+    )
+
+    results = build_cohorts(
+        deps,
+        encounter_id=ENCOUNTER_ID,
+        class_name="Warlock",
+        spec_name="Demonology",
+        difficulty=5,
+        duration_bucket_s=duration_s,
+    )
+
+    assert [result.cohort_id for result in results] == [current_criteria.cohort_id()]
+    assert results[0].n_members == len(current)
+    assert transport.calls == ["partition"]
 
 
 def _rankings_page(rankings: list[dict[str, Any]], *, has_more: bool = False) -> dict[str, Any]:

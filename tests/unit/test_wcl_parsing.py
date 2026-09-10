@@ -3,14 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from botgitgud.analysis.phases import derive_phase_intervals
+from botgitgud.domain.ability_identity import IdentitySource
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.ingest.wcl_parsing import (
     compute_talent_hash,
     count_tier_pieces,
+    extract_ambiguous_scope_target_groups,
     extract_damage_total,
+    extract_scope_target_ids,
     find_matching_rank_percent,
     find_player_in_details,
     learn_spells_from_casts_table,
+    learn_spells_from_damage_table,
+    learn_spells_from_master_data,
     parse_aura_ids,
     parse_cast_events,
     parse_cast_events_by_phase,
@@ -154,7 +159,22 @@ def test_extract_damage_total_none_when_absent() -> None:
     assert extract_damage_total([{"id": 1, "total": 100.0}], 99) is None
 
 
-def test_learn_spells_from_casts_table_only_learns_for_matching_player(tmp_path: Path) -> None:
+def test_scope_targets_resolve_exact_structural_name_type_union() -> None:
+    entries = [
+        {"targets": [{"name": "Boss", "type": "Boss"}]},
+        {"targets": [{"name": "Add", "type": "NPC"}]},
+    ]
+    actors = [
+        {"id": 1, "name": "Boss", "subType": "Boss"},
+        {"id": 2, "name": "Add", "subType": "NPC"},
+        {"id": 3, "name": "Add", "subType": "NPC"},
+        {"id": 270, "name": "Silver Simulacrum", "subType": "NPC"},
+    ]
+    assert extract_scope_target_ids(entries, actors) == frozenset({1, 2, 3})
+    assert extract_ambiguous_scope_target_groups(entries, actors) == (frozenset({2, 3}),)
+
+
+def test_learn_spells_from_casts_table_learns_report_wide_ability_names(tmp_path: Path) -> None:
     catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
     entries = [
         {"id": 6, "abilities": [{"guid": 104316, "name": "Call Dreadstalkers"}]},
@@ -162,7 +182,55 @@ def test_learn_spells_from_casts_table_only_learns_for_matching_player(tmp_path:
     ]
     learn_spells_from_casts_table(entries, 6, catalog)
     assert catalog.get(104316).name == "Call Dreadstalkers"
-    assert catalog.get(999).source == "unknown"  # never learned — belongs to a different actor
+    assert catalog.get(999).name == "Other Player's Spell"
+
+
+def test_master_data_is_primary_and_preserves_provenance(tmp_path: Path) -> None:
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(434635, "Partial name", "wcl")
+
+    learn_spells_from_master_data(
+        [{"gameID": 434635, "name": "Ruination", "icon": "x", "type": 1}], catalog
+    )
+
+    identity = catalog.identity(434635)
+    assert identity.resolved_name == "Ruination"
+    assert identity.identity_source is IdentitySource.WCL_REPORT_MASTER_DATA
+
+
+def test_learn_spells_from_damage_table_learns_only_ability_nodes(tmp_path: Path) -> None:
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    entries = [
+        {
+            "id": 6,
+            "abilities": [
+                {"guid": 104318, "name": "Fel Firebolt"},
+                {"guid": 999},
+                {"name": "Missing guid"},
+                {"id": 777, "name": "ID is not a guid"},
+            ],
+            "pets": [
+                {
+                    "guid": 55659,
+                    "name": "Wild Imp",
+                    "abilities": [{"guid": 267997, "name": "Demonic Assault"}],
+                },
+                {"guid": 888},
+                {"name": "Missing pet guid"},
+            ],
+        },
+        {"id": 7, "abilities": [{"guid": 30213, "name": "Legion Strike"}]},
+    ]
+
+    learn_spells_from_damage_table(entries, catalog)
+
+    assert catalog.get(104318).name == "Fel Firebolt"
+    assert catalog.get(267997).name == "Demonic Assault"
+    assert catalog.identity(55659).resolution_status == "unresolved"
+    assert catalog.get(30213).name == "Legion Strike"
+    assert catalog.get(999).source == "unknown"
+    assert catalog.get(888).source == "unknown"
+    assert catalog.get(777).source == "unknown"
 
 
 def test_parse_cast_events_filters_by_source_and_type() -> None:

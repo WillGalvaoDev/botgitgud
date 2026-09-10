@@ -20,6 +20,7 @@ import structlog
 
 from botgitgud import telemetry
 from botgitgud.analysis.phases import derive_phase_intervals
+from botgitgud.domain.damage_scope import DamageScopeVersion
 from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
@@ -29,20 +30,29 @@ from botgitgud.ingest.log_fetcher_aux import (
     fetch_cast_timelines,
     fetch_percentile,
 )
-from botgitgud.ingest.performance_fetch import fetch_damage_and_targets, fetch_resource_waste
+from botgitgud.ingest.performance_fetch import (
+    fetch_resource_waste,
+    fetch_scoped_damage_and_targets,
+)
 from botgitgud.ingest.performance_parsing import (
     compute_active_time_pct,
     compute_downtime_s,
     extract_pet_owner_map,
     find_damage_table_entry,
     parse_death_events,
+    parse_resource_waste_by_ability,
     pet_ids_for_owner,
 )
 from botgitgud.ingest.store import Store
 from botgitgud.ingest.wcl_parsing import (
+    extract_ambiguous_scope_target_groups,
+    extract_damage_table_total,
     extract_damage_total,
+    extract_scope_target_ids,
     find_player_in_details,
     learn_spells_from_casts_table,
+    learn_spells_from_damage_table,
+    learn_spells_from_master_data,
 )
 from botgitgud.wcl.client import WclClient
 from botgitgud.wcl.queries import QUERY_PLAYER_META
@@ -249,6 +259,9 @@ class LogFetcher:
             op_name="fetch_player_meta",
         )
         report = res_json.get("data", {}).get("reportData", {}).get("report", {})
+        learn_spells_from_master_data(
+            report.get("masterData", {}).get("abilities", []), self._catalog
+        )
         fights = report.get("fights", [])
         if not fights:
             msg = f"fight {fight_id} não encontrado no report {report_code}"
@@ -270,6 +283,8 @@ class LogFetcher:
 
         casts_entries = report.get("castsTable", {}).get("data", {}).get("entries", [])
         learn_spells_from_casts_table(casts_entries, match.player_id, self._catalog)
+        damage_entries = report.get("damageTable", {}).get("data", {}).get("entries", [])
+        learn_spells_from_damage_table(damage_entries, self._catalog)
 
         phase_intervals = derive_phase_intervals(
             raw_fight.get("phaseTransitions") or [],
@@ -299,7 +314,7 @@ class LogFetcher:
                 encounter_id=raw_fight["encounterID"],
                 difficulty=raw_fight.get("difficulty"),
             )
-        has_augmentation, external_buffs, uptimes = fetch_buffs_and_debuffs(
+        has_augmentation, external_buffs, uptimes, aura_details = fetch_buffs_and_debuffs(
             query_fn,
             report_code=report_code,
             fight_id=fight_id,
@@ -314,30 +329,73 @@ class LogFetcher:
             partition = fetch_partition(query_fn, report_code=report_code, fight_id=fight_id)
 
         # T3.1 — features beyond casts.
-        damage_entry = find_damage_table_entry(
-            report.get("damageTable", {}).get("data", {}).get("entries", []), match.player_id
-        )
+        damage_entry = find_damage_table_entry(damage_entries, match.player_id)
         active_time_pct = compute_active_time_pct(damage_entry, end_time_ms - start_time_ms)
 
-        pet_owner_map = extract_pet_owner_map(report.get("masterData", {}).get("actors", []))
+        actors = report.get("masterData", {}).get("actors", [])
+        pet_owner_map = extract_pet_owner_map(actors)
         pet_ids = pet_ids_for_owner(pet_owner_map, match.player_id)
         cast_counts = {spell_id: len(times) for spell_id, times in cast_timeline.items()}
-        damage_by_ability, avg_targets_per_cast = fetch_damage_and_targets(
+        scope_target_ids = extract_scope_target_ids(damage_entries, actors)
+        (
+            damage_by_ability,
+            avg_targets_per_cast,
+            support_subtracted,
+            scoped_total,
+            unscoped_own,
+            damaged_target_ids,
+        ) = fetch_scoped_damage_and_targets(
             query_fn,
             report_code=report_code,
             fight_id=fight_id,
             start_time_ms=start_time_ms,
             end_time_ms=end_time_ms,
+            player_id=match.player_id,
             source_ids=frozenset({match.player_id}) | pet_ids,
+            target_ids=scope_target_ids,
+            pet_owner_by_actor=pet_owner_map,
             cast_counts=cast_counts,
         )
+        authoritative_total = extract_damage_table_total(damage_entries, match.player_id)
+        ambiguous_groups = extract_ambiguous_scope_target_groups(damage_entries, actors)
+        damaging_ambiguity = any(len(group & damaged_target_ids) > 1 for group in ambiguous_groups)
+        reconcilable = (
+            authoritative_total is not None
+            and bool(scope_target_ids)
+            and unscoped_own >= authoritative_total
+        )
+        if not reconcilable:
+            # Missing table authority, target scope, or a complete event stream:
+            # preserve historical semantics rather than calling absence a mismatch.
+            damage_scope = DamageScopeVersion.LEGACY_UNSCOPED
+        elif not damaging_ambiguity and scoped_total == authoritative_total:
+            damage_scope = DamageScopeVersion.WCL_TARGET_SCOPE_V1
+        else:
+            damage_scope = DamageScopeVersion.UNRECONCILED
+        resource_events: list[dict[str, Any]] = []
+
+        def recording_resource_query(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            response = query_fn(*args, **kwargs)
+            event_data = (
+                response.get("data", {})
+                .get("reportData", {})
+                .get("report", {})
+                .get("events", {})
+                .get("data", [])
+            )
+            resource_events.extend(e for e in event_data if isinstance(e, dict))
+            return response
+
         resource_waste = fetch_resource_waste(
-            query_fn,
+            recording_resource_query,
             report_code=report_code,
             fight_id=fight_id,
             player_id=match.player_id,
             start_time_ms=start_time_ms,
             end_time_ms=end_time_ms,
+        )
+        resource_waste_by_ability = parse_resource_waste_by_ability(
+            resource_events, match.player_id
         )
 
         death_times_ms = parse_death_events(summary_data.get("deathEvents", []), match.player_id)
@@ -379,8 +437,16 @@ class LogFetcher:
             damage_by_ability=damage_by_ability,
             uptimes=uptimes,
             resource_waste=resource_waste,
+            resource_waste_by_ability=resource_waste_by_ability,
+            aura_details=aura_details,
             deaths=len(death_times_ms),
             downtime_s=downtime_s,
             avg_targets_per_cast=avg_targets_per_cast,
             phase_cast_timeline=phase_cast_timeline,
+            damage_scope=damage_scope,
+            support_subtracted_damage=(
+                support_subtracted
+                if damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
+                else 0.0
+            ),
         )

@@ -23,7 +23,7 @@ from typing import Any
 
 from botgitgud.domain.specs import SpecId
 
-DEFAULT_BENCHMARK_POLICY_VERSION = "v1"
+DEFAULT_BENCHMARK_POLICY_VERSION = "v2"
 
 
 class EncounterBenchmarkTargetError(ValueError):
@@ -190,10 +190,9 @@ class DedupPolicy(StrEnum):
 class PercentileBand:
     """`[low, high)` — `low` inclusivo, `high` exclusivo.
 
-    A única exceção deliberada a essa regra simples é documentada em
-    `BenchmarkPolicy`: a banda mais alta aprovada termina em 99, então
-    percentile 99 e 100 não caem em NENHUMA banda por design — não é um bug
-    de `contains`, é um reflexo honesto do que foi de fato aprovado.
+    `contains` preserva essa regra geral. O ponto 100 da policy padrão é
+    tratado explicitamente por `BenchmarkPolicy.band_for`, pois 100 é o
+    limite superior válido do domínio e pertence à banda final.
     """
 
     name: str
@@ -220,6 +219,7 @@ class PercentileBand:
 
 
 DEFAULT_BANDS: tuple[PercentileBand, ...] = (
+    PercentileBand("p99-100", 99.0, 100.0),
     PercentileBand("p95-99", 95.0, 99.0),
     PercentileBand("p75-95", 75.0, 95.0),
     PercentileBand("p50-75", 50.0, 75.0),
@@ -234,9 +234,8 @@ class BenchmarkPolicy:
     anterior (condição obrigatória da revisão arquitetural).
 
     `bands`: a estratificação por desempenho aprovada — ver `DEFAULT_BANDS`.
-        Cobre deliberadamente só 50..99: 0..50 e 99..100 não têm banda
-        (ver `PercentileBand`/`band_for`), porque só essas três foram
-        aprovadas. Uma quarta banda não é inventada aqui.
+        Cobre 50..100; a banda final inclui explicitamente o ponto 100.
+        Percentis abaixo de 50 continuam deliberadamente sem banda.
     `min_sample_size`: tamanho mínimo BÁSICO — não é a regra final de
         suficiência estatística do benchmark (isso é EB.2); só a validação
         de "a policy declara um limiar coerente". 8 espelha o mesmo piso
@@ -295,7 +294,7 @@ class BenchmarkPolicy:
         """`None` in -> `None` out: ausência de percentile (sem dado de
         rank) nunca é um erro, é um caso de negócio real. Fora de 0..100
         FALHA fechado — isso é dado malformado, não "sem banda". Dentro de
-        0..100 mas sem banda (0<=p<50 ou 99<=p<=100 com a policy padrão) é
+        0..100 mas sem banda (0<=p<50 com a policy padrão) é
         um resultado válido: `None`, sem exceção.
         """
         if percentile is None:
@@ -305,6 +304,12 @@ class BenchmarkPolicy:
         for band in self.bands:
             if band.contains(percentile):
                 return band
+        # ``PercentileBand`` is half-open, but 100 is a valid percentile and
+        # belongs to the policy's final band when that band ends at 100.
+        if percentile == 100.0:
+            for band in reversed(self.bands):
+                if band.high == 100.0:
+                    return band
         return None
 
     def to_dict(self) -> dict[str, Any]:

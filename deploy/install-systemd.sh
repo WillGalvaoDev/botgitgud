@@ -5,13 +5,12 @@
 # enable. NAO inicia o servico por padrao.
 #
 # Por que nao inicia sozinho: um `start` com .env incompleto sobe um processo
-# que falha no boot do bot (build_bot valida report_public_base_url e as
-# credenciais), e o supervisor trataria essa saida como crash -- gerando
+# que falha no boot por credenciais ausentes, e o supervisor trataria essa saida como crash -- gerando
 # backoff e, na quinta tentativa, um restart storm. Melhor recusar cedo, com
 # mensagem acionavel. `--start` existe para o caso em que o operador ja
 # validou, e mesmo assim roda o preflight antes.
 #
-# NAO abre porta, NAO mexe em firewall, NAO instala Caddy, NAO altera SSH.
+# NAO abre porta, NAO mexe em firewall e NAO altera SSH.
 #
 # Uso:
 #   sudo ./deploy/install-systemd.sh [--repo-dir /opt/botgitgud] [--start]
@@ -95,18 +94,10 @@ fi
 
 [ -x "${PYTHON}" ] || die "--start pedido, mas a venv nao existe em ${PYTHON}"
 
-# --production: um START e um start de PRODUCAO, entao exige
-# REPORT_PUBLIC_BASE_URL valida. Sem ela, build_bot() (CL.5) falha no boot do
-# bot e o supervisor trata isso como crash -- backoff e, na quinta tentativa,
-# restart storm. Ate a CL.9 (DuckDNS/Caddy/HTTPS) definir o dominio real, este
-# gate BLOQUEIA o start de proposito. Nao contorne inventando uma URL.
 log "validando .env para start de producao (nenhum valor e impresso)"
 if ! "${PYTHON}" -m botgitgud.cli deploy-validate-env \
-        --env-file "${REPO_DIR}/.env" --production; then
-    die ".env incompleto/invalido para producao -- start recusado.
-  Se o bloqueio for REPORT_PUBLIC_BASE_URL: isso e esperado antes da CL.9.
-  O host pode ficar preparado (bootstrap + preflight + enable) sem iniciar;
-  o primeiro start de producao acontece depois que houver dominio real."
+        --env-file "${REPO_DIR}/.env"; then
+    die ".env incompleto/invalido para producao -- start recusado."
 fi
 
 log "systemctl start ${UNIT_NAME}"

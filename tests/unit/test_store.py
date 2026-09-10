@@ -8,6 +8,9 @@ from pathlib import Path
 
 from botgitgud.domain.models import (
     AbilityDamage,
+    AbilitySourceDamage,
+    AuraBand,
+    AuraDetail,
     FightRef,
     PlayerBuild,
     PlayerLog,
@@ -162,6 +165,29 @@ def test_read_log_preserves_nested_structures_exactly(tmp_path: Path) -> None:
     assert read_back.uptimes == log.uptimes
     assert read_back.resource_waste == log.resource_waste
     assert read_back.deaths == 2
+
+
+def test_round_trip_preserves_m6_signals(tmp_path: Path) -> None:
+    log = _log(
+        damage_by_ability={
+            1: AbilityDamage(
+                1,
+                100.0,
+                3,
+                2,
+                by_source={
+                    6: AbilitySourceDamage(6, 70.0, 2),
+                    16: AbilitySourceDamage(16, 30.0, 1),
+                },
+            )
+        },
+        resource_waste_by_ability={7: {10: 3.0, 11: 2.0}},
+        aura_details={5: AuraDetail(12, (AuraBand(200, 300), AuraBand(10, 20)))},
+    )
+    with Store(tmp_path) as store:
+        store.write_log(log)
+        read_back = store.read_log("ABCDEFGHIJKLMNOP", 1, "Zarad")
+    assert read_back == log
 
 
 def test_partition_none_falls_back_to_unknown_directory(tmp_path: Path) -> None:

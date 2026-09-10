@@ -51,7 +51,9 @@ def test_first_boot_seeds_the_runtime_cache_from_the_versioned_file(tmp_path: Pa
 def test_first_boot_without_a_seed_starts_empty_instead_of_failing(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     catalog = open_runtime_catalog(data_dir, blizzard=None, seed_path=tmp_path / "nao-existe.json")
-    assert catalog.get(999).name == "Spell #999"
+    info = catalog.get(999)
+    assert "999" in info.name
+    assert info.source == "unknown"
 
 
 def test_existing_runtime_cache_takes_precedence_over_the_seed(tmp_path: Path) -> None:
@@ -127,7 +129,9 @@ def test_corrupt_runtime_cache_follows_the_existing_quarantine_policy(tmp_path: 
 
     catalog = open_runtime_catalog(data_dir, blizzard=None, seed_path=None)
 
-    assert catalog.get(1).name == "Spell #1"  # inicia vazio
+    info = catalog.get(1)
+    assert "1" in info.name  # inicia vazio
+    assert info.source == "unknown"
     assert list(data_dir.glob("spells.corrupt.*.json"))  # quarentena preservada
 
 

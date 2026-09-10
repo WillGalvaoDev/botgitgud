@@ -214,6 +214,8 @@ def compare_all_spells(
     """
     comparisons: list[SpellComparison] = []
     for spell_id in eligible_spell_ids:
+        if catalog.identity(spell_id).resolution_status == "unresolved":
+            continue
         sp = profile[spell_id]
         comparisons.append(
             compare_spell_usage_by_phase(

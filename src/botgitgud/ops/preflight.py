@@ -6,11 +6,7 @@ operacional está em ver TODAS as falhas de uma vez ("faltam 3 diretórios e
 o .env não tem DISCORD_TOKEN"), não em parar na primeira. O exit code do
 comando agrega o pior severity encontrado.
 
-**Nada aqui toca a rede.** A única operação de socket é um `bind()` em
-loopback seguido de `close()` imediato — prova que a porta do report server
-está livre e que o processo tem permissão para escutá-la, sem jamais
-aceitar conexão, sem `connect()`, sem resolver nome externo. É o mais perto
-de "o servidor vai subir" que dá para chegar sem subir o servidor.
+**Nada aqui toca a rede.**
 
 **Arquitetura e versão de Python são WARNING, não ERROR**, quando divergem
 do alvo: este mesmo preflight roda na máquina de desenvolvimento Windows
@@ -22,7 +18,6 @@ from __future__ import annotations
 
 import importlib
 import platform
-import socket
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -35,15 +30,11 @@ TARGET_MACHINES = ("aarch64", "arm64")
 MINIMUM_PYTHON = (3, 11)
 PREFERRED_PYTHON = ((3, 12), (3, 13))
 
-# Módulos que provam que o pacote está instalado E importável na venv —
-# não só presente no disco. `report_server` entra de propósito: é o que
-# arrasta `aiohttp`, a única dependência de runtime que o deploy poderia
-# ter esquecido de instalar sem o bot falhar antes do primeiro relatório.
+# Módulos que provam que o pacote está instalado e importável na venv.
 SMOKE_IMPORTS = (
     "botgitgud",
     "botgitgud.cli",
     "botgitgud.config",
-    "botgitgud.bot.report_server",
     "botgitgud.ops.supervisor",
 )
 
@@ -161,8 +152,8 @@ def check_systemd_unit(repo_root: Path) -> CheckResult:
     return _ok("systemd_unit", str(unit))
 
 
-def check_env(env_path: Path, *, require_public_base_url: bool = False) -> list[CheckResult]:
-    report = validate_env_file(Path(env_path), require_public_base_url=require_public_base_url)
+def check_env(env_path: Path) -> list[CheckResult]:
+    report = validate_env_file(Path(env_path))
     results: list[CheckResult] = []
     for issue in report.issues:
         detail = f"{issue.variable}: {issue.message}"
@@ -177,34 +168,12 @@ def check_env(env_path: Path, *, require_public_base_url: bool = False) -> list[
     return results
 
 
-def check_report_server_bind(host: str, port: int) -> CheckResult:
-    """Bind + close imediato. Nunca escuta de verdade, nunca aceita
-    conexão, nunca fala com a rede — só responde "esta porta está livre e
-    posso escutá-la".
-    """
-    if port == 0:
-        return _warn("report_server_bind", "porta 0 (efêmera) — nada a verificar")
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            probe.bind((host, port))
-    except OSError as exc:
-        return _fail("report_server_bind", f"não foi possível bindar {host}:{port} — {exc}")
-    return _ok("report_server_bind", f"{host}:{port} disponível")
-
-
 def run_preflight(
     *,
     data_dir: Path,
     env_path: Path,
     repo_root: Path,
-    report_server_host: str,
-    report_server_port: int,
-    require_public_base_url: bool = False,
 ) -> list[CheckResult]:
-    """`require_public_base_url=True` é o gate de START DE PRODUÇÃO, não o
-    de preparação do host — ver `ops/deploy.py::validate_env_values`.
-    """
     results: list[CheckResult] = [
         check_architecture(),
         check_python_version(),
@@ -215,8 +184,7 @@ def run_preflight(
     if Path(data_dir).is_dir():
         results.append(check_writable(data_dir))
     results.append(check_systemd_unit(repo_root))
-    results.extend(check_env(env_path, require_public_base_url=require_public_base_url))
-    results.append(check_report_server_bind(report_server_host, report_server_port))
+    results.extend(check_env(env_path))
     return results
 
 
@@ -229,8 +197,5 @@ def worst_status(results: list[CheckResult]) -> CheckStatus:
 
 
 def exit_code_for(results: list[CheckResult]) -> int:
-    """Só FAILED reprova. Um WARNING (arquitetura de desenvolvimento,
-    `REPORT_PUBLIC_BASE_URL` ainda vazia) não pode impedir um deploy que é
-    legítimo nesta etapa do roadmap.
-    """
+    """Only failed checks reject the operation."""
     return 1 if worst_status(results) is CheckStatus.FAILED else 0

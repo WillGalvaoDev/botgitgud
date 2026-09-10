@@ -55,7 +55,9 @@ def _log(
 
 
 def _catalog(tmp_path: Path) -> SpellCatalog:
-    return SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(999, "Known Aura", "wcl")
+    return catalog
 
 
 # -- grade_scalar: directional (one-tailed) grading --------------------------
@@ -171,6 +173,20 @@ def test_uptime_finding_included_even_when_player_never_had_the_buff(tmp_path: P
     uptime_finding = next(uf for uf in result.uptimes if uf.spell.spell_id == 999)
     assert uptime_finding.finding.user_value == 0.0
     assert uptime_finding.finding.grade == "red"
+
+
+def test_uptime_findings_omit_unresolved_abilities(tmp_path: Path) -> None:
+    resolved_id = 111
+    unresolved_id = 222
+    uptimes = {resolved_id: 0.90, unresolved_id: 0.90}
+    matched = [_log(name=f"Ref{i}", uptimes=uptimes) for i in range(20)]
+    player = _log(uptimes={resolved_id: 0.10, unresolved_id: 0.10})
+    catalog = SpellCatalog(tmp_path / "spells.json", blizzard=None)
+    catalog.learn(resolved_id, "Known Aura", "wcl")
+
+    result = analyze_performance_features(player, matched, catalog)
+
+    assert {finding.spell.spell_id for finding in result.uptimes} == {resolved_id}
 
 
 # -- resource waste -------------------------------------------------------------

@@ -1,5 +1,18 @@
 # Desvios em relação a `docs/implementacao.md`
 
+## D-38 — buffs externos defensivos deixam de definir comparabilidade
+
+- **Tarefa:** M4 — covariáveis ofensivas + policy v2.
+- **Documento anterior:** `external_buffs` usava igualdade do conjunto inteiro e
+  `has_augmentation` era um filtro binário separado.
+- **Evidência:** no corpus 3183, restringir a comparação aos quatro buffs externos ofensivos
+  aumenta a amostra sem admitir divergência ofensiva; os nove IDs restantes são apenas
+  defensivos/utilitários. O booleano de Augmentation é redundante com os IDs ofensivos.
+- **Decisão:** policy v2 compara somente IDs ofensivos, declara `has_augmentation` como
+  covariável de ajuste e deixa de filtrá-la. Policy v1 preserva o filtro binário e seu
+  `cohort_id` histórico; os pools coexistem e nenhum pool foi migrado ou removido.
+- **Impacto:** o default passa a v2 e novos pools recebem identidade distinta, sob demanda.
+
 ## D-32 — campos numéricos opcionais de `report.rankings` podem ser `"-"`
 
 - **Tarefa:** censo real A+B da zona 46

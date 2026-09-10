@@ -9,13 +9,20 @@ removed for v1.0 because no product requirement or caller exists (D-13).
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+import duckdb
 import structlog
 
 from botgitgud.analysis.cohort_builder import BucketBuildResult, CohortState, build_cohorts
+from botgitgud.analysis.cohort_invalidation import (
+    CohortPoolAssessment,
+    InvalidationPlan,
+    plan_invalidation,
+)
 from botgitgud.analysis.pipeline import AnalysisRequest, Deps, run_analysis
 from botgitgud.blizzard.client import BlizzardClient, BlizzardClientConfig
 from botgitgud.bot.ops_snapshot import ColdBuildPublisher
@@ -53,6 +60,88 @@ from botgitgud.wcl.client import WclClient, WclClientConfig
 log = structlog.get_logger(__name__)
 
 EX_TEMPFAIL = 75  # BSD sysexits.h — T1.7's build-cohort uses this on budget exhaustion
+
+
+def _read_cohort_registry_read_only(database: Path) -> list[dict[str, object]]:
+    """Read registry rows without Store initialization or DDL."""
+    connection = duckdb.connect(str(database), read_only=True)
+    try:
+        cursor = connection.execute(
+            """SELECT cohort_id, difficulty, partition, n_members
+               FROM cohort_registry ORDER BY difficulty, partition, cohort_id"""
+        )
+        keys = ("cohort_id", "difficulty", "partition", "n_members")
+        return [dict(zip(keys, row, strict=True)) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
+def _plan_as_dict(
+    plan: InvalidationPlan, *, backup_present: bool | None = None
+) -> dict[str, object]:
+    def item(assessment: CohortPoolAssessment) -> dict[str, object]:
+        return {
+            "cohort_id": assessment.cohort_id,
+            "difficulty": assessment.difficulty,
+            "n_members": assessment.n_members,
+            "partition": assessment.partition,
+            "reasons": list(assessment.reasons),
+            "status": assessment.status,
+        }
+
+    return {
+        "affected_total": plan.affected_total,
+        "backup_present": backup_present,
+        "counts_by_difficulty_partition": [
+            {"count": count, "difficulty": difficulty, "partition": partition}
+            for difficulty, partition, count in plan.counts_by_difficulty_partition
+        ],
+        "preserved": [item(a) for a in plan.preserved],
+        "requires_refetch": bool(plan.to_invalidate),
+        # Lower-bound estimate: one rankings query and one logical log fetch
+        # per recorded member.  No query is executed by this report.
+        "estimated_refetch_queries": sum(a.n_members + 1 for a in plan.to_invalidate),
+        "to_invalidate": [item(a) for a in plan.to_invalidate],
+        "total": plan.total,
+        "assessed_total": plan.assessed_total,
+    }
+
+
+def _cmd_plan_cohort_invalidation(args: argparse.Namespace) -> int:
+    database = args.database or args.data_dir / "warehouse.duckdb"
+    try:
+        rows = _read_cohort_registry_read_only(database)
+    except Exception as exc:
+        sys.stderr.write(
+            f"erro: não foi possível abrir o store em modo somente leitura: {database} ({exc})\n"
+        )
+        return 1
+
+    plan = plan_invalidation(rows)
+    backup_present = any(database.parent.glob(f"{database.name}*.bak"))
+    rendered = _plan_as_dict(plan, backup_present=backup_present)
+    if args.json:
+        sys.stdout.write(json.dumps(rendered, ensure_ascii=False, sort_keys=True) + "\n")
+        return 0
+
+    sys.stdout.write(
+        f"assessed={plan.assessed_total} affected={plan.total} preserved={len(plan.preserved)}\n"
+    )
+    sys.stdout.write(
+        f"backup_present={str(backup_present).lower()} "
+        f"requires_refetch={str(bool(plan.to_invalidate)).lower()} "
+        f"estimated_refetch_queries={rendered['estimated_refetch_queries']}\n"
+    )
+    for difficulty, partition, count in plan.counts_by_difficulty_partition:
+        sys.stdout.write(f"difficulty={difficulty} partition={partition} affected={count}\n")
+    for assessment in plan.to_invalidate:
+        sys.stdout.write(
+            f"INVALIDATE {assessment.cohort_id} difficulty={assessment.difficulty} "
+            f"partition={assessment.partition} reasons={','.join(assessment.reasons)}\n"
+        )
+    for assessment in plan.preserved:
+        sys.stdout.write(f"PRESERVE {assessment.cohort_id} status={assessment.status}\n")
+    return 0
 
 
 def _build_deps(settings: Settings) -> Deps:
@@ -277,11 +366,8 @@ def _cmd_serve(_args: argparse.Namespace) -> int:
     from botgitgud.bot.discord_bot import build_bot
 
     try:
-        # CL.5: build_bot() agora pode falhar antes de qualquer conexao ao
-        # Discord (report_public_base_url invalida/ausente, ReportServer
-        # nao consegue bindar) — precisa estar DENTRO do try/finally para
-        # que deps.store/deps.client sejam liberados mesmo nesse caso,
-        # nunca vazados por um startup que nunca chegou a rodar.
+        # Construção permanece dentro do try/finally para que recursos locais
+        # sejam liberados mesmo se o runtime falhar antes de conectar.
         bot = build_bot(deps)
         bot.run(settings.discord_token.get_secret_value())
     except BaseException as e:
@@ -368,6 +454,20 @@ def build_parser() -> argparse.ArgumentParser:
     add_experiment_calibrate_parser(sub)
     add_ops_parsers(sub)
     add_deploy_parsers(sub)
+
+    p_invalidation = sub.add_parser(
+        "plan-cohort-invalidation",
+        aliases=["cohort-invalidation-plan"],
+        help="Produz, sem executar, o plano seletivo de invalidação de coortes.",
+    )
+    p_invalidation.add_argument(
+        "--data-dir", type=Path, default=Path("data"), help="Diretório que contém warehouse.duckdb."
+    )
+    p_invalidation.add_argument(
+        "--database", type=Path, default=None, help="Path explícito do warehouse.duckdb."
+    )
+    p_invalidation.add_argument("--json", action="store_true", help="Emite JSON determinístico.")
+    p_invalidation.set_defaults(func=_cmd_plan_cohort_invalidation)
 
     p_probe = sub.add_parser("probe-schema", help="Sonda o schema WCL v2 ao vivo (T0.1).")
     p_probe.set_defaults(func=_cmd_probe_schema)

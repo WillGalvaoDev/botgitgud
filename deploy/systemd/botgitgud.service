@@ -32,7 +32,7 @@ WorkingDirectory=/opt/botgitgud
 # `... cli serve` here: that would create two competing restart layers.
 ExecStart=/opt/botgitgud/.venv/bin/python -m botgitgud.cli supervise
 
-# Secrets (DISCORD_TOKEN, WCL_CLIENT_ID/SECRET, REPORT_PUBLIC_BASE_URL, ...)
+# Secrets (DISCORD_TOKEN, WCL_CLIENT_ID/SECRET, ...)
 # live only in this file on the host, never in the unit itself. The real
 # .env is created by the operator (docs/linux-deployment.md) and is never
 # committed to the repo.
@@ -60,8 +60,8 @@ RestartSec=5
 # `systemctl stop` sends SIGTERM to the supervisor. The supervisor converts
 # it into control/stop.request (install_signal_handlers) and then waits up
 # to SUPERVISOR_STOP_GRACE_S (default 30s, see .env.example) for the bot
-# child to close itself gracefully -- websocket, ReportServer.stop(), then
-# DuckDB -- before escalating to a hard terminate of the child. TimeoutStopSec
+# child to close itself gracefully -- websocket, then DuckDB -- before
+# escalating to a hard terminate of the child. TimeoutStopSec
 # must stay comfortably ABOVE that grace period, or systemd SIGKILLs the
 # whole cgroup before the supervisor's own graceful path gets to run.
 # 45s = 30s default grace + margin for the supervisor's own poll/backoff
