@@ -1,0 +1,114 @@
+﻿"""Read-only M1 review reproductions. Run from the isolated review copy."""
+from __future__ import annotations
+import json, math, sys, tempfile
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+ROOT = Path(__file__).resolve().parent
+sys.path[:0] = [str(ROOT/'src'),str(ROOT/'tests/unit'),str(ROOT/'tests/fixtures')]
+from test_m1_astra_regressions import _log
+from test_m0_methodology_contract import _candidates
+from test_m1_acceptance import test_a07_split_keeps_original_denominator_and_closes
+from test_pipeline import _build_deps, _DispatchTransport, _req
+import botgitgud.analysis.dps_gap as gap_module
+from botgitgud.analysis.dps_gap import analyze_dps_gap
+from botgitgud.analysis.measurement import account_damage
+from botgitgud.analysis.metric_observations import compare_metrics, observe
+from botgitgud.analysis.pipeline import run_analysis, _report_ability_sections
+from botgitgud.analysis.findings import TopPriorities
+from botgitgud.domain.models import CollectionProvenance, CollectionStatus
+from botgitgud.domain.spells import SpellCatalog
+from botgitgud.ingest.performance_fetch import _paginate_events
+from botgitgud.ingest.log_fetcher_aux import fetch_cast_timelines
+from botgitgud.ingest.performance_parsing import parse_aura_uptimes
+from botgitgud.ingest.parquet_codec import write_parquet_log, read_parquet_log
+from botgitgud.report.contract import ReportContract, ExecutionSection, ConfidenceSummary
+from botgitgud.report.coaching_answer import render_coaching_answer
+from botgitgud.report.text import ReportHeader, _render_header
+
+out={}
+with tempfile.TemporaryDirectory(prefix='m1-probe-') as temp:
+    temp=Path(temp)
+    cat=SpellCatalog(temp/'spells.json',blizzard=None);cat.learn(1,'Example','wcl')
+    refs=[_log(200,fight_id=i+2) for i in range(15)]
+    def gap(p):
+        return analyze_dps_gap(p,refs,cohort_median_dps=None,catalog=cat,buffs_relaxed=False)
+    out['R1_invalid_cast_coaching']=[]
+    for label,times in [('negative',(-1.,)),('outside_fight',(301.,)),('nan',(float('nan'),))]:
+        p=replace(_log(100),cast_timeline={1:times});g=gap(p);candidates=_candidates(g)
+        contract=ReportContract(resultado=ReportHeader('Player','Boss','Warlock','Demonology',15,300,300),setup=None,execucao=ExecutionSection((),None,g),top_actions=TopPriorities(),confianca=ConfidenceSummary(15,15,(),(),()),material_priorities=candidates)
+        assert g.metric_comparisons['player_casts_per_minute:1'].player.status.value=='INVALID'
+        assert g.abilities[0].review_eligible and len(candidates)==1
+        out['R1_invalid_cast_coaching'].append({'case':label,'cast_metric_status':'INVALID','review_eligible':True,'candidate_count':len(candidates),'discord':render_coaching_answer(contract)})
+    out['R2_false_complete_page']=[]
+    for content in [{'data':[]},{'data':[{'type':'cast','sourceID':1,'abilityGameID':1,'timestamp':301000}],'nextPageTimestamp':None}]:
+        payload={'data':{'reportData':{'report':{'events':content}}}}
+        args=dict(report_code='x',fight_id=1,start_time_ms=0,end_time_ms=300000)
+        _,quality=_paginate_events(lambda *a,**k:payload,'',op_name='probe',**args)
+        flat,_,cast_quality=fetch_cast_timelines(lambda *a,**k:payload,player_id=1,intervals=(),include_provenance=True,**args)
+        assert quality.status.value==cast_quality.status.value=='COMPLETE'
+        out['R2_false_complete_page'].append({'input':content,'damage_status':quality.status.value,'casts_status':cast_quality.status.value,'timeline':flat})
+    p=_log(100);prov=p.measurement_provenance
+    col=CollectionProvenance(CollectionStatus.COMPLETE,(),300000,0)
+    invalid=replace(p,measurement_provenance=replace(prov,damage_collection=col,casts_collection=col,damage_reconciliation_status='unreconciled',damage_reconciliation_residual=999))
+    write_parquet_log(invalid,temp/'invalid-provenance.parquet')
+    restored=read_parquet_log(temp/'invalid-provenance.parquet')
+    assert account_damage(restored).status.value=='AVAILABLE'
+    out['R3_provenance']={'after_parquet_roundtrip':account_damage(restored).status.value,'requested_interval':[300000,0],'declared_reconciliation':'unreconciled','declared_residual':999}
+    p=_log(1e12);p=replace(p,measurement_provenance=replace(p.measurement_provenance,damage_table_total=1e12-1))
+    a=account_damage(p);assert a.status.value=='AVAILABLE' and a.reconciliation_residual==1
+    out['R4_authority_tolerance']={'gross':1e12,'authority':1e12-1,'status':a.status.value,'residual_damage':a.reconciliation_residual}
+    out['R5_missing_uptime']=[]
+    for aura in [{'guid':1,'name':'Example'},{'guid':1,'name':'Example','totalUptime':None},{'guid':1,'name':'Example','totalUptime':0}]:
+        values=parse_aura_uptimes({'totalTime':300000,'auras':[aura]})
+        p=replace(_log(100),uptimes={a.spell_id:a.uptime_frac for a in values})
+        m=compare_metrics(p,[replace(r,uptimes={1:.8}) for r in refs],cat)['aura_uptime_fraction:1']
+        assert m.player.status.value=='AVAILABLE' and m.player.value==0 and m.finding.grade=='red'
+        out['R5_missing_uptime'].append({'input':aura,'status':m.player.status.value,'value':m.player.value,'grade':m.finding.grade,'N':len(m.reference_ids)})
+    out['R6_core_availability']=[]
+    for label,p in [('legacy',replace(_log(100),measurement_provenance=None)),('invalid',replace(_log(100),cast_timeline={1:(float('nan'),)},uptimes={1:2}))]:
+        core=_report_ability_sections(p,refs,cat)[0][0]
+        assert core.cast_count==1 and core.casts_per_minute==.2
+        out['R6_core_availability'].append({'case':label,'available_features':[f.value for f in core.available_features],'cast_count':core.cast_count,'casts_per_minute':core.casts_per_minute,'uptime':core.uptime})
+    deps=_build_deps(temp/'pipeline',_DispatchTransport({}));deps.catalog.learn(1,'Example','wcl')
+    try:
+        p=replace(_log(100),dps=999)
+        historical=[replace(r,measurement_provenance=None) for r in refs]
+        with patch.object(deps.fetcher,'fetch',return_value=p),patch.object(deps.store,'read_candidate_pool',return_value=[]),patch('botgitgud.analysis.pipeline.fetch_cohort_logs',return_value=historical),patch('botgitgud.analysis.pipeline.get_current_partition',return_value=1):
+            result=run_analysis(_req(),deps)
+        assert result.dps_gap.reference_n_quantitative==15 and result.header.reference_n==0
+        out['R7_header']={'quantitative_N':15,'header_N':0,'player_WCL_dps':999,'player_measured_dps':result.dps_gap.measured_dps,'rendered':'\n'.join(_render_header(result.header))}
+    finally: deps.store.close()
+    p=_log(0,hits=5)
+    events=observe(p,1,'damage_events_per_second',cat);per_event=observe(p,1,'damage_per_event',cat)
+    assert events.value is None and per_event.value is None
+    out['R8_zero_damage_events']={'D':0,'hits':5,'T':300,'expected_events_per_second':5/300,'expected_damage_per_event':0,'actual_event_status':events.status.value,'actual_per_event_status':per_event.status.value}
+    p=replace(_log(100),fight=replace(_log(100).fight,duration_s=1e-308));a=account_damage(p)
+    assert a.status.value=='AVAILABLE' and math.isinf(a.net_dps)
+    out['R9_finite_overflow']={'D':100,'T':1e-308,'status':a.status.value,'net_dps':'inf'}
+    original=gap_module._event_split_pair
+    def wrong_weight(*args,**kwargs):
+        terms,reason=original(*args,**kwargs)
+        return (tuple(v*15/8 for v in terms),reason) if terms is not None else (None,reason)
+    with patch.object(gap_module,'_event_split_pair',side_effect=wrong_weight):
+        test_a07_split_keeps_original_denominator_and_closes(cat)
+    out['R10_A07_non_vacuity']={'mutation':'valid split terms multiplied by 15/8, equivalent to renormalizing the valid subset','existing_acceptance_test':'PASS despite wrong weights'}
+    g=gap(_log(100))
+    from botgitgud.analysis.performance_features import analyze_performance_features
+    from botgitgud.analysis.findings import build_findings
+    from botgitgud.analysis.remediation import build_remediations
+    from botgitgud.analysis.materiality import collect_material_candidates
+    p=replace(_log(100,origin='PET',casts=False),uptimes={1:.1})
+    pet_refs=[replace(_log(200,origin='PET',casts=False,fight_id=i+2),uptimes={1:.9}) for i in range(15)]
+    pg=analyze_dps_gap(p,pet_refs,cohort_median_dps=None,catalog=cat,buffs_relaxed=False)
+    perf=analyze_performance_features(p,pet_refs,cat)
+    f,r,e=build_findings(dps_gap=pg,n=15,relaxed_covariates=(),performance=perf,player_damage_share={1:1.0})
+    rem=build_remediations(dps_gap=pg,findings=f,relevance_findings=r,execution_findings=e)
+    candidates=collect_material_candidates(dps_gap=pg,remediations=rem,performance=perf)
+    assert not pg.abilities[0].review_eligible and len(candidates)==1
+    assert candidates[0].finding.kind=='UPTIME'
+    contract=ReportContract(resultado=ReportHeader('Player','Boss','Warlock','Demonology',15,300,300),setup=None,execucao=ExecutionSection((),perf,pg),top_actions=TopPriorities(),confianca=ConfidenceSummary(15,15,(),(),()),material_priorities=candidates)
+    out['R12_uptime_bypasses_entity_gate']={'origin':'PET','own_casts':0,'damage_review_eligible':False,'material_candidates':['UPTIME'],'discord':render_coaching_answer(contract)}
+    out['R11_active_legacy_fields']={name:getattr(g.abilities[0],name) for name in ('n_r','p_r','d_r','delta_d','volume','efficiency','interaction','cohort_share')}
+(ROOT/'independent-probes.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,allow_nan=False),encoding='utf8')
+print('12 reproduction groups confirmed; output: independent-probes.json')

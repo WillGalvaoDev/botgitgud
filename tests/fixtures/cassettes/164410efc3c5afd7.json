@@ -1,0 +1,182 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "461",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Supra",
+      "serverRegion": "US",
+      "serverSlug": "zul'jin"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 60.68130047622007,
+            "bestAmount": 171564.77177929,
+            "difficulty": 5,
+            "fastestKill": 254476,
+            "medianPerformance": 78.27358791476358,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 171564.77177929,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 327249,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 583404,
+                  "name": "Rhythm"
+                },
+                "historicalPercent": 99.805519038116,
+                "historicalTotalParses": 6510,
+                "lockedIn": true,
+                "rankPercent": 99.805519038116,
+                "rankTotalParses": 6510,
+                "report": {
+                  "code": "aLTbZD81ypBntHdR",
+                  "fightID": 20,
+                  "startTime": 1782785196403
+                },
+                "spec": "Demonology",
+                "startTime": 1782789834563,
+                "todayPercent": 99.0224816610186,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 137160.83638536,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 254476,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 576250,
+                  "name": "Fun with Friends"
+                },
+                "historicalPercent": 92.40793279239031,
+                "historicalTotalParses": 28010,
+                "lockedIn": true,
+                "rankPercent": 92.40793279239031,
+                "rankTotalParses": 28010,
+                "report": {
+                  "code": "TKQhfVrAvGwPyzZB",
+                  "fightID": 24,
+                  "startTime": 1781485565718
+                },
+                "spec": "Demonology",
+                "startTime": 1781489604029,
+                "todayPercent": 92.22640402395844,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 122638.1193713,
+                "bestSpec": "Demonology",
+                "bracketData": 289,
+                "class": 10,
+                "duration": 321233,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 576250,
+                  "name": "Fun with Friends"
+                },
+                "historicalPercent": 78.27358791476358,
+                "historicalTotalParses": 22285,
+                "lockedIn": true,
+                "rankPercent": 78.27358791476358,
+                "rankTotalParses": 22285,
+                "report": {
+                  "code": "QMPf2my84Y6qcAHC",
+                  "fightID": 22,
+                  "startTime": 1779670729774
+                },
+                "spec": "Demonology",
+                "startTime": 1779673612755,
+                "todayPercent": 70.73885573331088,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 92947.845086668,
+                "bestSpec": "Destruction",
+                "bracketData": 278,
+                "class": 10,
+                "duration": 369342,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 576250,
+                  "name": "Fun with Friends"
+                },
+                "historicalPercent": 16.682345166721824,
+                "historicalTotalParses": 3796,
+                "lockedIn": true,
+                "rankPercent": 16.682345166721824,
+                "rankTotalParses": 3796,
+                "report": {
+                  "code": "FKf4RVbP3ZBmWCgG",
+                  "fightID": 19,
+                  "startTime": 1776646249973
+                },
+                "spec": "Destruction",
+                "startTime": 1776650210177,
+                "todayPercent": 16.60983113431989,
+                "todayTotalParses": 4019
+              },
+              {
+                "amount": 89541.711104752,
+                "bestSpec": "Demonology",
+                "bracketData": 280,
+                "class": 10,
+                "duration": 345987,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 576250,
+                  "name": "Fun with Friends"
+                },
+                "historicalPercent": 16.237117469108703,
+                "historicalTotalParses": 11959,
+                "lockedIn": true,
+                "rankPercent": 16.237117469108703,
+                "rankTotalParses": 11959,
+                "report": {
+                  "code": "FjkRKaYhgBc3tVLQ",
+                  "fightID": 19,
+                  "startTime": 1777856001673
+                },
+                "spec": "Demonology",
+                "startTime": 1777859668026,
+                "todayPercent": 14.861542346006868,
+                "todayTotalParses": 28276
+              }
+            ],
+            "totalKills": 5,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

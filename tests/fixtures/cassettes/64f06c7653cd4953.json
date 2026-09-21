@@ -1,0 +1,28 @@
+{
+  "method": "GET",
+  "request_headers": {
+    "Authorization": "<redacted>"
+  },
+  "request_payload": {
+    "locale": "en_US",
+    "namespace": "static-us"
+  },
+  "response_json": {
+    "_links": {
+      "self": {
+        "href": "https://us.api.blizzard.com/data/wow/spell/358733?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "description": "Reduces your falling speed.\r\n\r\nYou can activate this ability with the jump key while falling.",
+    "id": 358733,
+    "media": {
+      "id": 358733,
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/spell/358733?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "name": "Glide"
+  },
+  "status_code": 200,
+  "url": "https://us.api.blizzard.com/data/wow/spell/358733"
+}

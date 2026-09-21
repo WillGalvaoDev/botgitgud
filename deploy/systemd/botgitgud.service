@@ -1,0 +1,95 @@
+# BotGITGUD -- Linux/systemd unit for the PROCESS SUPERVISOR (not the bot).
+#
+# systemd supervises the Python supervisor (src/botgitgud/ops/supervisor.py)
+# ONLY. The supervisor keeps deciding restart/backoff/storm-breaker/clean-stop
+# for the bot CHILD process itself -- see docs/v1-process-supervision.md and
+# docs/linux-deployment.md. This unit is a thin launcher, the same role
+# scripts/bot-supervisor.ps1 plays on Windows: it never talks to WCL/Discord,
+# never touches DuckDB, never decides anything about the bot child.
+#
+# NOT installed by this repo -- copy manually per docs/linux-deployment.md.
+# Placeholder User/Group/paths below: adjust for the real host, never run
+# as root.
+
+[Unit]
+Description=BotGITGUD process supervisor (spawns `botgitgud.cli serve`)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botgitgud
+Group=botgitgud
+WorkingDirectory=/opt/botgitgud
+# Relative paths in Settings (e.g. the DATA_DIR=data default) resolve
+# against THIS cwd -- must be the repo root, matching how
+# ops/supervisor.py's own REPO_ROOT (Path(__file__).resolve().parents[3])
+# resolves for the bot child it spawns.
+
+# Runs the SUPERVISOR, never the bot directly -- the supervisor is the one
+# that spawns `python -m botgitgud.cli serve` as its own child, with its own
+# restart/backoff/storm policy (ops/supervisor.py). Never point ExecStart at
+# `... cli serve` here: that would create two competing restart layers.
+ExecStart=/opt/botgitgud/.venv/bin/python -m botgitgud.cli supervise
+
+# Secrets (DISCORD_TOKEN, WCL_CLIENT_ID/SECRET, ...)
+# live only in this file on the host, never in the unit itself. The real
+# .env is created by the operator (docs/linux-deployment.md) and is never
+# committed to the repo.
+EnvironmentFile=/opt/botgitgud/.env
+
+# -- restart policy ---------------------------------------------------------
+# The supervisor already owns restart/backoff/storm-breaker for the BOT
+# child (ops/supervisor.py). systemd's job is one level up: restart the
+# supervisor process itself only if IT dies unexpectedly -- a real crash of
+# the Python supervisor, never a bot-restart decision.
+#
+# ops/supervisor.py::main() returns exit code 0 for BOTH a deliberate clean
+# stop (SIGTERM -> control/stop.request -> graceful child shutdown) AND a
+# restart-storm giveup (crash-loop detected, requires a human to
+# investigate) -- an unhandled exception in the supervisor is the only path
+# that exits non-zero. `Restart=on-failure` restarts the unit only on
+# non-zero exit / abnormal termination (signal, timeout, watchdog), so both
+# a controlled `systemctl stop` and a storm-breaker giveup are correctly
+# left alone. Never `Restart=always`: it would fight the storm-breaker
+# (restart forever into the same crash loop) and would turn a deliberate,
+# clean `systemctl stop` into an infinite restart.
+Restart=on-failure
+RestartSec=5
+
+# `systemctl stop` sends SIGTERM to the supervisor. The supervisor converts
+# it into control/stop.request (install_signal_handlers) and then waits up
+# to SUPERVISOR_STOP_GRACE_S (default 30s, see .env.example) for the bot
+# child to close itself gracefully -- websocket, then DuckDB -- before
+# escalating to a hard terminate of the child. TimeoutStopSec
+# must stay comfortably ABOVE that grace period, or systemd SIGKILLs the
+# whole cgroup before the supervisor's own graceful path gets to run.
+# 45s = 30s default grace + margin for the supervisor's own poll/backoff
+# bookkeeping around it. Raise this if SUPERVISOR_STOP_GRACE_S is raised.
+TimeoutStopSec=45
+
+# KillMode=mixed (NOT the `control-group` default): SIGTERM goes to the
+# supervisor's own main PID only. Under `control-group`, systemd would also
+# SIGTERM the bot CHILD directly, racing the supervisor's own
+# control/stop.request protocol with an uncontrolled kill the child has no
+# handler for (only the supervisor installs signal handlers; the child only
+# polls stop.request from inside its own event loop). `mixed` still SIGKILLs
+# anything left in the cgroup once TimeoutStopSec expires, so an orphaned
+# child can never outlive the unit stopping -- it just isn't the first move.
+KillMode=mixed
+
+# -- hardening ----------------------------------------------------------
+# Deliberately paired with a service user created WITHOUT a home directory
+# (see docs/linux-deployment.md: `useradd --system --no-create-home`) so
+# ProtectHome=true can never hide any of the app's own files. Nothing here
+# restricts networking (Discord/WCL need outbound HTTPS) or read access to
+# /etc (DNS resolution needs /etc/resolv.conf, which stays readable -- these
+# directives only affect WRITE access outside ReadWritePaths).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/botgitgud/data
+
+[Install]
+WantedBy=multi-user.target

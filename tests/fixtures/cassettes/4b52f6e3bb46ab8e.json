@@ -1,0 +1,28 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "80",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "{ rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }"
+  },
+  "response_json": {
+    "data": {
+      "rateLimitData": {
+        "limitPerHour": 3600,
+        "pointsResetIn": 1294,
+        "pointsSpentThisHour": 260.2
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -1,0 +1,66 @@
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+.................................................                        [100%]
+============================== warnings summary ===============================
+..\..\..\..\OneDrive\Desktop\BotGITGUD\.venv\Lib\site-packages\_pytest\python.py:124
+  C:\Users\wsgon\OneDrive\Desktop\BotGITGUD\.venv\Lib\site-packages\_pytest\python.py:124: PytestRemovedIn10Warning: Passing a non-Collection iterable to parametrize is deprecated.
+  Test: tests/unit/test_ability_identity.py::test_precedence_is_strict_and_total, argvalues type: product
+  Please convert to a list or tuple.
+  See https://docs.pytest.org/en/stable/deprecations.html#parametrize-iterators
+    metafunc.parametrize(*marker.args, **marker.kwargs, _param_mark=marker)
+
+tests/golden/test_legacy_determinism.py: 102 warnings
+tests/golden/test_legacy_output.py: 6 warnings
+tests/unit/test_discord_bot.py: 85 warnings
+tests/unit/test_interactive_delivery.py: 15 warnings
+tests/unit/test_update_command.py: 15 warnings
+tests/unit/test_worker_lifecycle.py: 5 warnings
+  C:\Users\wsgon\OneDrive\Desktop\BotGITGUD\.venv\Lib\site-packages\discord\ext\commands\core.py:430: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if not asyncio.iscoroutinefunction(func):
+
+tests/golden/test_legacy_determinism.py: 34 warnings
+tests/golden/test_legacy_output.py: 2 warnings
+tests/unit/test_discord_bot.py: 51 warnings
+tests/unit/test_interactive_delivery.py: 9 warnings
+tests/unit/test_update_command.py: 9 warnings
+tests/unit/test_worker_lifecycle.py: 3 warnings
+  C:\Users\wsgon\OneDrive\Desktop\BotGITGUD\.venv\Lib\site-packages\discord\client.py:2101: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if not asyncio.iscoroutinefunction(coro):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------------------------- snapshot report summary ---------------------------
+2 snapshots passed.
+2569 passed, 1 deselected, 337 warnings in 595.95s (0:09:55)

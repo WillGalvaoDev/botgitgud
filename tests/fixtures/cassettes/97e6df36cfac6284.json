@@ -1,0 +1,290 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "463",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Voldemort",
+      "serverRegion": "EU",
+      "serverSlug": "vashj"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 68.91574998907315,
+            "bestAmount": 170527.80446391,
+            "difficulty": 5,
+            "fastestKill": 179650,
+            "medianPerformance": 65.30057876574435,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 170527.80446391,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 268554,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 99.75760467702341,
+                "historicalTotalParses": 7369,
+                "lockedIn": true,
+                "rankPercent": 99.75760467702341,
+                "rankTotalParses": 7369,
+                "report": {
+                  "code": "bxN2ym6nwY1h8Xkc",
+                  "fightID": 51,
+                  "startTime": 1783001166228
+                },
+                "spec": "Demonology",
+                "startTime": 1783014220154,
+                "todayPercent": 98.81142882728159,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 153864.11451904,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 250299,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 93.4723286579572,
+                "historicalTotalParses": 10492,
+                "lockedIn": true,
+                "rankPercent": 93.4723286579572,
+                "rankTotalParses": 10492,
+                "report": {
+                  "code": "tvB2c1qJ3Xm4LDGj",
+                  "fightID": 18,
+                  "startTime": 1785099485691
+                },
+                "spec": "Demonology",
+                "startTime": 1785102963260,
+                "todayPercent": 92.35086193707696,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 151795.05705539,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 179650,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 91.65499387732052,
+                "historicalTotalParses": 10704,
+                "lockedIn": true,
+                "rankPercent": 91.65499387732052,
+                "rankTotalParses": 10704,
+                "report": {
+                  "code": "9kVCvwyG6gafnTd7",
+                  "fightID": 42,
+                  "startTime": 1785320815018
+                },
+                "spec": "Demonology",
+                "startTime": 1785334621228,
+                "todayPercent": 90.91766476725067,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 127723.91506826,
+                "bestSpec": "Demonology",
+                "bracketData": 290,
+                "class": 10,
+                "duration": 264118,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "historicalPercent": 85.36053774746487,
+                "historicalTotalParses": 23170,
+                "lockedIn": true,
+                "rankPercent": 85.36053774746487,
+                "rankTotalParses": 23170,
+                "report": {
+                  "code": "yRdkxT2aFHB1LKXb",
+                  "fightID": 22,
+                  "startTime": 1779900840484
+                },
+                "spec": "Demonology",
+                "startTime": 1779903864745,
+                "todayPercent": 80.20578618814555,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 123230.08255258,
+                "bestSpec": "Demonology",
+                "bracketData": 289,
+                "class": 10,
+                "duration": 244208,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 54.94650179615256,
+                "historicalTotalParses": 8659,
+                "lockedIn": true,
+                "rankPercent": 54.94650179615256,
+                "rankTotalParses": 8659,
+                "report": {
+                  "code": "kLzGrp1b7dqRTANx",
+                  "fightID": 14,
+                  "startTime": 1783607583512
+                },
+                "spec": "Demonology",
+                "startTime": 1783610590371,
+                "todayPercent": 50.579890743333266,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 110697.80761826,
+                "bestSpec": "Demonology",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 313221,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "historicalPercent": 65.30057876574435,
+                "historicalTotalParses": 9218,
+                "lockedIn": true,
+                "rankPercent": 65.30057876574435,
+                "rankTotalParses": 9218,
+                "report": {
+                  "code": "aT42hgmLHDzp1Wqx",
+                  "fightID": 1,
+                  "startTime": 1777481898574
+                },
+                "spec": "Demonology",
+                "startTime": 1777485425497,
+                "todayPercent": 45.21469169222178,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 108769.36207569,
+                "bestSpec": "Demonology",
+                "bracketData": 277,
+                "class": 10,
+                "duration": 369072,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "historicalPercent": 61.24102664999954,
+                "historicalTotalParses": 2464,
+                "lockedIn": true,
+                "rankPercent": 61.24102664999954,
+                "rankTotalParses": 2464,
+                "report": {
+                  "code": "MpZB37kTyt6CgLXY",
+                  "fightID": 12,
+                  "startTime": 1776014630761
+                },
+                "spec": "Demonology",
+                "startTime": 1776017448671,
+                "todayPercent": 57.728030393878235,
+                "todayTotalParses": 6555
+              },
+              {
+                "amount": 101979.05397207,
+                "bestSpec": "Destruction",
+                "bracketData": 278,
+                "class": 10,
+                "duration": 354387,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "historicalPercent": 47.44807931996389,
+                "historicalTotalParses": 3139,
+                "lockedIn": true,
+                "rankPercent": 47.44807931996389,
+                "rankTotalParses": 3139,
+                "report": {
+                  "code": "GyftZNzrCq63jaFm",
+                  "fightID": 23,
+                  "startTime": 1776272859545
+                },
+                "spec": "Destruction",
+                "startTime": 1776278461854,
+                "todayPercent": 43.206595926724674,
+                "todayTotalParses": 4019
+              },
+              {
+                "amount": 93028.04159125,
+                "bestSpec": "Destruction",
+                "bracketData": 275,
+                "class": 10,
+                "duration": 335359,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "historicalPercent": 21.060098410031983,
+                "historicalTotalParses": 1536,
+                "lockedIn": true,
+                "rankPercent": 21.060098410031983,
+                "rankTotalParses": 1536,
+                "report": {
+                  "code": "JfAQhwg1Dtbarz7m",
+                  "fightID": 34,
+                  "startTime": 1775408916675
+                },
+                "spec": "Destruction",
+                "startTime": 1775417152926,
+                "todayPercent": 16.762402640482833,
+                "todayTotalParses": 4019
+              }
+            ],
+            "totalKills": 9,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

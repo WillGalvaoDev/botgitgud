@@ -1,0 +1,458 @@
+{
+ "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+ "variables": {
+  "code": "PhNt3RFYW2dcf8vD",
+  "fightIDs": [
+   38
+  ]
+ },
+ "response_json": {
+  "data": {
+   "reportData": {
+    "report": {
+     "rankings": {
+      "data": [
+       {
+        "fightID": 38,
+        "partition": 4,
+        "zone": 46,
+        "encounter": {
+         "id": 3181,
+         "name": "Crown of the Cosmos"
+        },
+        "difficulty": 5,
+        "size": 20,
+        "kill": 1,
+        "duration": 366097,
+        "bracketData": 293.05,
+        "deaths": 8,
+        "damageTakenExcludingTanks": 325394137,
+        "roles": {
+         "tanks": {
+          "name": "Tanks",
+          "characters": [
+           {
+            "id": 53803471,
+            "name": "Tonkotsu",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "DeathKnight",
+            "spec": "Blood",
+            "amount": 51178.260216346,
+            "bracketData": 294,
+            "bracket": 21,
+            "rank": "~9",
+            "best": "~9",
+            "totalParses": 11,
+            "bracketPercent": 100,
+            "rankPercent": 25
+           },
+           {
+            "id": 234229,
+            "name": "Pumps",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Druid",
+            "spec": "Guardian",
+            "amount": 82412.381685697,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~2",
+            "best": "~2",
+            "totalParses": 2,
+            "bracketPercent": 0,
+            "rankPercent": 33
+           }
+          ]
+         },
+         "healers": {
+          "name": "Healers",
+          "characters": [
+           {
+            "id": 16598156,
+            "name": "Raellyn",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Druid",
+            "spec": "Restoration",
+            "amount": 2347.3980243389,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~3",
+            "best": "~3",
+            "totalParses": 5,
+            "bracketPercent": 40,
+            "rankPercent": 50
+           },
+           {
+            "id": 38850230,
+            "name": "Zaljan",
+            "server": {
+             "id": 183,
+             "name": "Saurfang",
+             "region": "US"
+            },
+            "class": "Shaman",
+            "spec": "Restoration",
+            "amount": 666.07666015625,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~2",
+            "best": "~2",
+            "totalParses": 6,
+            "bracketPercent": 32,
+            "rankPercent": 71
+           },
+           {
+            "id": 106657661,
+            "name": "Chimomocha",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Evoker",
+            "spec": "Preservation",
+            "amount": 7589.8813100962,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~3",
+            "best": "~3",
+            "totalParses": 9,
+            "bracketPercent": 100,
+            "rankPercent": 70
+           }
+          ]
+         },
+         "dps": {
+          "name": "Damage Dealers",
+          "characters": [
+           {
+            "id": 26771498,
+            "name": "Drym",
+            "server": {
+             "id": 30,
+             "name": "Barthilas",
+             "region": "US"
+            },
+            "class": "DeathKnight",
+            "spec": "Unholy",
+            "amount": 126950.25165264,
+            "bracketData": 292,
+            "bracket": 20,
+            "rank": "~4",
+            "best": "~4",
+            "totalParses": 12,
+            "bracketPercent": 62,
+            "rankPercent": 69
+           },
+           {
+            "id": 72245629,
+            "name": "Bannakis",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Hunter",
+            "spec": "BeastMastery",
+            "amount": 157856.92420373,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~1",
+            "best": "~1",
+            "totalParses": 7,
+            "bracketPercent": 75,
+            "rankPercent": 100
+           },
+           {
+            "id": 106427170,
+            "name": "Sawickyx",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Hunter",
+            "spec": "Survival",
+            "amount": 128751.0141226,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~1",
+            "best": "~1",
+            "totalParses": 3,
+            "bracketPercent": 0,
+            "rankPercent": 100
+           },
+           {
+            "id": 56546995,
+            "name": "Pnpm",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Mage",
+            "spec": "Arcane",
+            "amount": 149349.24316406,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~1",
+            "best": "~1",
+            "totalParses": 10,
+            "bracketPercent": 100,
+            "rankPercent": 100
+           },
+           {
+            "id": 72914902,
+            "name": "Stepspin",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Monk",
+            "spec": "Windwalker",
+            "amount": 119175.3117488,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~4",
+            "best": "~4",
+            "totalParses": 7,
+            "bracketPercent": 41,
+            "rankPercent": 50
+           },
+           {
+            "id": 71467785,
+            "name": "Vraeladintwo",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Paladin",
+            "spec": "Retribution",
+            "amount": 125299.64036208,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~2",
+            "best": "~2",
+            "totalParses": 8,
+            "bracketPercent": 54,
+            "rankPercent": 77
+           },
+           {
+            "id": 979600,
+            "name": "Malpractis",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Priest",
+            "spec": "Shadow",
+            "amount": 164235.30930739,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~2",
+            "best": "~2",
+            "totalParses": 9,
+            "bracketPercent": 75,
+            "rankPercent": 80
+           },
+           {
+            "id": 2139131,
+            "name": "Brilliant",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Rogue",
+            "spec": "Subtlety",
+            "amount": 102730.95233624,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~5",
+            "best": "~5",
+            "totalParses": 6,
+            "bracketPercent": 0,
+            "rankPercent": 28
+           },
+           {
+            "id": 86699984,
+            "name": "Brylen",
+            "server": {
+             "id": 10,
+             "name": "Aman'Thul",
+             "region": "US"
+            },
+            "class": "Shaman",
+            "spec": "Elemental",
+            "amount": 144347.89569561,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~4",
+            "best": "~4",
+            "totalParses": 11,
+            "bracketPercent": 0,
+            "rankPercent": 66
+           },
+           {
+            "id": 94637542,
+            "name": "Zz",
+            "server": {
+             "id": 10,
+             "name": "Aman'Thul",
+             "region": "US"
+            },
+            "class": "Shaman",
+            "spec": "Enhancement",
+            "amount": 112008.34303636,
+            "bracketData": 292,
+            "bracket": 20,
+            "rank": "~1",
+            "best": "~1",
+            "totalParses": 4,
+            "bracketPercent": 100,
+            "rankPercent": 100
+           },
+           {
+            "id": 57929012,
+            "name": "Braska",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Warlock",
+            "spec": "Destruction",
+            "amount": 132153.25927734,
+            "bracketData": 293,
+            "bracket": 21,
+            "rank": "~7",
+            "best": "~7",
+            "totalParses": 14,
+            "bracketPercent": 39,
+            "rankPercent": 53
+           },
+           {
+            "id": 87158797,
+            "name": "Rohanlock",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Warlock",
+            "spec": "Destruction",
+            "amount": 141098.03654597,
+            "bracketData": 294,
+            "bracket": 21,
+            "rank": "~5",
+            "best": "~5",
+            "totalParses": 14,
+            "bracketPercent": 66,
+            "rankPercent": 66
+           },
+           {
+            "id": 111413026,
+            "name": "Alleyw",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Warrior",
+            "spec": "Arms",
+            "amount": 155967.98940805,
+            "bracketData": 294,
+            "bracket": 21,
+            "rank": "~2",
+            "best": "~2",
+            "totalParses": 10,
+            "bracketPercent": 100,
+            "rankPercent": 81
+           },
+           {
+            "id": 81916444,
+            "name": "Llooll",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "DemonHunter",
+            "spec": "Devourer",
+            "amount": 122856.75987831,
+            "bracketData": 294,
+            "bracket": 21,
+            "rank": "~5",
+            "best": "~5",
+            "totalParses": 14,
+            "bracketPercent": 67,
+            "rankPercent": 66
+           },
+           {
+            "id": 92632207,
+            "name": "Viledump",
+            "server": {
+             "id": 99,
+             "name": "Frostmourne",
+             "region": "US"
+            },
+            "class": "Evoker",
+            "spec": "Augmentation",
+            "amount": 130495.68528395,
+            "bracketData": 292,
+            "bracket": 20,
+            "rank": "~3",
+            "best": "~3",
+            "totalParses": 6,
+            "bracketPercent": 40,
+            "rankPercent": 57
+           }
+          ]
+         }
+        },
+        "bracket": 21,
+        "guild": {
+         "id": 781308,
+         "name": "Post Prog Clarity",
+         "faction": 0,
+         "server": {
+          "id": 99,
+          "name": "Frostmourne",
+          "region": "US"
+         }
+        },
+        "reportsBlacklistForCharacters": [],
+        "speed": {
+         "rank": "~2",
+         "best": "~2",
+         "totalParses": 11,
+         "rankPercent": 83
+        },
+        "execution": {
+         "rank": "~9",
+         "best": "~9",
+         "totalParses": 11,
+         "rankPercent": 25
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,176 @@
+{
+  "R1_invalid_cast_coaching": [
+    {
+      "case": "negative",
+      "cast_metric_status": "INVALID",
+      "review_eligible": true,
+      "candidate_count": 1,
+      "discord": "A análise encontrou ajustes específicos sustentados pelos dados.\n\n1. O DPS observado de Example ficou abaixo da referência; a causa da diferença não foi identificada. É um desvio forte de resultado. Revise a contribuição observada desta habilidade; a causa da diferença não foi identificada."
+    },
+    {
+      "case": "outside_fight",
+      "cast_metric_status": "INVALID",
+      "review_eligible": true,
+      "candidate_count": 1,
+      "discord": "A análise encontrou ajustes específicos sustentados pelos dados.\n\n1. O DPS observado de Example ficou abaixo da referência; a causa da diferença não foi identificada. É um desvio forte de resultado. Revise a contribuição observada desta habilidade; a causa da diferença não foi identificada."
+    },
+    {
+      "case": "nan",
+      "cast_metric_status": "INVALID",
+      "review_eligible": true,
+      "candidate_count": 1,
+      "discord": "A análise encontrou ajustes específicos sustentados pelos dados.\n\n1. O DPS observado de Example ficou abaixo da referência; a causa da diferença não foi identificada. É um desvio forte de resultado. Revise a contribuição observada desta habilidade; a causa da diferença não foi identificada."
+    }
+  ],
+  "R2_false_complete_page": [
+    {
+      "input": {
+        "data": []
+      },
+      "damage_status": "COMPLETE",
+      "casts_status": "COMPLETE",
+      "timeline": {}
+    },
+    {
+      "input": {
+        "data": [
+          {
+            "type": "cast",
+            "sourceID": 1,
+            "abilityGameID": 1,
+            "timestamp": 301000
+          }
+        ],
+        "nextPageTimestamp": null
+      },
+      "damage_status": "COMPLETE",
+      "casts_status": "COMPLETE",
+      "timeline": {
+        "1": [
+          301.0
+        ]
+      }
+    }
+  ],
+  "R3_provenance": {
+    "after_parquet_roundtrip": "AVAILABLE",
+    "requested_interval": [
+      300000,
+      0
+    ],
+    "declared_reconciliation": "unreconciled",
+    "declared_residual": 999
+  },
+  "R4_authority_tolerance": {
+    "gross": 1000000000000.0,
+    "authority": 999999999999.0,
+    "status": "AVAILABLE",
+    "residual_damage": 1.0
+  },
+  "R5_missing_uptime": [
+    {
+      "input": {
+        "guid": 1,
+        "name": "Example"
+      },
+      "status": "AVAILABLE",
+      "value": 0.0,
+      "grade": "red",
+      "N": 15
+    },
+    {
+      "input": {
+        "guid": 1,
+        "name": "Example",
+        "totalUptime": null
+      },
+      "status": "AVAILABLE",
+      "value": 0.0,
+      "grade": "red",
+      "N": 15
+    },
+    {
+      "input": {
+        "guid": 1,
+        "name": "Example",
+        "totalUptime": 0
+      },
+      "status": "AVAILABLE",
+      "value": 0.0,
+      "grade": "red",
+      "N": 15
+    }
+  ],
+  "R6_core_availability": [
+    {
+      "case": "legacy",
+      "available_features": [
+        "cast_count",
+        "cast_timeline",
+        "casts_per_minute",
+        "damage_share"
+      ],
+      "cast_count": 1,
+      "casts_per_minute": 0.2,
+      "uptime": null
+    },
+    {
+      "case": "invalid",
+      "available_features": [
+        "cast_count",
+        "cast_timeline",
+        "casts_per_minute",
+        "damage_share",
+        "uptime"
+      ],
+      "cast_count": 1,
+      "casts_per_minute": 0.2,
+      "uptime": 2
+    }
+  ],
+  "R7_header": {
+    "quantitative_N": 15,
+    "header_N": 0,
+    "player_WCL_dps": 999,
+    "player_measured_dps": 0.3333333333333333,
+    "rendered": "==========================================\nGITGUD MAJOR CD ANALYSIS\n==========================================\n**Player:** P1\n**Boss:** Boss\n**Spec:** Demonology Warlock\n**DPS:** 999 (percentil: 50)\n**Referência:** 0 logs | DPS mediano: 1 | Duração: 5m00s - 5m00s\n**Coorte:** 0 logs | buffs externos ✅ | duração ±7% ✅\n⚠️ peças de tier ±1 não pareado (amostra insuficiente)\n⚠️ ilvl ±5 não pareado (amostra insuficiente)\n⚠️ Amostra pequena (0 logs). Trate os desvios como indicativos, não conclusivos.\n=========================================="
+  },
+  "R8_zero_damage_events": {
+    "D": 0,
+    "hits": 5,
+    "T": 300,
+    "expected_events_per_second": 0.016666666666666666,
+    "expected_damage_per_event": 0,
+    "actual_event_status": "NOT_APPLICABLE",
+    "actual_per_event_status": "NOT_APPLICABLE"
+  },
+  "R9_finite_overflow": {
+    "D": 100,
+    "T": 1e-308,
+    "status": "AVAILABLE",
+    "net_dps": "inf"
+  },
+  "R10_A07_non_vacuity": {
+    "mutation": "valid split terms multiplied by 15/8, equivalent to renormalizing the valid subset",
+    "existing_acceptance_test": "PASS despite wrong weights"
+  },
+  "R12_uptime_bypasses_entity_gate": {
+    "origin": "PET",
+    "own_casts": 0,
+    "damage_review_eligible": false,
+    "material_candidates": [
+      "UPTIME"
+    ],
+    "discord": "A análise encontrou ajustes específicos sustentados pelos dados.\n\n1. O uptime de Example foi o mais baixo dos 15 comparáveis; a causa não foi medida. É um desvio forte de resultado. Busque aumentar o uptime; estes dados não mostram a causa do desvio."
+  },
+  "R11_active_legacy_fields": {
+    "n_r": 1.0,
+    "p_r": 200.0,
+    "d_r": 200.0,
+    "delta_d": -100.0,
+    "volume": 0.0,
+    "efficiency": -100.00000000000001,
+    "interaction": 0.0,
+    "cohort_share": null
+  }
+}

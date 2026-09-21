@@ -1,0 +1,102 @@
+2026-09-13 20:41:08 [info     ] spell_catalog.loaded           n_entries=6025 path=C:\Users\wsgon\AppData\Local\Temp\tmp74f18zyd\corpus-spells.json
+{
+  "created_utc": "2026-09-13T23:43:09.633504+00:00",
+  "python": "3.14.6",
+  "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+  "source_file_count": 978,
+  "raw_before": "983b0a3ed9294925e70c60da62c871da87d629261d3d9c4568e67c25cd426926",
+  "raw_after": "983b0a3ed9294925e70c60da62c871da87d629261d3d9c4568e67c25cd426926",
+  "identity_catalog_sha256": "9c9fb070beb3b4919f624615e4ec6ef37ac25742411190f63fe50ae69a294d5f",
+  "historical_hash_status": "UNRESOLVED; no historical byte-preservation claim",
+  "files": 1361,
+  "pulls": 672,
+  "players": 869,
+  "census": [
+    {
+      "scope": "legacy_unscoped",
+      "status": "PARTIAL",
+      "reason": "LEGACY_UNSCOPED_SUBTOTAL",
+      "n": 1274
+    },
+    {
+      "scope": "unreconciled",
+      "status": "UNKNOWN",
+      "reason": "UNRECONCILED_DAMAGE_SCOPE",
+      "n": 37
+    },
+    {
+      "scope": "wcl_target_scope_v1",
+      "status": "AVAILABLE",
+      "reason": "LEGACY_RECONCILED_TOTAL",
+      "n": 50
+    }
+  ],
+  "public_comparisons": 47,
+  "metric_n_population": "Every metric ID in the union of each accounting-eligible player and its matched pool; N excludes unavailable observations independently. Not independent player counts.",
+  "metric_n": {
+    "gross_ability_dps": {
+      "n": 15968,
+      "min": 0,
+      "median": 0,
+      "p95": 17,
+      "max": 46
+    },
+    "player_casts_per_minute": {
+      "n": 15968,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "damage_events_per_second": {
+      "n": 15968,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "damage_per_event": {
+      "n": 15968,
+      "min": 0,
+      "median": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "aura_uptime_fraction": {
+      "n": 15968,
+      "min": 0,
+      "median": 3,
+      "p95": 47,
+      "max": 82
+    },
+    "gross_damage_share_pct": {
+      "n": 15968,
+      "min": 0,
+      "median": 0,
+      "p95": 17,
+      "max": 46
+    }
+  },
+  "real_residual_dps": {
+    "n": 50,
+    "min": 1.4095391520640987e-12,
+    "median": 2.481792549247075e-11,
+    "p95": 4.338751580235112e-11,
+    "max": 5.0652870786649373e-11
+  },
+  "synthetic_residual_dps": {
+    "n": 500,
+    "min": 0.0,
+    "median": 2.9103830456733704e-11,
+    "p95": 2.3283064365386963e-10,
+    "max": 7.450580596923828e-09
+  },
+  "synthetic_seed": 20260912,
+  "independent_split_oracle": {
+    "cases": 500,
+    "split_pairs": 4980,
+    "omitted_rows": 502,
+    "arithmetic": "fractions.Fraction",
+    "tolerance": "max(1e-9, 1e-12 * sum(abs(compared_terms)))"
+  }
+}

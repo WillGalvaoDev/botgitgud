@@ -1,0 +1,23 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "29",
+    "content-type": "application/x-www-form-urlencoded",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "grant_type": "client_credentials"
+  },
+  "response_json": {
+    "access_token": "<redacted-fixture-token>",
+    "expires_in": 31104000,
+    "token_type": "Bearer"
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/oauth/token"
+}

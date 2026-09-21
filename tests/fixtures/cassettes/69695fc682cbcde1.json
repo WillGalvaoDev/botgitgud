@@ -1,0 +1,259 @@
+{
+  "method": "POST",
+  "request_headers": {},
+  "request_payload": {
+    "query": "\nquery GetRankingsCDs(\n  $encounterID: Int!, $className: String!, $specName: String!, $page: Int!, $partition: Int!\n) {\n  worldData {\n    encounter(id: $encounterID) {\n      characterRankings(\n        className: $className, specName: $specName, metric: dps, page: $page, partition: $partition\n      )\n    }\n  }\n}\n",
+    "variables": {
+      "className": "Warlock",
+      "encounterID": 3179,
+      "page": 2,
+      "partition": 3,
+      "specName": "Demonology"
+    }
+  },
+  "response_json": {
+    "data": {
+      "worldData": {
+        "encounter": {
+          "characterRankings": {
+            "hasMorePages": false,
+            "rankings": [
+              {
+                "amount": 172087.71593662,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 234849,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Mauve",
+                "report": {
+                  "code": "MY93mpAvy76RgcZG",
+                  "fightID": 16,
+                  "startTime": 1785150068026
+                },
+                "server": {
+                  "id": 720,
+                  "name": "死亡之翼",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785151409755
+              },
+              {
+                "amount": 171719.13051671,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 360858,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "泪橋",
+                "report": {
+                  "code": "C3p1FyPBrwNv8AaY",
+                  "fightID": 21,
+                  "startTime": 1785584508638
+                },
+                "server": {
+                  "id": 720,
+                  "name": "死亡之翼",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785587183031
+              },
+              {
+                "amount": 171564.77177929,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 327249,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 576250,
+                  "name": "Fun with Friends"
+                },
+                "hardModeLevel": 0,
+                "name": "Supra",
+                "report": {
+                  "code": "aLTbZD81ypBntHdR",
+                  "fightID": 20,
+                  "startTime": 1782785196403
+                },
+                "server": {
+                  "id": 245,
+                  "name": "Zul'jin",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1782789834563
+              },
+              {
+                "amount": 171183.58544282,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 233232,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 750816,
+                  "name": "Opposite"
+                },
+                "hardModeLevel": 0,
+                "name": "Killawarlock",
+                "report": {
+                  "code": "xfLKGrpkhMZXWyn4",
+                  "fightID": 13,
+                  "startTime": 1784661473992
+                },
+                "server": {
+                  "id": 329,
+                  "name": "Silvermoon",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784665891929
+              },
+              {
+                "amount": 171038.26237054,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 225940,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 575612,
+                  "name": "INSERTCOIN"
+                },
+                "hardModeLevel": 0,
+                "name": "Oul",
+                "report": {
+                  "code": "QnmY3KpWwBfFPVT2",
+                  "fightID": 23,
+                  "startTime": 1783180749943
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783185680755
+              },
+              {
+                "amount": 170527.80446391,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 268554,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 150260,
+                  "name": "Epilogue"
+                },
+                "hardModeLevel": 0,
+                "name": "Voldemort",
+                "report": {
+                  "code": "bxN2ym6nwY1h8Xkc",
+                  "fightID": 51,
+                  "startTime": 1783001166228
+                },
+                "server": {
+                  "id": 351,
+                  "name": "Vashj",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783014220154
+              },
+              {
+                "amount": 170211.03292992,
+                "bracketData": 288,
+                "class": "Warlock",
+                "duration": 302005,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Xrone",
+                "report": {
+                  "code": "vzy4HQacFDhBjNKR",
+                  "fightID": 136,
+                  "startTime": 1782277790638
+                },
+                "server": {
+                  "id": 584,
+                  "name": "凤凰之神",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782308293307
+              },
+              {
+                "amount": 170082.3184337,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 230811,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "天选中的唯一",
+                "report": {
+                  "code": "adcngrhYpTKyAXWk",
+                  "fightID": 20,
+                  "startTime": 1784781939238
+                },
+                "server": {
+                  "id": 655,
+                  "name": "安苏",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784785266909
+              },
+              {
+                "amount": 169956.03154791,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 294029,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Crystelia",
+                "report": {
+                  "code": "v37mXMyk4tgz1KWH",
+                  "fightID": 2,
+                  "startTime": 1786449454282
+                },
+                "server": {
+                  "id": 747,
+                  "name": "熊猫酒仙",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1786449532494
+              },
+              {
+                "amount": 169935.79881919,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 225946,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "东风拾壹",
+                "report": {
+                  "code": "zYrX3JPvC16WqLfy",
+                  "fightID": 19,
+                  "startTime": 1784523723209
+                },
+                "server": {
+                  "id": 790,
+                  "name": "罗宁",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784526226750
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

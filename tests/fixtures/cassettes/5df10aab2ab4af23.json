@@ -1,0 +1,2468 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "Authorization": "<redacted>",
+    "Content-Type": "application/json"
+  },
+  "request_payload": {
+    "query": "\n    query GetRankingsCDs($encounterID: Int!, $className: String!, $specName: String!, $page: Int!) {\n      worldData {\n        encounter(id: $encounterID) {\n          characterRankings(className: $className, specName: $specName, metric: dps, page: $page)\n        }\n      }\n    }\n    ",
+    "variables": {
+      "className": "Warlock",
+      "encounterID": 3179,
+      "page": 3,
+      "specName": "Demonology"
+    }
+  },
+  "response_json": {
+    "data": {
+      "worldData": {
+        "encounter": {
+          "characterRankings": {
+            "count": 100,
+            "hasMorePages": true,
+            "page": 3,
+            "rankings": [
+              {
+                "amount": 166902.23196645,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 156902,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "选手零零肆",
+                "report": {
+                  "code": "TLKqx2VCQtbRJZc3",
+                  "fightID": 20,
+                  "startTime": 1784199593289
+                },
+                "server": {
+                  "id": 770,
+                  "name": "白银之手",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784201738767
+              },
+              {
+                "amount": 166896.67037922,
+                "bracketData": 289,
+                "class": "Warlock",
+                "duration": 351061,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Mingone",
+                "report": {
+                  "code": "1NRnJyvFbgGQ9Vm7",
+                  "fightID": 19,
+                  "startTime": 1782191167264
+                },
+                "server": {
+                  "id": 584,
+                  "name": "凤凰之神",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782194953298
+              },
+              {
+                "amount": 166870.71537456,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 183680,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Taxonic",
+                "report": {
+                  "code": "qH1JR2vngjXtmb9w",
+                  "fightID": 67,
+                  "startTime": 1784610476446
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1784647375624
+              },
+              {
+                "amount": 166846.25246548,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 162240,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 732711,
+                  "name": "Noctis"
+                },
+                "hardModeLevel": 0,
+                "name": "Interlock",
+                "report": {
+                  "code": "WKaf6kbqgxrwMjnc",
+                  "fightID": 35,
+                  "startTime": 1784135914525
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784141635754
+              },
+              {
+                "amount": 166839.85900646,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 328242,
+                "faction": -1,
+                "hardModeLevel": 0,
+                "name": "洛阿神术",
+                "report": {
+                  "code": "g7vZjfwGn3PbcrCd",
+                  "fightID": 1,
+                  "startTime": 1784469476002
+                },
+                "server": {
+                  "id": 583,
+                  "name": "冰风岗",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784469897878
+              },
+              {
+                "amount": 166817.57306675,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 178159,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 714741,
+                  "name": "OG Konflikt"
+                },
+                "hardModeLevel": 0,
+                "name": "Lockrr",
+                "report": {
+                  "code": "qYvVgb7BADh94and",
+                  "fightID": 18,
+                  "startTime": 1786036969093
+                },
+                "server": {
+                  "id": 283,
+                  "name": "Draenor",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1786039952172
+              },
+              {
+                "amount": 166815.08271861,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 195482,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 201,
+                  "name": "Pure"
+                },
+                "hardModeLevel": 0,
+                "name": "Shukey",
+                "report": {
+                  "code": "fBC1jAFDYcnVmGQW",
+                  "fightID": 39,
+                  "startTime": 1785433354851
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785441966227
+              },
+              {
+                "amount": 166792.5860114,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 203723,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 412773,
+                  "name": "경채"
+                },
+                "hardModeLevel": 0,
+                "name": "Hornyjeff",
+                "report": {
+                  "code": "zkd7b6BfYGRtnpm2",
+                  "fightID": 23,
+                  "startTime": 1781786171023
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1781788522423
+              },
+              {
+                "amount": 166725.88870643,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 172948,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "자두금지",
+                "report": {
+                  "code": "jhmT6cpXZxB1RAyG",
+                  "fightID": 18,
+                  "startTime": 1783943649805
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1783946513884
+              },
+              {
+                "amount": 166706.06340601,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 163423,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 781308,
+                  "name": "Post Prog Clarity"
+                },
+                "hardModeLevel": 0,
+                "name": "Rohanlock",
+                "report": {
+                  "code": "fGgzhL36xwCykcWZ",
+                  "fightID": 34,
+                  "startTime": 1783650453602
+                },
+                "server": {
+                  "id": 99,
+                  "name": "Frostmourne",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1783680359839
+              },
+              {
+                "amount": 166589.43316207,
+                "bracketData": 288,
+                "class": "Warlock",
+                "duration": 324449,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Iliillilil",
+                "report": {
+                  "code": "PbMp9FyRxqz2tY4h",
+                  "fightID": 67,
+                  "startTime": 1783837988325
+                },
+                "server": {
+                  "id": 720,
+                  "name": "死亡之翼",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783862374281
+              },
+              {
+                "amount": 166587.21298303,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 164276,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 3145,
+                  "name": "Infinite"
+                },
+                "hardModeLevel": 0,
+                "name": "Demon",
+                "report": {
+                  "code": "bcjgztFBLQ87MRNK",
+                  "fightID": 2,
+                  "startTime": 1784487517175
+                },
+                "server": {
+                  "id": 350,
+                  "name": "Twisting Nether",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784487667477
+              },
+              {
+                "amount": 166539.45342571,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 249408,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "hardModeLevel": 0,
+                "name": "伊莉熙娅",
+                "report": {
+                  "code": "8rjvW2LkqmGf41Py",
+                  "fightID": 57,
+                  "startTime": 1782968424758
+                },
+                "server": {
+                  "id": 703,
+                  "name": "暗影议会",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782977099059
+              },
+              {
+                "amount": 166533.54082657,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 227156,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "어둠의라썬",
+                "report": {
+                  "code": "TcAQbW6zJM2HwnGK",
+                  "fightID": 9,
+                  "startTime": 1784545420372
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1784548997267
+              },
+              {
+                "amount": 166463.84414123,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 309203,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "粥粥丶术",
+                "report": {
+                  "code": "4dyf86Db7L31YaBQ",
+                  "fightID": 8,
+                  "startTime": 1782633974377
+                },
+                "server": {
+                  "id": 624,
+                  "name": "塞拉摩",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782634566206
+              },
+              {
+                "amount": 166380.87451077,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 166333,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "嗨有灰机",
+                "report": {
+                  "code": "a3jxD1qCN8mhMKZp",
+                  "fightID": 1,
+                  "startTime": 1783855358977
+                },
+                "server": {
+                  "id": 745,
+                  "name": "烈焰峰",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783859844681
+              },
+              {
+                "amount": 166251.92794047,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 192563,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 778283,
+                  "name": "Crystal Method"
+                },
+                "hardModeLevel": 0,
+                "name": "Rangedpiss",
+                "report": {
+                  "code": "jtJWRMxNkgwXGVBP",
+                  "fightID": 33,
+                  "startTime": 1784453559054
+                },
+                "server": {
+                  "id": 340,
+                  "name": "Tarren Mill",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784485807517
+              },
+              {
+                "amount": 166184.90091068,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 202595,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "막댕이",
+                "report": {
+                  "code": "d74CtnWPXcBZrT98",
+                  "fightID": 29,
+                  "startTime": 1785409098230
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785413243355
+              },
+              {
+                "amount": 166184.85647632,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 236616,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 37151,
+                  "name": "Lavega"
+                },
+                "hardModeLevel": 0,
+                "name": "딜컷할게요",
+                "report": {
+                  "code": "R6WfrXga8CJpLQxT",
+                  "fightID": 18,
+                  "startTime": 1785376055077
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785378192929
+              },
+              {
+                "amount": 166154.7623224,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 171030,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 8048,
+                  "name": "Barbershop Quartet"
+                },
+                "hardModeLevel": 0,
+                "name": "Shponglemoar",
+                "report": {
+                  "code": "QmcPtvzbY7Aw8T3n",
+                  "fightID": 42,
+                  "startTime": 1785664646916
+                },
+                "server": {
+                  "id": 99,
+                  "name": "Frostmourne",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1785672623972
+              },
+              {
+                "amount": 166112.4518578,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 216546,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 734633,
+                  "name": "Rhapsody"
+                },
+                "hardModeLevel": 0,
+                "name": "Rénna",
+                "report": {
+                  "code": "Yg1qLjH7dh6kfGPv",
+                  "fightID": 12,
+                  "startTime": 1785778328501
+                },
+                "server": {
+                  "id": 350,
+                  "name": "Twisting Nether",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785779718504
+              },
+              {
+                "amount": 166106.16931127,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 200849,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 73857,
+                  "name": "Fortune"
+                },
+                "hardModeLevel": 0,
+                "name": "佐倉雙葉",
+                "report": {
+                  "code": "cDHBKGAkmw8Yh3Lj",
+                  "fightID": 31,
+                  "startTime": 1784808186114
+                },
+                "server": {
+                  "id": 552,
+                  "name": "眾星之子",
+                  "region": "TW"
+                },
+                "spec": "Demonology",
+                "startTime": 1784814889388
+              },
+              {
+                "amount": 166020.771698,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 176779,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 761766,
+                  "name": "Sword of Damocles"
+                },
+                "hardModeLevel": 0,
+                "name": "Leviticus",
+                "report": {
+                  "code": "GdkcDQxrm8WRFT14",
+                  "fightID": 30,
+                  "startTime": 1786013649087
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1786017085333
+              },
+              {
+                "amount": 165977.60845359,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 229015,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Bitlee",
+                "report": {
+                  "code": "6wPLRfhnYMNZFBJx",
+                  "fightID": 19,
+                  "startTime": 1783777682963
+                },
+                "server": {
+                  "id": 747,
+                  "name": "熊猫酒仙",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783779536727
+              },
+              {
+                "amount": 165949.88360372,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 166672,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 714214,
+                  "name": "Инвиктус"
+                },
+                "hardModeLevel": 0,
+                "name": "Надс",
+                "report": {
+                  "code": "jcbmtYJLzP2K89qM",
+                  "fightID": 32,
+                  "startTime": 1783529777448
+                },
+                "server": {
+                  "id": 495,
+                  "name": "Ревущий фьорд",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783534282615
+              },
+              {
+                "amount": 165943.1204727,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 203764,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "스위밍",
+                "report": {
+                  "code": "1mcj7yqzGtapFh3B",
+                  "fightID": 65,
+                  "startTime": 1784258583290
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1784270260496
+              },
+              {
+                "amount": 165937.56525096,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 227966,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 85198,
+                  "name": "와우와 관련된 사진내용제목이 있어야 합니다"
+                },
+                "hardModeLevel": 0,
+                "name": "Chaosarrow",
+                "report": {
+                  "code": "Ft2cvwTGPQHyRK8p",
+                  "fightID": 27,
+                  "startTime": 1785322524798
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785325764087
+              },
+              {
+                "amount": 165933.51019629,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 162461,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 13321,
+                  "name": "grr woof woof bark"
+                },
+                "hardModeLevel": 0,
+                "name": "Tacofajita",
+                "report": {
+                  "code": "wQrb7afRDFdvWzKT",
+                  "fightID": 20,
+                  "startTime": 1784175301980
+                },
+                "server": {
+                  "id": 133,
+                  "name": "Kil'jaeden",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784179111446
+              },
+              {
+                "amount": 165890.75207648,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 184928,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 707414,
+                  "name": "BROOMERS"
+                },
+                "hardModeLevel": 0,
+                "name": "Zorlocxd",
+                "report": {
+                  "code": "6vmCThdBHj7FgVcW",
+                  "fightID": 10,
+                  "startTime": 1786271894316
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1786296554599
+              },
+              {
+                "amount": 165814.13884434,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 162729,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 575362,
+                  "name": "Mental Apocalypse"
+                },
+                "hardModeLevel": 0,
+                "name": "Naaw",
+                "report": {
+                  "code": "FRKV16CPwxmGQYdH",
+                  "fightID": 26,
+                  "startTime": 1782924631974
+                },
+                "server": {
+                  "id": 320,
+                  "name": "Ragnaros",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1782927426802
+              },
+              {
+                "amount": 165747.76885875,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 280798,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "萌萌的小舒舒",
+                "report": {
+                  "code": "WphM3qJKH7kVTxzC",
+                  "fightID": 56,
+                  "startTime": 1782624952732
+                },
+                "server": {
+                  "id": 750,
+                  "name": "燃烧之刃",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782633844447
+              },
+              {
+                "amount": 165713.41650843,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 348101,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 759505,
+                  "name": "Lithe"
+                },
+                "hardModeLevel": 0,
+                "name": "Murloclock",
+                "report": {
+                  "code": "xjmL93yMqr8GKQHB",
+                  "fightID": 60,
+                  "startTime": 1783851228812
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783874266404
+              },
+              {
+                "amount": 165675.16266005,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 273423,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "無忌哥哥",
+                "report": {
+                  "code": "dcXzNHFLbaWKGwQ9",
+                  "fightID": 13,
+                  "startTime": 1781788562203
+                },
+                "server": {
+                  "id": 814,
+                  "name": "菲米丝",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1781790971872
+              },
+              {
+                "amount": 165666.25584073,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 147670,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 57881,
+                  "name": "Pathogen"
+                },
+                "hardModeLevel": 0,
+                "name": "Felfishcraig",
+                "report": {
+                  "code": "K2mrf1T3ACXkndYB",
+                  "fightID": 33,
+                  "startTime": 1784162520441
+                },
+                "server": {
+                  "id": 150,
+                  "name": "Mal'Ganis",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784170498521
+              },
+              {
+                "amount": 165665.12232085,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 300235,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "hardModeLevel": 0,
+                "name": "香蕉快跑四",
+                "report": {
+                  "code": "x6CGKjmt82PBbDFw",
+                  "fightID": 66,
+                  "startTime": 1782709710473
+                },
+                "server": {
+                  "id": 676,
+                  "name": "影之哀伤",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782720482686
+              },
+              {
+                "amount": 165614.05785932,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 221883,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 757980,
+                  "name": "잘하다가 왜그래요"
+                },
+                "hardModeLevel": 0,
+                "name": "짐나르다베임",
+                "report": {
+                  "code": "XbA2mj9TnFyGrgp4",
+                  "fightID": 29,
+                  "startTime": 1782364335319
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1782367834254
+              },
+              {
+                "amount": 165534.7471203,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 235962,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "实变函术",
+                "report": {
+                  "code": "Wwf41vngKFqrRTLj",
+                  "fightID": 19,
+                  "startTime": 1783055091690
+                },
+                "server": {
+                  "id": 569,
+                  "name": "伊森利恩",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783058033951
+              },
+              {
+                "amount": 165519.03044872,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 159744,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Adrienbrody",
+                "report": {
+                  "code": "AQDhfa2wNmbzWtn1",
+                  "fightID": 29,
+                  "startTime": 1784271393928
+                },
+                "server": {
+                  "id": 790,
+                  "name": "罗宁",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784274512056
+              },
+              {
+                "amount": 165515.82848932,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 306220,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "糖果小棉袄",
+                "report": {
+                  "code": "PM2mkrKpghCT37YJ",
+                  "fightID": 10,
+                  "startTime": 1784638896860
+                },
+                "server": {
+                  "id": 584,
+                  "name": "凤凰之神",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784640815659
+              },
+              {
+                "amount": 165512.10106383,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 195520,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 556431,
+                  "name": "나른한오후"
+                },
+                "hardModeLevel": 0,
+                "name": "삼겹살에치즈",
+                "report": {
+                  "code": "3QBD62GbcAPWwt4p",
+                  "fightID": 29,
+                  "startTime": 1785840613908
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785850458691
+              },
+              {
+                "amount": 165443.76496906,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 164506,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "尸体",
+                "report": {
+                  "code": "ya6NACgnj9G3DHBP",
+                  "fightID": 28,
+                  "startTime": 1785651135507
+                },
+                "server": {
+                  "id": 575,
+                  "name": "克尔苏加德",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785655165530
+              },
+              {
+                "amount": 165423.02759101,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 173861,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 452113,
+                  "name": "Ethical"
+                },
+                "hardModeLevel": 0,
+                "name": "Shadowsbad",
+                "report": {
+                  "code": "h3X4pgWKcDv8Zr1P",
+                  "fightID": 29,
+                  "startTime": 1784712803597
+                },
+                "server": {
+                  "id": 99,
+                  "name": "Frostmourne",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784716696723
+              },
+              {
+                "amount": 165414.7530174,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 209286,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 785496,
+                  "name": "JGGBT"
+                },
+                "hardModeLevel": 0,
+                "name": "Ultrahobo",
+                "report": {
+                  "code": "6JBGpvHwfVZh8bFk",
+                  "fightID": 35,
+                  "startTime": 1782950331452
+                },
+                "server": {
+                  "id": 123,
+                  "name": "Illidan",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1782957729261
+              },
+              {
+                "amount": 165382.88981182,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 195030,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 669266,
+                  "name": "Banhammer"
+                },
+                "hardModeLevel": 0,
+                "name": "Neinvâlid",
+                "report": {
+                  "code": "nkF4cWw9bd8PXYDK",
+                  "fightID": 14,
+                  "startTime": 1783875490542
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783876543561
+              },
+              {
+                "amount": 165364.64127845,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 154061,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 730449,
+                  "name": "Just Woke Up"
+                },
+                "hardModeLevel": 0,
+                "name": "Kalamazi",
+                "report": {
+                  "code": "vztakVYKT7rA94ZH",
+                  "fightID": 33,
+                  "startTime": 1784764058004
+                },
+                "server": {
+                  "id": 121,
+                  "name": "Hyjal",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784770834883
+              },
+              {
+                "amount": 165330.67932053,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 206103,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Lcwarlockf",
+                "report": {
+                  "code": "4VPJmYRQBag1Zv9F",
+                  "fightID": 55,
+                  "startTime": 1784955702432
+                },
+                "server": {
+                  "id": 826,
+                  "name": "血色十字军",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784963656899
+              },
+              {
+                "amount": 165295.52776028,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 166695,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 699829,
+                  "name": "Kodeks"
+                },
+                "hardModeLevel": 0,
+                "name": "Bigkloq",
+                "report": {
+                  "code": "drcRjPCWaQXLxTgY",
+                  "fightID": 36,
+                  "startTime": 1783183757372
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783268994781
+              },
+              {
+                "amount": 165269.68901645,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 158883,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 10239,
+                  "name": "Vex Thal"
+                },
+                "hardModeLevel": 0,
+                "name": "Ersis",
+                "report": {
+                  "code": "mD1rKJc3LMjBdztC",
+                  "fightID": 29,
+                  "startTime": 1785780034233
+                },
+                "server": {
+                  "id": 340,
+                  "name": "Tarren Mill",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785783523547
+              },
+              {
+                "amount": 165234.48490507,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 289170,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Sevenqaq",
+                "report": {
+                  "code": "ptwyYBXvVNxbnjgD",
+                  "fightID": 4,
+                  "startTime": 1783162382170
+                },
+                "server": {
+                  "id": 871,
+                  "name": "阿纳克洛斯",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783165166138
+              },
+              {
+                "amount": 165156.52128048,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 227509,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 816483,
+                  "name": "Parseholes"
+                },
+                "hardModeLevel": 0,
+                "name": "Zioffywl",
+                "report": {
+                  "code": "2jLfr8XDGV9HKwNc",
+                  "fightID": 23,
+                  "startTime": 1785174626020
+                },
+                "server": {
+                  "id": 336,
+                  "name": "Stormscale",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785182930302
+              },
+              {
+                "amount": 165155.90361596,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 160317,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 482249,
+                  "name": "Unluck"
+                },
+                "hardModeLevel": 0,
+                "name": "Clippz",
+                "report": {
+                  "code": "zAyYCXMp2BQH1w8Z",
+                  "fightID": 42,
+                  "startTime": 1784134521406
+                },
+                "server": {
+                  "id": 407,
+                  "name": "Blackmoore",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784141761291
+              },
+              {
+                "amount": 165134.90388754,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 285759,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "hardModeLevel": 0,
+                "name": "香蕉快跑十",
+                "report": {
+                  "code": "fXCcQPjw83WRbB6H",
+                  "fightID": 21,
+                  "startTime": 1785069852921
+                },
+                "server": {
+                  "id": 676,
+                  "name": "影之哀伤",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785072501574
+              },
+              {
+                "amount": 165121.34320953,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 229778,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 750816,
+                  "name": "Opposite"
+                },
+                "hardModeLevel": 0,
+                "name": "Forteka",
+                "report": {
+                  "code": "Ch2nrbVcaB8NAmdK",
+                  "fightID": 24,
+                  "startTime": 1785070616152
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785075523293
+              },
+              {
+                "amount": 165096.42907751,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 169368,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Maguskk",
+                "report": {
+                  "code": "XWFxTBMtYpdfmcgR",
+                  "fightID": 26,
+                  "startTime": 1786169215882
+                },
+                "server": {
+                  "id": 569,
+                  "name": "伊森利恩",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1786173262285
+              },
+              {
+                "amount": 165072.15181196,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 247991,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "东风伍帝",
+                "report": {
+                  "code": "H7aFALx8mW4BtJQ1",
+                  "fightID": 10,
+                  "startTime": 1784377348264
+                },
+                "server": {
+                  "id": 790,
+                  "name": "罗宁",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784380039351
+              },
+              {
+                "amount": 165015.33558775,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 287436,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "格雷迈术",
+                "report": {
+                  "code": "dpAr1haP7FzgQkwN",
+                  "fightID": 16,
+                  "startTime": 1785674491539
+                },
+                "server": {
+                  "id": 583,
+                  "name": "冰风岗",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785676138910
+              },
+              {
+                "amount": 165004.56244773,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 243948,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "唐天凉",
+                "report": {
+                  "code": "6BPLtpqDHyCVQfxX",
+                  "fightID": 15,
+                  "startTime": 1784894272021
+                },
+                "server": {
+                  "id": 564,
+                  "name": "主宰之剑",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784897443152
+              },
+              {
+                "amount": 165004.26620226,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 182598,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 12670,
+                  "name": "The Next Step"
+                },
+                "hardModeLevel": 0,
+                "name": "Lausen",
+                "report": {
+                  "code": "qDGJkFVYpdrWj7nw",
+                  "fightID": 18,
+                  "startTime": 1785777865863
+                },
+                "server": {
+                  "id": 350,
+                  "name": "Twisting Nether",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785780484141
+              },
+              {
+                "amount": 164999.65665638,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 256303,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 757980,
+                  "name": "잘하다가 왜그래요"
+                },
+                "hardModeLevel": 0,
+                "name": "세르기엘",
+                "report": {
+                  "code": "AkjWzY8vrqPa4tx7",
+                  "fightID": 26,
+                  "startTime": 1785459127707
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785465959509
+              },
+              {
+                "amount": 164988.92082217,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 206333,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 5830,
+                  "name": "Зов Саргераса"
+                },
+                "hardModeLevel": 0,
+                "name": "Lockorcdva",
+                "report": {
+                  "code": "R6jALgKrfcGb3azF",
+                  "fightID": 16,
+                  "startTime": 1784138169851
+                },
+                "server": {
+                  "id": 329,
+                  "name": "Silvermoon",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784140881896
+              },
+              {
+                "amount": 164887.7945047,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 219606,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Xfs",
+                "report": {
+                  "code": "TjrVwDx9HZNW2gK8",
+                  "fightID": 15,
+                  "startTime": 1782967430620
+                },
+                "server": {
+                  "id": 697,
+                  "name": "无尽之海",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782969213907
+              },
+              {
+                "amount": 164845.28295263,
+                "bracketData": 289,
+                "class": "Warlock",
+                "duration": 341824,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Ssfifteen",
+                "report": {
+                  "code": "zJV4rWZLpP8GFkg6",
+                  "fightID": 15,
+                  "startTime": 1781963670144
+                },
+                "server": {
+                  "id": 826,
+                  "name": "血色十字军",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1781965454557
+              },
+              {
+                "amount": 164807.75368249,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 195520,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 189296,
+                  "name": "Main Tank Heal"
+                },
+                "hardModeLevel": 0,
+                "name": "잭슨간지",
+                "report": {
+                  "code": "3QBD62GbcAPWwt4p",
+                  "fightID": 29,
+                  "startTime": 1785840613908
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785850458691
+              },
+              {
+                "amount": 164804.37545761,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 170725,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 383249,
+                  "name": "Amazing Stories"
+                },
+                "hardModeLevel": 0,
+                "name": "Yukandax",
+                "report": {
+                  "code": "mfBgdKM9qTcrDywF",
+                  "fightID": 15,
+                  "startTime": 1786038585237
+                },
+                "server": {
+                  "id": 408,
+                  "name": "Blackrock",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1786040579158
+              },
+              {
+                "amount": 164803.25437619,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 167897,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 584805,
+                  "name": "Cope"
+                },
+                "hardModeLevel": 0,
+                "name": "Dalla",
+                "report": {
+                  "code": "RTVYbfwhB8aHJdxj",
+                  "fightID": 38,
+                  "startTime": 1783847889520
+                },
+                "server": {
+                  "id": 99,
+                  "name": "Frostmourne",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1783855578699
+              },
+              {
+                "amount": 164794.48603057,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 189700,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 763855,
+                  "name": "Колесо сансары"
+                },
+                "hardModeLevel": 0,
+                "name": "Щекочилла",
+                "report": {
+                  "code": "rKXn7xQvzt6DCmkG",
+                  "fightID": 12,
+                  "startTime": 1783617273662
+                },
+                "server": {
+                  "id": 488,
+                  "name": "Гордунни",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783619397416
+              },
+              {
+                "amount": 164792.65176252,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 239486,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 37151,
+                  "name": "Lavega"
+                },
+                "hardModeLevel": 0,
+                "name": "비겁한노움",
+                "report": {
+                  "code": "Qh4PTw2aJ6zA1Kdk",
+                  "fightID": 15,
+                  "startTime": 1784524790032
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1784525992328
+              },
+              {
+                "amount": 164782.92511249,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 238678,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 750816,
+                  "name": "Opposite"
+                },
+                "hardModeLevel": 0,
+                "name": "Killalockb",
+                "report": {
+                  "code": "gZyMNKhQLjT98Fz7",
+                  "fightID": 42,
+                  "startTime": 1785781092444
+                },
+                "server": {
+                  "id": 340,
+                  "name": "Tarren Mill",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785794857215
+              },
+              {
+                "amount": 164745.74452753,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 187347,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 206055,
+                  "name": "Vesper"
+                },
+                "hardModeLevel": 0,
+                "name": "Weakdotz",
+                "report": {
+                  "code": "1FKTmGMhjW4xXQvr",
+                  "fightID": 58,
+                  "startTime": 1785874086651
+                },
+                "server": {
+                  "id": 245,
+                  "name": "Zul'jin",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1785900191472
+              },
+              {
+                "amount": 164741.13376811,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 169435,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 15257,
+                  "name": "Рак Гейминг"
+                },
+                "hardModeLevel": 0,
+                "name": "Эндюк",
+                "report": {
+                  "code": "bzxpvqd6ZFN9aP8R",
+                  "fightID": 13,
+                  "startTime": 1785688357295
+                },
+                "server": {
+                  "id": 488,
+                  "name": "Гордунни",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785689384431
+              },
+              {
+                "amount": 164687.74716638,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 181305,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 597430,
+                  "name": "Awakeníng"
+                },
+                "hardModeLevel": 0,
+                "name": "Renray",
+                "report": {
+                  "code": "LKgQZdA6yVfrMhGP",
+                  "fightID": 18,
+                  "startTime": 1784680464075
+                },
+                "server": {
+                  "id": 150,
+                  "name": "Mal'Ganis",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784683874915
+              },
+              {
+                "amount": 164649.98930721,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 196394,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "星铁职业选手",
+                "report": {
+                  "code": "1kMLABX4pbxtW7mq",
+                  "fightID": 66,
+                  "startTime": 1782019261831
+                },
+                "server": {
+                  "id": 790,
+                  "name": "罗宁",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1782043470786
+              },
+              {
+                "amount": 164613.61979568,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 194790,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 792397,
+                  "name": "Reforged"
+                },
+                "hardModeLevel": 0,
+                "name": "Toastradamus",
+                "report": {
+                  "code": "cTRHYxVLQ68KAMjX",
+                  "fightID": 68,
+                  "startTime": 1784681693845
+                },
+                "server": {
+                  "id": 245,
+                  "name": "Zul'jin",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1784692183365
+              },
+              {
+                "amount": 164612.42151784,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 216769,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 712786,
+                  "name": "Redline Raiding"
+                },
+                "hardModeLevel": 0,
+                "name": "Edgykid",
+                "report": {
+                  "code": "vPfCxWLVnakbgARd",
+                  "fightID": 14,
+                  "startTime": 1783876645489
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783878517704
+              },
+              {
+                "amount": 164558.5852419,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 242416,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 261762,
+                  "name": "좋은날"
+                },
+                "hardModeLevel": 0,
+                "name": "살롱이",
+                "report": {
+                  "code": "cnWM7NdRH62X8bDY",
+                  "fightID": 27,
+                  "startTime": 1785730680492
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785734148150
+              },
+              {
+                "amount": 164532.05491139,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 257870,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 719373,
+                  "name": "騎士娛樂團"
+                },
+                "hardModeLevel": 0,
+                "name": "小奈醬",
+                "report": {
+                  "code": "8h6madxf9rvMRwXA",
+                  "fightID": 17,
+                  "startTime": 1784894913879
+                },
+                "server": {
+                  "id": 549,
+                  "name": "暗影之月",
+                  "region": "TW"
+                },
+                "spec": "Demonology",
+                "startTime": 1784897921982
+              },
+              {
+                "amount": 164507.31888557,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 196478,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "미감수",
+                "report": {
+                  "code": "7vyxtJLfZ2c4Tqwh",
+                  "fightID": 25,
+                  "startTime": 1785066860125
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1785069605580
+              },
+              {
+                "amount": 164387.50800512,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 199872,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 719171,
+                  "name": "그래도 우리가"
+                },
+                "hardModeLevel": 0,
+                "name": "플라톤",
+                "report": {
+                  "code": "C7LRQH2zwhk9j6B4",
+                  "fightID": 25,
+                  "startTime": 1786086327058
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1786104006456
+              },
+              {
+                "amount": 164356.71998198,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 221950,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "고흑마",
+                "report": {
+                  "code": "Hc32mRzWBvNVaDpT",
+                  "fightID": 27,
+                  "startTime": 1784988228857
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1784991415448
+              },
+              {
+                "amount": 164352.79963662,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 162914,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 584805,
+                  "name": "Cope"
+                },
+                "hardModeLevel": 0,
+                "name": "Jxkoi",
+                "report": {
+                  "code": "6QwGNpya1KYA2B4J",
+                  "fightID": 50,
+                  "startTime": 1783243004461
+                },
+                "server": {
+                  "id": 99,
+                  "name": "Frostmourne",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1783250674021
+              },
+              {
+                "amount": 164341.23495633,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 194517,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 703244,
+                  "name": "Два отца"
+                },
+                "hardModeLevel": 0,
+                "name": "Luthienx",
+                "report": {
+                  "code": "vgTJ7bLPYdZ8Crqa",
+                  "fightID": 22,
+                  "startTime": 1783609832059
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783614019538
+              },
+              {
+                "amount": 164340.98757201,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 233988,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 491077,
+                  "name": "Envelop"
+                },
+                "hardModeLevel": 0,
+                "name": "Raszahk",
+                "report": {
+                  "code": "CJGLRm3McV4tgk1a",
+                  "fightID": 13,
+                  "startTime": 1786148413828
+                },
+                "server": {
+                  "id": 207,
+                  "name": "Stormreaver",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1786150955659
+              },
+              {
+                "amount": 164320.8176978,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 277413,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 140486,
+                  "name": "Creamfields"
+                },
+                "hardModeLevel": 0,
+                "name": "少林閃到腰",
+                "report": {
+                  "code": "YVdrNnW4HqBtyTA3",
+                  "fightID": 54,
+                  "startTime": 1784165563368
+                },
+                "server": {
+                  "id": 550,
+                  "name": "水晶之刺",
+                  "region": "TW"
+                },
+                "spec": "Demonology",
+                "startTime": 1784294252300
+              },
+              {
+                "amount": 164298.85350318,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 176625,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Welp",
+                "report": {
+                  "code": "VaCqB6T4JkmRKGgQ",
+                  "fightID": 43,
+                  "startTime": 1784740798436
+                },
+                "server": {
+                  "id": 340,
+                  "name": "Tarren Mill",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784748336980
+              },
+              {
+                "amount": 164241.21278918,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 275827,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 793943,
+                  "name": "光明契约"
+                },
+                "hardModeLevel": 0,
+                "name": "李慕婉",
+                "report": {
+                  "code": "tzGZHnrBVxfpy3kN",
+                  "fightID": 29,
+                  "startTime": 1783055054231
+                },
+                "server": {
+                  "id": 781,
+                  "name": "米奈希尔",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1783058347297
+              },
+              {
+                "amount": 164224.83036355,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 217524,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 19011,
+                  "name": "Arctic Avengers"
+                },
+                "hardModeLevel": 0,
+                "name": "Soulshee",
+                "report": {
+                  "code": "aJtVA4YHhwZr1BmW",
+                  "fightID": 27,
+                  "startTime": 1782665874030
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1782671860728
+              },
+              {
+                "amount": 164224.1311496,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 190683,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 820853,
+                  "name": "속닥속닥"
+                },
+                "hardModeLevel": 0,
+                "name": "흑망주",
+                "report": {
+                  "code": "WbCLz7w16QTFxnDf",
+                  "fightID": 23,
+                  "startTime": 1783771632331
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1783773818069
+              },
+              {
+                "amount": 164071.87861211,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 237915,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 802601,
+                  "name": "iuiui"
+                },
+                "hardModeLevel": 0,
+                "name": "丶明前奶绿",
+                "report": {
+                  "code": "Xp1YfzA3Tac6jdHg",
+                  "fightID": 80,
+                  "startTime": 1784200187904
+                },
+                "server": {
+                  "id": 826,
+                  "name": "血色十字军",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784211466932
+              },
+              {
+                "amount": 164052.16606045,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 199325,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 613534,
+                  "name": "Sorry"
+                },
+                "hardModeLevel": 0,
+                "name": "갤파",
+                "report": {
+                  "code": "93ZB7HNJ8WrxKhTA",
+                  "fightID": 20,
+                  "startTime": 1782129406729
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1782132177109
+              },
+              {
+                "amount": 164033.84704074,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 260200,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 369458,
+                  "name": "목금토일월화수"
+                },
+                "hardModeLevel": 0,
+                "name": "흑쮜",
+                "report": {
+                  "code": "6jMmBLF3TfJA8CZa",
+                  "fightID": 19,
+                  "startTime": 1786165869873
+                },
+                "server": {
+                  "id": 526,
+                  "name": "아즈샤라",
+                  "region": "KR"
+                },
+                "spec": "Demonology",
+                "startTime": 1786168255891
+              },
+              {
+                "amount": 164013.19851785,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 359207,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "忆思彤",
+                "report": {
+                  "code": "tdv9ZjMLCBmYcPW1",
+                  "fightID": 22,
+                  "startTime": 1785054293735
+                },
+                "server": {
+                  "id": 584,
+                  "name": "凤凰之神",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1785057129646
+              },
+              {
+                "amount": 164003.64117842,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 193344,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 707414,
+                  "name": "BROOMERS"
+                },
+                "hardModeLevel": 0,
+                "name": "Qveenlock",
+                "report": {
+                  "code": "L6cHvnwN1RqbyK2D",
+                  "fightID": 19,
+                  "startTime": 1785690455102
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1785692480843
+              },
+              {
+                "amount": 163929.88366698,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 230631,
+                "faction": 0,
+                "guild": {
+                  "faction": 0,
+                  "id": 802601,
+                  "name": "iuiui"
+                },
+                "hardModeLevel": 0,
+                "name": "白毛死傲娇",
+                "report": {
+                  "code": "mKNzht7YgrvZy1Wd",
+                  "fightID": 40,
+                  "startTime": 1784092186276
+                },
+                "server": {
+                  "id": 887,
+                  "name": "鬼雾峰",
+                  "region": "CN"
+                },
+                "spec": "Demonology",
+                "startTime": 1784098884069
+              },
+              {
+                "amount": 163861.94591863,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 197850,
+                "faction": 0,
+                "hardModeLevel": 0,
+                "name": "Karlangodx",
+                "report": {
+                  "code": "bQcnyCKdq49LtxJW",
+                  "fightID": 13,
+                  "startTime": 1783915176263
+                },
+                "server": {
+                  "id": 123,
+                  "name": "Illidan",
+                  "region": "US"
+                },
+                "spec": "Demonology",
+                "startTime": 1783916186285
+              },
+              {
+                "amount": 163809.69879551,
+                "bracketData": 290,
+                "class": "Warlock",
+                "duration": 181239,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 1546,
+                  "name": "Echo"
+                },
+                "hardModeLevel": 0,
+                "name": "Firekatdone",
+                "report": {
+                  "code": "zaFCHhTygWvJf2qN",
+                  "fightID": 17,
+                  "startTime": 1781884696016
+                },
+                "server": {
+                  "id": 350,
+                  "name": "Twisting Nether",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1781886351532
+              },
+              {
+                "amount": 163802.85870584,
+                "bracketData": 293,
+                "class": "Warlock",
+                "duration": 184629,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 224,
+                  "name": "Luce"
+                },
+                "hardModeLevel": 0,
+                "name": "Bdpx",
+                "report": {
+                  "code": "JzrCW7nX8Z4qF3Gh",
+                  "fightID": 37,
+                  "startTime": 1784484642877
+                },
+                "server": {
+                  "id": 283,
+                  "name": "Draenor",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784491566050
+              },
+              {
+                "amount": 163792.84129226,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 173495,
+                "faction": 1,
+                "guild": {
+                  "faction": 0,
+                  "id": 575612,
+                  "name": "INSERTCOIN"
+                },
+                "hardModeLevel": 0,
+                "name": "Bio",
+                "report": {
+                  "code": "qkFMCW8QnmaAVG3p",
+                  "fightID": 17,
+                  "startTime": 1784304863094
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784307137307
+              },
+              {
+                "amount": 163781.16367036,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 164703,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 732711,
+                  "name": "Noctis"
+                },
+                "hardModeLevel": 0,
+                "name": "Elannis",
+                "report": {
+                  "code": "qty2a3NbGF9Ajx1m",
+                  "fightID": 79,
+                  "startTime": 1784736391963
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1784744907444
+              },
+              {
+                "amount": 163756.14049053,
+                "bracketData": 292,
+                "class": "Warlock",
+                "duration": 226122,
+                "faction": 1,
+                "hardModeLevel": 0,
+                "name": "Jiàyìn",
+                "report": {
+                  "code": "fzXb3L9JVGgPwKDx",
+                  "fightID": 25,
+                  "startTime": 1786269959192
+                },
+                "server": {
+                  "id": 340,
+                  "name": "Tarren Mill",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1786276132841
+              },
+              {
+                "amount": 163749.10917575,
+                "bracketData": 291,
+                "class": "Warlock",
+                "duration": 195886,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 19011,
+                  "name": "Arctic Avengers"
+                },
+                "hardModeLevel": 0,
+                "name": "Dofzz",
+                "report": {
+                  "code": "9gT14JnrQqbdVyvX",
+                  "fightID": 27,
+                  "startTime": 1783874825076
+                },
+                "server": {
+                  "id": 304,
+                  "name": "Kazzak",
+                  "region": "EU"
+                },
+                "spec": "Demonology",
+                "startTime": 1783881481860
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -1,0 +1,448 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from botgitgud.analysis.comparison import SpellComparison, compare_spell_usage
+from botgitgud.analysis.feature_availability import FeatureKind
+from botgitgud.analysis.grading import QuantileStats
+from botgitgud.analysis.performance_features import PerformanceFindings, ScalarFinding
+from botgitgud.analysis.pipeline import CoreAbilityReport, ExternalDpsContext
+from botgitgud.analysis.proc_analysis import ProcAnalysis, ProcMetrics
+from botgitgud.analysis.setup_analysis import SetupAnalysis
+from botgitgud.analysis.setup_finding import (
+    BenchmarkSampleRef,
+    EvidenceLevel,
+    FindingSubject,
+    ObservationCode,
+    PrevalenceSummary,
+    Publicability,
+    SetupFinding,
+)
+from botgitgud.domain.ability_role import AbilityRole
+from botgitgud.domain.models import RunManifest
+from botgitgud.domain.spells import SpellInfo
+from botgitgud.report.contract import ConfidenceSummary
+from botgitgud.report.text import ReportHeader, render_report
+
+
+def _spell(spell_id: int, name: str) -> SpellInfo:
+    return SpellInfo(spell_id=spell_id, name=name, source="wcl")
+
+
+def _header(**overrides: object) -> ReportHeader:
+    defaults: dict[str, object] = {
+        "char_name": "Zarad",
+        "boss_name": "Fallen-King Salhadaar",
+        "class_name": "Warlock",
+        "spec": "Demonology",
+        "reference_n": 2,
+        "duration_min_s": 300.0,
+        "duration_max_s": 360.0,
+    }
+    defaults.update(overrides)
+    return ReportHeader(**defaults)  # type: ignore[arg-type]
+
+
+def test_missed_usage_section_appears_when_there_are_missed_usages() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Eye Beam"),
+        presence=0.9,
+        user_times=[10.0, 130.0],
+        ref_times=[10.0, 130.0, 250.0, 370.0],
+        n_usages_median=4.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison])
+    assert "USOS PERDIDOS" in text
+    assert "Eye Beam" in text.split("USOS PERDIDOS")[1].split("MAJOR")[0]
+
+
+def test_missed_usage_section_absent_when_nothing_missed() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Fireball"),
+        presence=0.9,
+        user_times=[10.0, 130.0],
+        ref_times=[10.0, 130.0],
+        n_usages_median=2.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison])
+    assert "USOS PERDIDOS" not in text
+
+
+def test_ability_never_used_by_player_still_appears_in_report() -> None:
+    """O pior erro possível (achado 3.1, segunda metade): 0 usos e presence alta."""
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Summon Demonic Tyrant"),
+        presence=0.9,
+        user_times=[],
+        ref_times=[60.0, 180.0],
+        n_usages_median=2.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison])
+    assert "Summon Demonic Tyrant" in text
+    assert "Usos: 0 (coorte: 2.0)" in text
+    assert "USOS PERDIDOS" in text
+
+
+def test_extra_usage_rendered_without_masked_delta() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Call Dreadstalkers"),
+        presence=0.9,
+        user_times=[10.0, 40.0, 70.0],
+        ref_times=[10.0, 40.0],
+        n_usages_median=2.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison])
+    assert "Uso extra" in text
+    assert "Delta: +0.0s" not in text  # legacy's masked-zero behavior must not reappear
+
+
+def test_usage_count_line_shows_user_and_cohort_median() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Dark Pact"),
+        presence=0.9,
+        user_times=[10.0, 40.0],
+        ref_times=[10.0, 40.0, 70.0],
+        n_usages_median=2.5,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison])
+    assert "Usos: 2 (coorte: 2.5)" in text
+
+
+def test_header_shows_dps_and_percentile_when_available() -> None:
+    header = _header(
+        player_dps=108342.5,
+        player_percentile=71.0,
+        cohort_median_dps=117576.0,
+        reference_n=15,
+        damage_comparison_status="AVAILABLE",
+    )
+    text = render_report(header, [])
+    assert "108,342" in text or "108,343" in text  # formatted with thousands separator
+    assert "71" in text
+    assert "117,576" in text
+
+
+def test_header_falls_back_to_nd_never_fabricates() -> None:
+    header = _header(player_dps=None, player_percentile=None, cohort_median_dps=None)
+    text = render_report(header, [])
+    assert "n/d" in text
+    assert "99" not in text  # the legacy fabricated-99.0 value must never appear
+
+
+def test_cohort_warning_banner_rendered_when_present() -> None:
+    header = _header(
+        cohort_warnings=(
+            "Amostra pequena (10 logs). Trate os desvios como indicativos, não conclusivos.",
+        )
+    )
+    text = render_report(header, [])
+    assert "⚠️ Amostra pequena (10 logs)" in text
+
+
+def test_no_warning_banner_when_absent() -> None:
+    header = _header(cohort_warnings=())
+    text = render_report(header, [])
+    assert "⚠️" not in text
+
+
+# EC.4: the "BUILD DIVERGENTE" section (T2.2) and its tests were removed
+# along with `BuildDivergence` — see analysis/talent_cluster.py's module
+# docstring for why.
+
+
+def test_build_divergente_never_appears_in_the_report() -> None:
+    text = render_report(_header(), [])
+    assert "BUILD DIVERGENTE" not in text
+
+
+# -- RP.2: SETUP section integration ---------------------------------------------
+
+
+def _setup_finding() -> SetupFinding:
+    sample = BenchmarkSampleRef(benchmark_id="Warlock/Demonology/1/1/1/v1", band_name=None)
+    return SetupFinding(
+        subject=FindingSubject.talent_build("1:1|2:2"),
+        observation=ObservationCode.MATCHES_COMMON_PATTERN,
+        evidence_level=EvidenceLevel.STRONG,
+        publicability=Publicability.PUBLISHABLE,
+        sample=sample,
+        prevalence=PrevalenceSummary(count=40, n_available=50, prevalence=0.8),
+    )
+
+
+def _setup_analysis(*findings: SetupFinding) -> SetupAnalysis:
+    return SetupAnalysis(
+        benchmark_id="Warlock/Demonology/1/1/1/v1",
+        findings=findings,
+        player_setup_available=True,
+        benchmark_available=True,
+    )
+
+
+def test_no_setup_param_leaves_the_report_unaffected() -> None:
+    """Every pre-RP.2 caller — none of which pass `setup=` — must see a
+    byte-for-byte identical report."""
+    with_default = render_report(_header(), [])
+    explicit_none = render_report(_header(), [], setup=None)
+    assert with_default == explicit_none
+    assert "SETUP" not in with_default
+
+
+def test_setup_section_appears_when_findings_are_publishable() -> None:
+    text = render_report(_header(), [], setup=_setup_analysis(_setup_finding()))
+    assert "SETUP" in text
+    assert "Build de talentos" in text
+
+
+def test_setup_section_never_contains_html_tags_in_the_text_report() -> None:
+    text = render_report(_header(), [], setup=_setup_analysis(_setup_finding()))
+    assert "<" not in text
+    assert ">" not in text
+
+
+# -- T2.3: quantile grading, bootstrap CI, BH collapsing -------------------------
+
+_REF_20 = [float(i) for i in range(1, 21)]  # n=20 >= MIN_N_FOR_GRADING, median 10.5
+
+
+def _graded_comparison(
+    user_time: float, *, reference_n: int = 20, ref_dist: list[float] | None = None
+) -> SpellComparison:
+    ref_dist = _REF_20 if ref_dist is None else ref_dist
+    return compare_spell_usage(
+        spell=_spell(1, "Test Spell"),
+        presence=1.0,
+        user_times=[user_time],
+        ref_times=[10.5],
+        n_usages_median=1.0,
+        reference_n=reference_n,
+        slot_ref_times=[ref_dist],
+    )
+
+
+def test_green_deviation_shows_green_and_is_never_collapsed() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(10.5)])  # q=0.5
+    assert "🟢" in text
+    assert "Desvios menores" not in text
+
+
+def test_single_yellow_deviation_collapses_alone() -> None:
+    """A single yellow candidate's BH threshold is (1/1)*FDR=0.10; a
+    yellow-graded p-value (~0.3-0.5) never survives that alone — it's
+    moved out of the ability's own inline block into the collapsed
+    section (which still shows the grade, just labeled non-significant).
+    """
+    text = render_report(_header(reference_n=20), [_graded_comparison(3.5)])  # q=0.15 -> yellow
+    before, after = text.split("Desvios menores (não significativos)")
+    assert "🟡" not in before  # not shown inline in the ability's own block
+    assert "Test Spell" in after
+    assert "🟡" in after
+
+
+def test_single_extreme_red_deviation_survives_bh_alone() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(0.5)])  # q=0.0 -> extreme
+    assert "🔴" in text
+    assert "Desvios menores" not in text
+
+
+def test_insufficient_sample_shows_no_color() -> None:
+    thin = [float(i) for i in range(5)]  # n=5 < MIN_N_FOR_GRADING
+    text = render_report(
+        _header(reference_n=5), [_graded_comparison(10.0, reference_n=5, ref_dist=thin)]
+    )
+    assert "⚪ amostra insuficiente (n=5)" in text
+    assert "🟢" not in text
+    assert "🟡" not in text
+    assert "🔴" not in text
+
+
+def test_ic90_shown_in_the_ideal_line_when_bootstrap_ci_available() -> None:
+    text = render_report(_header(reference_n=20), [_graded_comparison(10.5)])
+    assert "IC90:" in text
+
+
+# -- T2.1: matched/relaxed covariate declaration --------------------------------
+
+
+def test_matched_covariates_rendered_with_checkmarks() -> None:
+    header = _header(
+        matched_covariates=("item_level", "has_augmentation", "duration±7%"),
+        relaxed_covariates=(),
+    )
+    text = render_report(header, [])
+    assert "**Coorte pareada:**" in text
+    assert "ilvl ±5 ✅" in text
+    assert "Augmentation ✅" in text
+    assert "duração ±7% ✅" in text
+
+
+def test_no_covariates_line_when_matched_covariates_empty() -> None:
+    """Pre-T2.1 callers (none left in this codebase, but defends the
+    default) never populate matched_covariates — no line, no crash.
+    """
+    header = _header(matched_covariates=(), relaxed_covariates=())
+    text = render_report(header, [])
+    assert "**Coorte:**" not in text
+
+
+def test_relaxed_covariate_gets_generic_not_matched_warning() -> None:
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("item_level",))
+    text = render_report(header, [])
+    assert "⚠️ ilvl ±5 não pareado (amostra insuficiente)" in text
+
+
+def test_relaxed_has_augmentation_shows_the_support_buff_warning() -> None:
+    """T2.1 acceptance: when has_augmentation is relaxed, the report must
+    contain the specific support-buff warning, not the generic one.
+    """
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("has_augmentation",))
+    text = render_report(header, [])
+    assert (
+        "⚠️ Buffs de suporte não pareados — parte da diferença observada "
+        "pode não ser controlável por você." in text
+    )
+    assert "Augmentation não pareado" not in text
+
+
+def test_talent_cluster_pre_relaxed_shows_generic_warning() -> None:
+    """D-24: talent_cluster is always pre-relaxed until T2.2 exists."""
+    header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("talent_cluster",))
+    text = render_report(header, [])
+    assert "⚠️ talentos: mesma build não pareado (amostra insuficiente)" in text
+
+
+def test_no_parse_med_field_anywhere() -> None:
+    """achado 3.10: characterRankings não tem `percentile`; o campo antigo some de vez."""
+    header = _header(player_dps=1000.0, player_percentile=50.0, cohort_median_dps=2000.0)
+    text = render_report(header, [])
+    assert "Parse méd" not in text
+
+
+def test_reference_count_shown_explicitly() -> None:
+    header = _header(reference_n=47)
+    text = render_report(header, [])
+    assert "47 logs" in text
+
+
+def test_empty_comparisons_omit_timeline_section() -> None:
+    text = render_report(_header(), [])
+    assert text.startswith("=" * 42)
+    assert "\n1 RESULTADO\n" not in text
+    assert "TOP 3 PRIORIDADES" in text
+    assert "TIMELINE OFENSIVA" not in text
+
+
+def test_all_data_backed_sections_are_present_non_empty_and_ordered() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Summon Demonic Tyrant"),
+        presence=0.9,
+        user_times=[10.0],
+        ref_times=[10.0],
+        n_usages_median=1.0,
+        reference_n=20,
+    )
+    stats = QuantileStats(n=20, p10=0.0, p25=0.0, p50=0.0, p75=1.0, p90=1.0)
+    scalar = ScalarFinding("green", 0.5, 0.0, stats, None, "lower_better")
+    performance = PerformanceFindings(
+        active_time=None,
+        deaths=scalar,
+        downtime=scalar,
+        uptimes=(),
+        resource_waste=(),
+    )
+    core = CoreAbilityReport("Demonic Tyrant", AbilityRole.CORE_DAMAGE, (FeatureKind.CAST_COUNT,))
+    proc = ProcMetrics(
+        42,
+        AbilityRole.SELF_OFFENSIVE_PROC,
+        "available",
+        (),
+        0.25,
+        2,
+        0.4,
+        (),
+        None,
+        None,
+        0,
+    )
+    external = ExternalDpsContext("Breath of Eons", AbilityRole.EXTERNAL_OFFENSIVE, 1234.0)
+    confidence = ConfidenceSummary(50, 20, (), (), ())
+    setup = _setup_analysis(_setup_finding())
+    manifest = _manifest()
+    kwargs = {
+        "manifest": manifest,
+        "performance": performance,
+        "setup": setup,
+        "confidence": confidence,
+        "core_abilities": (core,),
+        "proc_analysis": ProcAnalysis("available", (), (proc,)),
+        "external_dps_context": (external,),
+    }
+    text = render_report(_header(), [comparison], **kwargs)  # type: ignore[arg-type]
+
+    text_markers = (
+        "GITGUD MAJOR CD ANALYSIS",
+        "TOP 3 PRIORIDADES",
+        "3 ANALISE POR HABILIDADE",
+        "4 SELF BUFFS & PROCS",
+        "5 EFICIENCIA DE RECURSO",
+        "6 TIMELINE OFENSIVA",
+        "7 CONTEXTO DE DPS EXTERNO",
+        "8 SETUP",
+        "9 COORTE & CONFIANCA",
+    )
+    assert len(text_markers) == 9
+    assert [text.index(marker) for marker in text_markers] == sorted(
+        text.index(marker) for marker in text_markers
+    )
+    for marker in text_markers[2:]:
+        tail = text.split(marker, 1)[1].lstrip("*\n-")
+        assert tail and tail.splitlines()[0].strip()
+    assert "Mortes:" in text and "Downtime:" in text
+    assert "Cohort:" in text and "deadbeefdeadbeef" in text
+
+
+# -- T1.5: manifest footer -----------------------------------------------------
+
+
+def _manifest(**overrides: object) -> RunManifest:
+    defaults: dict[str, object] = {
+        "cohort_id": "deadbeefdeadbeef",
+        "code_version": "abc1234",
+        "generated_at": datetime.now(UTC),
+        "n_members": 17,
+        "wcl_partition": 4,
+        "settings_hash": "feedface1234",
+    }
+    defaults.update(overrides)
+    return RunManifest(**defaults)  # type: ignore[arg-type]
+
+
+def test_manifest_footer_contains_cohort_id_and_code_version_with_comparisons() -> None:
+    comparison = compare_spell_usage(
+        spell=_spell(1, "Dark Pact"),
+        presence=0.9,
+        user_times=[10.0, 40.0],
+        ref_times=[10.0, 40.0],
+        n_usages_median=2.0,
+        reference_n=10,
+    )
+    text = render_report(_header(), [comparison], _manifest())
+    assert "deadbeefdeadbeef" in text
+    assert "abc1234" in text
+
+
+def test_manifest_footer_contains_cohort_id_and_code_version_without_comparisons() -> None:
+    text = render_report(_header(), [], _manifest())
+    assert "deadbeefdeadbeef" in text
+    assert "abc1234" in text
+
+
+def test_manifest_footer_absent_when_manifest_not_given() -> None:
+    text = render_report(_header(), [])
+    assert "Cohort:" not in text
+    assert "Versão:" not in text

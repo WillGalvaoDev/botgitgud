@@ -1,0 +1,190 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "311",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {\n  reportData {\n    report(code: $code) {\n      table(fightIDs: $fightIDs, dataType: Debuffs, sourceID: $sourceID, translate: true)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "M8Z36Rjy1GaJrBQL",
+      "fightIDs": [
+        23
+      ],
+      "sourceID": 17
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "table": {
+            "data": {
+              "auras": [
+                {
+                  "abilityIcon": "ability_mage_timewarp.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4473181,
+                      "startTime": 4232232
+                    }
+                  ],
+                  "guid": 80354,
+                  "name": "Temporal Displacement",
+                  "totalUptime": 240949,
+                  "totalUses": 1,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4289602,
+                      "startTime": 4247592
+                    },
+                    {
+                      "endTime": 4358299,
+                      "startTime": 4293779
+                    },
+                    {
+                      "endTime": 4415926,
+                      "startTime": 4364618
+                    },
+                    {
+                      "endTime": 4416428,
+                      "startTime": 4415927
+                    },
+                    {
+                      "endTime": 4473181,
+                      "startTime": 4416591
+                    }
+                  ],
+                  "guid": 387847,
+                  "name": "Fel Armor",
+                  "totalUptime": 214929,
+                  "totalUses": 5,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4267323,
+                      "startTime": 4259295
+                    },
+                    {
+                      "endTime": 4280237,
+                      "startTime": 4272233
+                    },
+                    {
+                      "endTime": 4319948,
+                      "startTime": 4311952
+                    },
+                    {
+                      "endTime": 4336685,
+                      "startTime": 4328666
+                    },
+                    {
+                      "endTime": 4399298,
+                      "startTime": 4391279
+                    },
+                    {
+                      "endTime": 4410849,
+                      "startTime": 4402833
+                    },
+                    {
+                      "endTime": 4448218,
+                      "startTime": 4440201
+                    },
+                    {
+                      "endTime": 4457996,
+                      "startTime": 4450004
+                    }
+                  ],
+                  "guid": 1250991,
+                  "name": "Dark Radiation",
+                  "totalUptime": 64091,
+                  "totalUses": 8,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_112_raiddimensius_blackhole.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4269130,
+                      "startTime": 4268002
+                    },
+                    {
+                      "endTime": 4440184,
+                      "startTime": 4439985
+                    }
+                  ],
+                  "guid": 1250828,
+                  "name": "Void Exposure",
+                  "totalUptime": 1327,
+                  "totalUses": 2,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4283629,
+                      "startTime": 4247618
+                    },
+                    {
+                      "endTime": 4329794,
+                      "startTime": 4293779
+                    },
+                    {
+                      "endTime": 4406421,
+                      "startTime": 4370424
+                    },
+                    {
+                      "endTime": 4452595,
+                      "startTime": 4416612
+                    }
+                  ],
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "totalUptime": 144006,
+                  "totalUses": 4,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_groundsate.jpg",
+                  "bands": [
+                    {
+                      "endTime": 4365548,
+                      "startTime": 4364618
+                    }
+                  ],
+                  "guid": 1245592,
+                  "name": "Torturous Extract",
+                  "totalUptime": 930,
+                  "totalUses": 1,
+                  "type": 32
+                }
+              ],
+              "endTime": 8113933,
+              "gameVersion": 1,
+              "logVersion": 17,
+              "startTime": 0,
+              "totalTime": 241698,
+              "useTargets": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

@@ -1,0 +1,175 @@
+# Portoes de qualidade do repositorio publico.
+#
+# Este workflow roda EXATAMENTE os mesmos comandos documentados no README
+# ("Testes") -- nao ha logica de verificacao propria aqui, so a orquestracao.
+# Se um portao mudar, ele muda no projeto e este arquivo continua valido.
+#
+# MATRIZ Windows + Linux, e nao um SO so, porque o projeto tem os dois como
+# alvo de verdade: o desenvolvimento acontece em Windows e a producao roda em
+# Linux (systemd). `ops/platform_process.py` tem um backend nativo por
+# plataforma (`msvcrt` x `fcntl`), entao rodar num SO so deixaria metade do
+# codigo de supervisao sem execucao real. A matriz ja pagou por si: a primeira
+# execucao em Linux revelou um erro de type-check que nunca aparecia no
+# Windows.
+#
+# Nada aqui toca Discord, Warcraft Logs, Blizzard ou qualquer servico externo:
+# a suite e offline por construcao (cassettes gravadas + `-m "not network"` no
+# pyproject.toml). Por isso o workflow tambem nao usa `secrets` -- ver o bloco
+# `env` abaixo.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Somente leitura: este workflow nao publica, nao comenta e nao empurra nada.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    # Um job so, parametrizado. `fail-fast: false` para que a falha num SO nao
+    # esconda o resultado do outro -- saber se um problema e especifico de
+    # plataforma ou nao e justamente o motivo da matriz existir.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    name: quality-gates (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        # bash nos DOIS runners (existe no windows-latest, via Git for
+        # Windows). Assim os passos abaixo sao um script so, sem uma variante
+        # PowerShell duplicada para cada comando.
+        shell: bash
+
+    env:
+      # PLACEHOLDERS SINTETICOS -- nao sao segredos e nao autenticam em lugar
+      # nenhum. Existem porque `Settings` (pydantic-settings) exige as cinco
+      # credenciais para ser construido, e alguns testes de CLI constroem o
+      # objeto real. Sem isto, esses testes falham por configuracao ausente e
+      # nao por regressao. Um segredo de verdade nunca deve aparecer aqui: a
+      # suite e offline e nao autentica em nada.
+      DISCORD_TOKEN: ci-placeholder-not-a-secret
+      WCL_CLIENT_ID: ci-placeholder-not-a-secret
+      WCL_CLIENT_SECRET: ci-placeholder-not-a-secret
+      BLIZZARD_CLIENT_ID: ci-placeholder-not-a-secret
+      BLIZZARD_CLIENT_SECRET: ci-placeholder-not-a-secret
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # 3.12: o pyproject declara `requires-python = ">=3.11"`, e ruff e
+          # pyright ja fixam a semantica de linguagem em 3.11 por conta propria
+          # (`target-version` / `pythonVersion`). 3.12 e a versao com que a
+          # instalacao limpa foi validada na GH.2.
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar o projeto
+        # A venv fica em `.venv` na raiz porque o pyright esta configurado com
+        # `venvPath = "."` / `venv = ".venv"` no pyproject.toml -- sem ela ele
+        # cai no interpretador do PATH e acusa centenas de erros de import. O
+        # proprio pyright resolve `Scripts/` (Windows) ou `bin/` (POSIX), entao
+        # a configuracao continua portavel.
+        #
+        # Os extras sao `[data,ml,dev]`: `data` e `dev` sao obvios, e `ml` e
+        # obrigatorio porque `botgitgud.cli` importa a trilha phase4, que
+        # importa `sklearn` no topo do modulo. Sem `ml`, ate
+        # `publication-check` falha com ModuleNotFoundError.
+        #
+        # `VENV_PY` normaliza o unico caminho que difere entre os dois
+        # runners; todos os passos seguintes sao identicos nos dois SOs.
+        run: |
+          python -m venv .venv
+          if [ -x .venv/bin/python ]; then
+            echo "VENV_PY=.venv/bin/python" >> "$GITHUB_ENV"
+            VENV_PY=.venv/bin/python
+          else
+            echo "VENV_PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+            VENV_PY=.venv/Scripts/python.exe
+          fi
+          "$VENV_PY" -m pip install --upgrade pip
+          "$VENV_PY" -m pip install -e ".[data,ml,dev]"
+
+      - name: ruff check
+        run: $VENV_PY -m ruff check .
+
+      - name: ruff format --check
+        run: $VENV_PY -m ruff format --check .
+
+      - name: pyright
+        run: $VENV_PY -m pyright
+
+      - name: publication-check
+        # Portao do proprio projeto (GH.0): recusa `.env`, chave privada,
+        # warehouse, backup ou dado de runtime versionado por acidente.
+        run: $VENV_PY -m botgitgud.cli publication-check
+
+      # Sem `-q` aqui: o `addopts` do pyproject.toml ja aplica um, e um
+      # segundo vira `-qq`, que suprime a linha final de contagem -- o log do
+      # CI ficava sem "N passed, M skipped". `-rs` lista os testes skipados
+      # COM a razao, que e o que torna auditavel quais contratos sao
+      # especificos de plataforma em cada runner da matriz.
+      - name: pytest tests/unit
+        run: $VENV_PY -m pytest tests/unit -rs
+
+      - name: pytest tests/golden
+        run: $VENV_PY -m pytest tests/golden -rs
+
+  # Contrato ESTAVEL do CI para branch protection.
+  #
+  # A matriz publica um check por combinacao ("quality-gates (ubuntu-latest)",
+  # "quality-gates (windows-latest)"). Exigir esses nomes diretamente na
+  # protecao da main e fragil: no dia em que um SO for adicionado, removido ou
+  # renomeado, a regra passa a exigir um check que ninguem publica, e merges
+  # travam sem que nada tenha quebrado de verdade. Este job existe para ser o
+  # unico nome que a protecao precisa conhecer -- a matriz pode mudar a
+  # vontade atras dele.
+  #
+  # Semantica, exatamente:
+  #
+  # * `needs: [quality-gates]` para toda a matriz. Para um job de matriz,
+  #   `needs.quality-gates.result` e o resultado AGREGADO: `success` so quando
+  #   TODAS as combinacoes deram success; `failure` se qualquer uma falhou;
+  #   `cancelled` se foi cancelada; `skipped` se nao rodou.
+  # * `if: always()` porque, sem isso, um `needs` que falha faz ESTE job ser
+  #   pulado -- e um job pulado nao publica status nenhum. O check ficaria
+  #   eternamente "Expected", em vez de vermelho. Com `always()` ele sempre
+  #   roda e sempre reporta.
+  # * A comparacao e por igualdade estrita a `success`: qualquer outro valor
+  #   (`failure`, `cancelled`, `skipped`) reprova. Nao existe
+  #   `continue-on-error` em lugar nenhum deste workflow.
+  ci-success:
+    needs: [quality-gates]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Nao precisa de token: nao faz checkout, nao le nem escreve nada no repo.
+    permissions: {}
+
+    steps:
+      - name: Conferir o resultado agregado da matriz
+        env:
+          # Via `env`, e nao interpolado direto no `run`: o valor nunca e
+          # concatenado no script.
+          MATRIX_RESULT: ${{ needs.quality-gates.result }}
+        run: |
+          echo "resultado agregado de quality-gates: ${MATRIX_RESULT}"
+          if [ "${MATRIX_RESULT}" != "success" ]; then
+            echo "::error::a matriz quality-gates terminou em '${MATRIX_RESULT}', nao em 'success'"
+            exit 1
+          fi
+          echo "todos os quality gates passaram nos dois sistemas operacionais"

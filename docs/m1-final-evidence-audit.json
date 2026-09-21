@@ -1,0 +1,544 @@
+{
+  "checked_utc": "2026-09-14T01:03:25.207235+00:00",
+  "purpose": "Final-tree execution and artifact linkage; normative interpretation in m1-review-evidence.md. M1 closure requires independent review.",
+  "validated_source_files": 978,
+  "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+  "isolated_source_bytes_equal": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+  "counts": {
+    "before_failed": 25,
+    "regressions_passed": 38,
+    "acceptance_passed": 157,
+    "offline_suite_passed": 2569
+  },
+  "suite_summary": "2569 passed, 1 deselected, 337 warnings in 595.95s (0:09:55)",
+  "executions": {
+    "regressions": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not network",
+        "-q",
+        "--tb=short",
+        "tests/unit/test_m1_required_changes.py",
+        "--junitxml=docs/m1-validation/regressions.xml"
+      ],
+      "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:26:21.173685+00:00",
+      "finished_utc": "2026-09-13T23:26:28.677951+00:00",
+      "elapsed_s": 7.504261599999154,
+      "exit_code": 0
+    },
+    "acceptance": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not network",
+        "-q",
+        "--tb=short",
+        "tests/unit/test_m0_methodology_contract.py",
+        "tests/unit/test_damage_scope.py",
+        "tests/unit/test_dps_gap.py",
+        "tests/unit/test_m1_acceptance.py",
+        "tests/unit/test_m1_algebra_properties.py",
+        "tests/unit/test_m1_astra_regressions.py",
+        "tests/unit/test_m1_feature_contract.py",
+        "tests/unit/test_m1_persistence_contract.py",
+        "tests/unit/test_m1_required_changes.py",
+        "tests/unit/test_m1_review_round2.py",
+        "--junitxml=docs/m1-validation/acceptance.xml"
+      ],
+      "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:27:02.131373+00:00",
+      "finished_utc": "2026-09-13T23:29:15.217912+00:00",
+      "elapsed_s": 133.086541699995,
+      "exit_code": 0
+    },
+    "ruff": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/ruff.exe",
+        "check",
+        "src",
+        "tests",
+        "scripts"
+      ],
+      "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:26:21.173747+00:00",
+      "finished_utc": "2026-09-13T23:26:21.300074+00:00",
+      "elapsed_s": 0.12632669999584323,
+      "exit_code": 0
+    },
+    "pyright": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+        "-m",
+        "pyright"
+      ],
+      "cwd": "C:\\Users\\wsgon\\OneDrive\\Desktop\\BotGITGUD",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:26:21.173747+00:00",
+      "finished_utc": "2026-09-13T23:26:40.760160+00:00",
+      "elapsed_s": 19.586415300000226,
+      "exit_code": 0
+    },
+    "suite": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+        "-m",
+        "pytest",
+        "-o",
+        "addopts=",
+        "-m",
+        "not network",
+        "-q",
+        "--tb=short",
+        "--junitxml=docs/m1-suite-final.xml"
+      ],
+      "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:30:30.637874+00:00",
+      "finished_utc": "2026-09-13T23:40:28.827459+00:00",
+      "elapsed_s": 598.1895949000027,
+      "exit_code": 0
+    },
+    "evidence": {
+      "command": [
+        "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+        "scripts/m1_review_evidence.py",
+        "--output",
+        "docs/m1-evidence-current.json.gz"
+      ],
+      "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+      "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+      "source_file_count": 978,
+      "started_utc": "2026-09-13T23:41:04.976419+00:00",
+      "finished_utc": "2026-09-13T23:43:12.599172+00:00",
+      "elapsed_s": 127.62277819999872,
+      "exit_code": 0
+    }
+  },
+  "required_changes": {
+    "U01": {
+      "before_assertion_failures": [
+        "test_u01_invalid_cast_cannot_authorize_coaching[-1.0]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[301.0]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[nan]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[inf]"
+      ],
+      "final_passed": [
+        "test_u01_invalid_cast_cannot_authorize_coaching[-1.0]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[301.0]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[nan]",
+        "test_u01_invalid_cast_cannot_authorize_coaching[inf]",
+        "test_u01_u02_valid_entity_and_own_uptime_scalar_can_coach"
+      ]
+    },
+    "U02": {
+      "before_assertion_failures": [
+        "test_u02_uptime_cannot_reintroduce_pet_coaching"
+      ],
+      "final_passed": [
+        "test_u02_uptime_cannot_reintroduce_pet_coaching"
+      ]
+    },
+    "U03": {
+      "before_assertion_failures": [
+        "test_u03_malformed_pages_are_not_complete[missing_cursor-damage]",
+        "test_u03_malformed_pages_are_not_complete[missing_cursor-casts]",
+        "test_u03_malformed_pages_are_not_complete[outside_interval-damage]",
+        "test_u03_malformed_pages_are_not_complete[outside_interval-casts]"
+      ],
+      "final_passed": [
+        "test_u03_malformed_pages_are_not_complete[missing_cursor-damage]",
+        "test_u03_malformed_pages_are_not_complete[missing_cursor-casts]",
+        "test_u03_malformed_pages_are_not_complete[outside_interval-damage]",
+        "test_u03_malformed_pages_are_not_complete[outside_interval-casts]",
+        "test_u03_explicit_empty_terminal_page_is_complete[damage]",
+        "test_u03_explicit_empty_terminal_page_is_complete[casts]",
+        "test_u03_fetch_integrates_collection_abstention[damage]",
+        "test_u03_fetch_integrates_collection_abstention[casts]"
+      ]
+    },
+    "U04": {
+      "before_assertion_failures": [
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[inverted]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[missing]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[short]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[reconciliation]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[residual]"
+      ],
+      "final_passed": [
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[inverted]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[missing]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[short]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[reconciliation]",
+        "test_u04_corrupt_provenance_stays_blocked_on_disk[residual]"
+      ]
+    },
+    "U05": {
+      "before_assertion_failures": [
+        "test_u05_wcl_authority_is_exact"
+      ],
+      "final_passed": [
+        "test_u05_wcl_authority_is_exact",
+        "test_u05_exact_authority_guard_survives_parquet"
+      ]
+    },
+    "U06": {
+      "before_assertion_failures": [
+        "test_u06_missing_uptime_is_not_zero[aura0]",
+        "test_u06_missing_uptime_is_not_zero[aura1]"
+      ],
+      "final_passed": [
+        "test_u06_missing_uptime_is_not_zero[aura0]",
+        "test_u06_missing_uptime_is_not_zero[aura1]"
+      ]
+    },
+    "U07": {
+      "before_assertion_failures": [
+        "test_u07_core_features_use_validated_availability[legacy]",
+        "test_u07_core_features_use_validated_availability[invalid]"
+      ],
+      "final_passed": [
+        "test_u07_core_features_use_validated_availability[legacy]",
+        "test_u07_core_features_use_validated_availability[invalid]"
+      ]
+    },
+    "U08": {
+      "before_assertion_failures": [
+        "test_u08_header_uses_damage_population_and_public_floor[legacy_casts]",
+        "test_u08_header_uses_damage_population_and_public_floor[small_damage_R]"
+      ],
+      "final_passed": [
+        "test_u08_header_uses_damage_population_and_public_floor[legacy_casts]",
+        "test_u08_header_uses_damage_population_and_public_floor[small_damage_R]",
+        "test_u08_header_cannot_publish_median_below_floor",
+        "test_u08_uptime_retains_own_population_and_public_floor"
+      ]
+    },
+    "U09": {
+      "before_assertion_failures": [
+        "test_u09_zero_damage_keeps_observed_event_metrics"
+      ],
+      "final_passed": [
+        "test_u09_zero_damage_keeps_observed_event_metrics"
+      ]
+    },
+    "U10": {
+      "before_assertion_failures": [
+        "test_u10_derived_overflow_abstains"
+      ],
+      "final_passed": [
+        "test_u10_derived_overflow_abstains",
+        "test_u10_nonfinite_derived_quantities_abstain[sum_overflow]",
+        "test_u10_nonfinite_derived_quantities_abstain[percentage_overflow]",
+        "test_u10_nonfinite_derived_quantities_abstain[statistic_overflow]",
+        "test_u10_conclusion_abstains_from_nonfinite_statistics"
+      ]
+    },
+    "U11": {
+      "before_assertion_failures": [
+        "test_u11_wrong_split_cannot_be_hidden_in_unclassified"
+      ],
+      "final_passed": [
+        "test_u11_wrong_split_cannot_be_hidden_in_unclassified",
+        "test_u11_small_closure_error_above_normative_tolerance_is_rejected"
+      ]
+    },
+    "U12": {
+      "before_assertion_failures": [
+        "test_u12_active_contract_has_no_legacy_adapters"
+      ],
+      "final_passed": [
+        "test_u12_active_contract_has_no_legacy_adapters"
+      ]
+    }
+  },
+  "coverage": {
+    "A01": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_duration_does_not_create_frequency_deficit",
+        "tests.unit.test_m1_acceptance::test_a01_duration_normalization_has_zero_frequency_delta"
+      ]
+    },
+    "A02": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_separate_medians_do_not_explain_overall_gap"
+      ]
+    },
+    "A03": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_support_adjusted_breakdown_closes",
+        "tests.unit.test_m1_acceptance::test_a03_a04_accounting_and_support_close"
+      ]
+    },
+    "A04": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a03_a04_accounting_and_support_close"
+      ]
+    },
+    "A05": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_algebra_properties::test_a05_a06_a16_a17_independent_ledger_before_and_after_gate",
+        "tests.unit.test_m1_algebra_properties::test_u11_independent_split_weights_and_normative_tolerance",
+        "tests.unit.test_m1_algebra_properties::test_u11_oracle_exercises_split_unclassified_support_and_gate",
+        "tests.unit.test_m1_astra_regressions::test_a05_reference_order_is_canonical_and_exclusions_survive",
+        "tests.unit.test_m1_required_changes::test_u11_small_closure_error_above_normative_tolerance_is_rejected",
+        "tests.unit.test_m1_required_changes::test_u11_wrong_split_cannot_be_hidden_in_unclassified"
+      ]
+    },
+    "A06": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_algebra_properties::test_a05_a06_a16_a17_independent_ledger_before_and_after_gate",
+        "tests.unit.test_m1_astra_regressions::test_a06_absent_player_mechanism_has_no_scalar_or_priority"
+      ]
+    },
+    "A07": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a07_split_keeps_original_denominator_and_closes",
+        "tests.unit.test_m1_algebra_properties::test_u11_independent_split_weights_and_normative_tolerance",
+        "tests.unit.test_m1_algebra_properties::test_u11_oracle_exercises_split_unclassified_support_and_gate",
+        "tests.unit.test_m1_required_changes::test_u11_small_closure_error_above_normative_tolerance_is_rejected",
+        "tests.unit.test_m1_required_changes::test_u11_wrong_split_cannot_be_hidden_in_unclassified"
+      ]
+    },
+    "A08": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a08_pet_is_ledger_only_and_not_coaching_eligible",
+        "tests.unit.test_m1_astra_regressions::test_a08_pet_never_enters_top_priorities",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[-1.0]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[301.0]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[inf]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[nan]",
+        "tests.unit.test_m1_required_changes::test_u01_u02_valid_entity_and_own_uptime_scalar_can_coach",
+        "tests.unit.test_m1_required_changes::test_u02_uptime_cannot_reintroduce_pet_coaching"
+      ]
+    },
+    "A09": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_uniform_output_deficit_remains_visible_by_ability"
+      ]
+    },
+    "A10": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_algebra_properties::test_a10_other_damage_cannot_change_own_dps_casts_or_uptime"
+      ]
+    },
+    "A11": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_share_rank_must_not_be_rendered_as_use_rank"
+      ]
+    },
+    "A12": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m0_methodology_contract::test_m0_one_target_per_cast_is_one[10]",
+        "tests.unit.test_m0_methodology_contract::test_m0_one_target_per_cast_is_one[20]",
+        "tests.unit.test_m1_astra_regressions::test_a12_new_aggregation_does_not_calculate_targets_per_cast"
+      ]
+    },
+    "A13": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_feature_contract::test_a13_retired_feature_never_reaches_fitted_columns[f1_controllable_only]",
+        "tests.unit.test_m1_feature_contract::test_a13_retired_feature_never_reaches_fitted_columns[f2_full_covariates]"
+      ]
+    },
+    "A14": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a14_invalid_cursor_is_partial[0]",
+        "tests.unit.test_m1_acceptance::test_a14_invalid_cursor_is_partial[bad]",
+        "tests.unit.test_m1_acceptance::test_a14_invalid_cursor_is_partial[nan]",
+        "tests.unit.test_m1_astra_regressions::test_a14_nested_malformed_wcl_response_is_partial[payload0]",
+        "tests.unit.test_m1_astra_regressions::test_a14_nested_malformed_wcl_response_is_partial[payload1]",
+        "tests.unit.test_m1_required_changes::test_u03_explicit_empty_terminal_page_is_complete[casts]",
+        "tests.unit.test_m1_required_changes::test_u03_explicit_empty_terminal_page_is_complete[damage]",
+        "tests.unit.test_m1_required_changes::test_u03_fetch_integrates_collection_abstention[casts]",
+        "tests.unit.test_m1_required_changes::test_u03_fetch_integrates_collection_abstention[damage]",
+        "tests.unit.test_m1_required_changes::test_u03_malformed_pages_are_not_complete[missing_cursor-casts]",
+        "tests.unit.test_m1_required_changes::test_u03_malformed_pages_are_not_complete[missing_cursor-damage]",
+        "tests.unit.test_m1_required_changes::test_u03_malformed_pages_are_not_complete[outside_interval-casts]",
+        "tests.unit.test_m1_required_changes::test_u03_malformed_pages_are_not_complete[outside_interval-damage]"
+      ]
+    },
+    "A15": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_astra_regressions::test_a15_historical_v1_is_marked_as_legacy_reconciled",
+        "tests.unit.test_m1_persistence_contract::test_a15_legacy_absence_is_not_upgraded_on_read"
+      ]
+    },
+    "A16": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a16_invalid_beats_partial_and_blocks_comparison",
+        "tests.unit.test_m1_astra_regressions::test_a16_partial_player_never_produces_comparison",
+        "tests.unit.test_m1_astra_regressions::test_a16_zero_player_dps_retains_dps_closure_without_fake_percentages",
+        "tests.unit.test_m1_required_changes::test_u10_conclusion_abstains_from_nonfinite_statistics",
+        "tests.unit.test_m1_required_changes::test_u10_derived_overflow_abstains",
+        "tests.unit.test_m1_required_changes::test_u10_nonfinite_derived_quantities_abstain[percentage_overflow]",
+        "tests.unit.test_m1_required_changes::test_u10_nonfinite_derived_quantities_abstain[statistic_overflow]",
+        "tests.unit.test_m1_required_changes::test_u10_nonfinite_derived_quantities_abstain[sum_overflow]"
+      ]
+    },
+    "A17": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_algebra_properties::test_a05_a06_a16_a17_independent_ledger_before_and_after_gate",
+        "tests.unit.test_m1_algebra_properties::test_u11_independent_split_weights_and_normative_tolerance",
+        "tests.unit.test_m1_algebra_properties::test_u11_oracle_exercises_split_unclassified_support_and_gate",
+        "tests.unit.test_m1_required_changes::test_u11_small_closure_error_above_normative_tolerance_is_rejected",
+        "tests.unit.test_m1_required_changes::test_u11_wrong_split_cannot_be_hidden_in_unclassified"
+      ]
+    },
+    "A18": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_astra_regressions::test_a18_eight_metric_members_preserve_insufficient_scalar",
+        "tests.unit.test_m1_astra_regressions::test_a18_partial_cast_references_are_excluded_from_cast_population",
+        "tests.unit.test_m1_required_changes::test_u08_header_cannot_publish_median_below_floor",
+        "tests.unit.test_m1_required_changes::test_u08_header_uses_damage_population_and_public_floor[legacy_casts]",
+        "tests.unit.test_m1_required_changes::test_u08_header_uses_damage_population_and_public_floor[small_damage_R]",
+        "tests.unit.test_m1_required_changes::test_u08_uptime_retains_own_population_and_public_floor"
+      ]
+    },
+    "A19": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_persistence_contract::test_a19_migrate_twice_preserves_historical_run_and_new_versions",
+        "tests.unit.test_m1_persistence_contract::test_a19_new_provenance_round_trip[COMPLETE]",
+        "tests.unit.test_m1_persistence_contract::test_a19_new_provenance_round_trip[PARTIAL]",
+        "tests.unit.test_m1_persistence_contract::test_a19_new_provenance_round_trip[UNKNOWN]",
+        "tests.unit.test_m1_persistence_contract::test_a19_telemetry_versions_reach_disk",
+        "tests.unit.test_m1_required_changes::test_u04_corrupt_provenance_stays_blocked_on_disk[inverted]",
+        "tests.unit.test_m1_required_changes::test_u04_corrupt_provenance_stays_blocked_on_disk[missing]",
+        "tests.unit.test_m1_required_changes::test_u04_corrupt_provenance_stays_blocked_on_disk[reconciliation]",
+        "tests.unit.test_m1_required_changes::test_u04_corrupt_provenance_stays_blocked_on_disk[residual]",
+        "tests.unit.test_m1_required_changes::test_u04_corrupt_provenance_stays_blocked_on_disk[short]",
+        "tests.unit.test_m1_required_changes::test_u05_exact_authority_guard_survives_parquet",
+        "tests.unit.test_m1_required_changes::test_u05_wcl_authority_is_exact"
+      ]
+    },
+    "A20": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_discord_bot::test_analisar_happy_path_sends_one_coaching_answer_without_link",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[-1.0]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[301.0]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[inf]",
+        "tests.unit.test_m1_required_changes::test_u01_invalid_cast_cannot_authorize_coaching[nan]",
+        "tests.unit.test_m1_required_changes::test_u01_u02_valid_entity_and_own_uptime_scalar_can_coach",
+        "tests.unit.test_m1_required_changes::test_u08_header_cannot_publish_median_below_floor",
+        "tests.unit.test_m1_required_changes::test_u08_header_uses_damage_population_and_public_floor[legacy_casts]",
+        "tests.unit.test_m1_required_changes::test_u08_header_uses_damage_population_and_public_floor[small_damage_R]",
+        "tests.unit.test_m1_required_changes::test_u08_uptime_retains_own_population_and_public_floor",
+        "tests.unit.test_pipeline::test_run_analysis_execution_findings_nonvacuous_with_a_material_death",
+        "tests.unit.test_pipeline::test_run_analysis_exposes_ready_capability_without_running_inference",
+        "tests.unit.test_pipeline::test_run_analysis_happy_path_returns_header_and_comparisons",
+        "tests.unit.test_pipeline::test_run_analysis_populates_conclusion_end_to_end"
+      ]
+    },
+    "A21": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_damage_scope::test_gate1_probe_reconciles_all_twenty_players_exactly"
+      ]
+    },
+    "A22": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_acceptance::test_a22_arithmetic_mean_not_median"
+      ]
+    },
+    "A23": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_dps_gap::test_report_exposes_cohort_and_aspirational_reference_numbers",
+        "tests.unit.test_m1_astra_regressions::test_a23_invalid_aspirational_member_is_excluded_without_crash"
+      ]
+    },
+    "A24": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_required_changes::test_u06_missing_uptime_is_not_zero[aura0]",
+        "tests.unit.test_m1_required_changes::test_u06_missing_uptime_is_not_zero[aura1]",
+        "tests.unit.test_m1_required_changes::test_u08_uptime_retains_own_population_and_public_floor",
+        "tests.unit.test_m1_review_round2::test_each_metric_has_its_own_population_and_typed_absence"
+      ]
+    },
+    "A25": {
+      "recorded_test_result": "PASS",
+      "executed_nodes": [
+        "tests.unit.test_m1_feature_contract::test_a25_new_evaluation_rejects_legacy_schema_without_training",
+        "tests.unit.test_m1_feature_contract::test_a25_nonfinite_feature_rejected[inf]",
+        "tests.unit.test_m1_feature_contract::test_a25_nonfinite_feature_rejected[nan]",
+        "tests.unit.test_m1_feature_contract::test_a25_result_uses_dataset_version_without_changing_campaign",
+        "tests.unit.test_m1_feature_contract::test_a25_value_schema_and_order_are_in_fingerprint"
+      ]
+    }
+  },
+  "raw_before": "983b0a3ed9294925e70c60da62c871da87d629261d3d9c4568e67c25cd426926",
+  "raw_after": "983b0a3ed9294925e70c60da62c871da87d629261d3d9c4568e67c25cd426926",
+  "historical_hash_status": "UNRESOLVED; no historical byte-preservation claim",
+  "artifact_sha256": {
+    "docs/m1-evidence-current.json.gz": "1e38e60b8f9c8fbd868fd032bf911b649e06edb8a79eaf1aa42a146c82b751bd",
+    "docs/m1-review-evidence.md": "819a96171ed8b038daf670417b665e08e098b542d34a25c63b0d982c486e138f",
+    "docs/m1-specification.md": "db1c9d1c6389d8528d6f4db141039170e1bd14d7e621a86731af7431d8b0312b",
+    "docs/m1-suite-exit.json": "faf24d29ab3d6603cd91804a6bd49da311003213b19ddac6a03c6fb059c50a22",
+    "docs/m1-suite-final.xml": "90bac94c30a68ba5e82fca649bf512289efb13da2a81a707e128d557be28f49b",
+    "docs/m1-validation/acceptance.json": "c98715d6c4e1f63523405466bb6652768cd55f4d818674dc6d8d37006fe34711",
+    "docs/m1-validation/acceptance.log.txt": "c2e72a8b718fecd3c8fd78d4b82adb5f0199e79130cdd15934356d606bd4337d",
+    "docs/m1-validation/acceptance.xml": "942b6458aa063f87a8a30ce79ede425fb0e78b6c0d4665654a97b69e0f61a71a",
+    "docs/m1-validation/audit.py.txt": "7dd46635dd523746eece4cbdd4da14538724cce7519ed037f7ac6851d4408ffd",
+    "docs/m1-validation/evidence.json": "2ac872da7e2927fd8568d3faf0503b063d03add88509f5792ad15471df81c9a0",
+    "docs/m1-validation/evidence.log.txt": "07d7a83919dc0064d1db2ffe521f859b6801a8b80d5c06f45932f526f12b8345",
+    "docs/m1-validation/pyright.json": "93d48de2ef601d1a2213b301bec10cb86d8fe3aea33b2c7d364ce15cd8d03efa",
+    "docs/m1-validation/pyright.log.txt": "409bc8d9797bc7e7def87688b2db69573b00762f489cbd34c52af51c1a293815",
+    "docs/m1-validation/regressions.json": "7f8cc8bf06d39d55ec4774e2c9c5d66915647051cf0272c107ff57f33c45eee9",
+    "docs/m1-validation/regressions.log.txt": "e6109a45375dbf91c6f05d994de50418b4b76c1b6a30c53a2296b069d335f044",
+    "docs/m1-validation/regressions.xml": "5e3d65b900ec82b8078c4a1b6efa43780ad4287aea84df4b5f948653f335e3c2",
+    "docs/m1-validation/ruff.json": "d61018b71f0a9a8b55e225ded453044f8da89ed63ac7a7fc0e895476ac912aed",
+    "docs/m1-validation/ruff.log.txt": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "docs/m1-validation/runner.py.txt": "ccd9f44c1cbde192e18fa7951ea976f96c3788966670715484e4ad84c2471bb9",
+    "docs/m1-validation/suite.json": "faf24d29ab3d6603cd91804a6bd49da311003213b19ddac6a03c6fb059c50a22",
+    "docs/m1-validation/suite.log.txt": "fc697d9b652590f92e1ffe617ebd3db6a044ed816c0063ca14f846ea8e376656",
+    "docs/reviews/m1-independent-2026-09-13/archive-sha256.json": "813c792fba2a0b075ffd43a28a23c747659478b75b99424d68e3e2a3b339c782",
+    "docs/reviews/m1-independent-2026-09-13/independent-probes.json": "479a0b6ea9d1a07df00db5b2f77fccccd8b20a22ff114cda0e922e966641a1f6",
+    "docs/reviews/m1-independent-2026-09-13/independent-review.md": "92d61971cbd9d6b3634bc70acba482196d37c86940bddf9880401f320fb73086",
+    "docs/reviews/m1-independent-2026-09-13/independent-validation.json": "78a1ddddfd5b6f53928244fa1f9d6217f30a35770c7598cdd3b1929c336a2870",
+    "docs/reviews/m1-independent-2026-09-13/independent-validation.md": "bad21060ee4fcdbe366bce6ba9c864ab86193cd94f6f1d73f14de454f9dfbb53",
+    "docs/reviews/m1-independent-2026-09-13/independent_probes.py.txt": "b0301ab3047e53fdbeae5b5a05ba414376df855e737a2e6c866a31bf3b43677e",
+    "docs/reviews/m1-independent-2026-09-13/README.md": "5e356a18bf5bd3d36e792646ca34a6325784b83fee840b2c98c304e26858fedc",
+    "docs/reviews/m1-independent-2026-09-13/regressions-before-exit.txt": "f1b2f662800122bed0ff255693df89c4487fbdcf453d3524a42d4ec20c3d9c04",
+    "docs/reviews/m1-independent-2026-09-13/regressions-before.log.txt": "5d8683409409eff81786ff782e50c2ecd61ed0656a0e299fb8c07e1bb11cfec1",
+    "docs/reviews/m1-independent-2026-09-13/regressions-before.xml": "2094b8de2ae7fd4a7e4b948e5ffeb27edbf3bd742e70deda9d88ba0ab7d89b71",
+    "docs/reviews/m1-independent-2026-09-13/superseded-implementation-evidence.md.txt": "50435f6b3e39048bdb975c37c7d5f6b13a476b28610770d1625e247b4c230254"
+  }
+}

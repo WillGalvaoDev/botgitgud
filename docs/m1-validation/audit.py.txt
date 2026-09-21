@@ -1,0 +1,145 @@
+"""Run with python docs/m1-validation/audit.py.txt [isolated-validation-root].
+
+Verifies recorded executions and artifact linkage, not normative sufficiency.
+"""
+import datetime
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+root = Path(__file__).resolve().parents[2]
+isolated = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def fingerprint(base, paths):
+    result = hashlib.sha256()
+    for path in sorted(paths, key=lambda p: p.relative_to(base).as_posix()):
+        result.update(path.relative_to(base).as_posix().encode())
+        result.update(hashlib.sha256(path.read_bytes()).digest())
+    return result.hexdigest()
+
+
+paths = [
+    p for folder in ('src', 'tests', 'scripts') for p in (root / folder).rglob('*')
+    if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc'
+    and not any(part.startswith('_record_scratch') for part in p.parts)
+] + [root / 'pyproject.toml', root / 'spells.json']
+source_hash = fingerprint(root, paths)
+if isolated:
+    for path in paths:
+        assert path.read_bytes() == (isolated / path.relative_to(root)).read_bytes(), path
+
+records = {}
+for mode in ('regressions', 'acceptance', 'ruff', 'pyright', 'suite', 'evidence'):
+    record = json.loads((root / f'docs/m1-validation/{mode}.json').read_text())
+    assert record['exit_code'] == 0, mode
+    assert record['source_fingerprint'] == source_hash, mode
+    assert record['source_file_count'] == len(paths), mode
+    records[mode] = record
+
+
+def junit(relative, expect_failure=False):
+    tree = ET.parse(root / relative)
+    cases = list(tree.iter('testcase'))
+    assert cases
+    for case in cases:
+        assert case.find('error') is None and case.find('skipped') is None, case.attrib
+        assert (case.find('failure') is not None) == expect_failure, case.attrib
+    return cases
+
+
+before = junit('docs/reviews/m1-independent-2026-09-13/regressions-before.xml', True)
+after = junit('docs/m1-validation/regressions.xml')
+acceptance = junit('docs/m1-validation/acceptance.xml')
+suite = junit('docs/m1-suite-final.xml')
+assert len(before) == 25 and len(after) == 38
+after_names = {case.attrib['name'] for case in after}
+assert all(case.attrib['name'] in after_names for case in before)
+groups = {}
+for number in range(1, 13):
+    prefix = f'test_u{number:02}_'
+    red = [case.attrib['name'] for case in before if case.attrib['name'].startswith(prefix)]
+    green = [case.attrib['name'] for case in after if case.attrib['name'].startswith(prefix)]
+    assert red and green
+    groups[f'U{number:02}'] = {'before_assertion_failures': red, 'final_passed': green}
+
+coverage_patterns = {
+    'A01': ['test_a01_', 'test_m0_duration_'],
+    'A02': ['test_m0_separate_medians_'],
+    'A03': ['test_a03_a04_', 'test_m0_support_adjusted_'],
+    'A04': ['test_a03_a04_'],
+    'A05': ['test_a05_', 'test_u11_'],
+    'A06': ['test_a05_a06_', 'test_a06_'],
+    'A07': ['test_a07_', 'test_u11_'],
+    'A08': ['test_a08_', 'test_u01_', 'test_u02_'],
+    'A09': ['test_m0_uniform_output_'],
+    'A10': ['test_a10_'],
+    'A11': ['test_m0_share_rank_'],
+    'A12': ['test_a12_', 'test_m0_one_target_per_cast_'],
+    'A13': ['test_a13_'],
+    'A14': ['test_a14_', 'test_u03_'],
+    'A15': ['test_a15_'],
+    'A16': ['test_a16_', 'test_u10_'],
+    'A17': ['test_a05_a06_a16_a17_', 'test_u11_'],
+    'A18': ['test_a18_', 'test_u08_'],
+    'A19': ['test_a19_', 'test_u04_', 'test_u05_'],
+    'A20': ['test_u08_', 'test_u01_', 'test_run_analysis_', 'test_analisar_happy_path_'],
+    'A21': ['test_gate1_probe_reconciles_all_twenty_players_exactly'],
+    'A22': ['test_a22_'],
+    'A23': ['test_a23_', 'test_report_exposes_cohort_and_aspirational_reference_numbers'],
+    'A24': ['test_u06_', 'test_u08_uptime_', 'test_each_metric_has_its_own_population_'],
+    'A25': ['test_a25_'],
+}
+coverage = {}
+for criterion, prefixes in coverage_patterns.items():
+    nodes = sorted({case.attrib['classname'] + '::' + case.attrib['name'] for case in suite
+                    if any(case.attrib['name'].startswith(prefix) for prefix in prefixes)})
+    assert nodes, criterion
+    coverage[criterion] = {'recorded_test_result': 'PASS', 'executed_nodes': nodes}
+
+archive = root / 'docs/reviews/m1-independent-2026-09-13'
+archive_hashes = json.loads((archive / 'archive-sha256.json').read_text())
+for name, expected in archive_hashes.items():
+    assert digest(archive / name) == expected, name
+with gzip.open(root / 'docs/m1-evidence-current.json.gz', 'rt', encoding='utf8') as stream:
+    evidence = json.load(stream)
+assert evidence['source_fingerprint'] == source_hash
+assert evidence['source_file_count'] == len(paths)
+assert evidence['raw_before'] == evidence['raw_after']
+raw = root / 'data/raw'
+assert fingerprint(raw, [p for p in raw.rglob('*') if p.is_file()]) == evidence['raw_after']
+assert digest(root / 'data/spells.json') == evidence['identity_catalog_sha256']
+assert evidence['independent_split_oracle']['cases'] == 500
+assert evidence['independent_split_oracle']['split_pairs'] > 0
+assert evidence['independent_split_oracle']['omitted_rows'] > 0
+suite_log = (root / 'docs/m1-validation/suite.log.txt').read_text(encoding='utf8')
+summary = re.findall(r'[^\n]*\d+ passed[^\n]*', suite_log)[-1]
+artifacts = [p for folder in ('docs/m1-validation', 'docs/reviews/m1-independent-2026-09-13')
+             for p in (root / folder).rglob('*') if p.is_file() and p.suffix != '.log']
+artifacts += [root / ('docs/' + name) for name in (
+    'm1-review-evidence.md', 'm1-specification.md', 'm1-suite-final.xml',
+    'm1-suite-exit.json', 'm1-evidence-current.json.gz',
+)]
+audit = {
+    'checked_utc': datetime.datetime.now(datetime.UTC).isoformat(),
+    'purpose': 'Final-tree execution and artifact linkage; normative interpretation in m1-review-evidence.md. M1 closure requires independent review.',
+    'validated_source_files': len(paths), 'source_fingerprint': source_hash,
+    'isolated_source_bytes_equal': str(isolated) if isolated else 'not rechecked in this invocation',
+    'counts': {'before_failed': len(before), 'regressions_passed': len(after),
+               'acceptance_passed': len(acceptance), 'offline_suite_passed': len(suite)},
+    'suite_summary': summary, 'executions': records, 'required_changes': groups,
+    'coverage': coverage, 'raw_before': evidence['raw_before'], 'raw_after': evidence['raw_after'],
+    'historical_hash_status': evidence['historical_hash_status'],
+    'artifact_sha256': {p.relative_to(root).as_posix(): digest(p) for p in sorted(artifacts)},
+}
+(root / 'docs/m1-final-evidence-audit.json').write_text(
+    json.dumps(audit, ensure_ascii=False, indent=2), encoding='utf8')
+print(json.dumps({'source_fingerprint': source_hash, 'counts': audit['counts'], 'suite_summary': summary}))

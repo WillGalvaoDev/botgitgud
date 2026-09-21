@@ -1,0 +1,291 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "473",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPlayerEvents(\n  $code: String!, $fightIDs: [Int]!, $startTime: Float!, $endTime: Float!\n) {\n  reportData {\n    report(code: $code) {\n      events(\n        fightIDs: $fightIDs, dataType: Casts, startTime: $startTime,\n        endTime: $endTime, limit: 5000, translate: true\n      ) {\n        data\n        nextPageTimestamp\n      }\n    }\n  }\n}\n",
+    "variables": {
+      "code": "zYrX3JPvC16WqLfy",
+      "endTime": 2729487,
+      "fightIDs": [
+        19
+      ],
+      "startTime": 2727805
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "events": {
+            "data": [
+              {
+                "abilityGameID": 61295,
+                "fight": 19,
+                "sourceID": 42,
+                "targetID": 2,
+                "timestamp": 2727805,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 115181,
+                "fight": 19,
+                "sourceID": 5,
+                "targetID": -1,
+                "timestamp": 2727897,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 30455,
+                "fight": 19,
+                "sourceID": 3,
+                "targetID": 322,
+                "timestamp": 2727935,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 596,
+                "fight": 19,
+                "sourceID": 26,
+                "targetID": 22,
+                "timestamp": 2728009,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 124682,
+                "fight": 19,
+                "sourceID": 4,
+                "targetID": -1,
+                "timestamp": 2728043,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 343294,
+                "fight": 19,
+                "sourceID": 1,
+                "targetID": 322,
+                "timestamp": 2728132,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 119582,
+                "fight": 19,
+                "sourceID": 8,
+                "sourceMarker": 2,
+                "targetID": -1,
+                "timestamp": 2728134,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 190984,
+                "fight": 19,
+                "sourceID": 2,
+                "targetID": -1,
+                "timestamp": 2728205,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 190984,
+                "fight": 19,
+                "sourceID": 2,
+                "targetID": 322,
+                "timestamp": 2728205,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 452201,
+                "fight": 19,
+                "sourceID": 22,
+                "targetID": 322,
+                "timestamp": 2728223,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 51505,
+                "fight": 19,
+                "sourceID": 22,
+                "targetID": -1,
+                "timestamp": 2728223,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 30455,
+                "fight": 19,
+                "sourceID": 27,
+                "targetID": 322,
+                "timestamp": 2728241,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 55090,
+                "fight": 19,
+                "sourceID": 28,
+                "targetID": 322,
+                "timestamp": 2728573,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 383328,
+                "fight": 19,
+                "sourceID": 19,
+                "targetID": 322,
+                "timestamp": 2728644,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 431443,
+                "fight": 19,
+                "sourceID": 10,
+                "targetID": 322,
+                "timestamp": 2728664,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 185438,
+                "fight": 19,
+                "sourceID": 9,
+                "targetID": 322,
+                "timestamp": 2728711,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 100780,
+                "fight": 19,
+                "sourceID": 8,
+                "sourceMarker": 2,
+                "targetID": 322,
+                "timestamp": 2728712,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 124682,
+                "fight": 19,
+                "sourceID": 4,
+                "targetID": 22,
+                "timestamp": 2728715,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 264178,
+                "fight": 19,
+                "sourceID": 6,
+                "targetID": -1,
+                "timestamp": 2728776,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 264178,
+                "fight": 19,
+                "sourceID": 6,
+                "targetID": 322,
+                "timestamp": 2728776,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 431443,
+                "fight": 19,
+                "sourceID": 10,
+                "targetID": -1,
+                "timestamp": 2728927,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 33076,
+                "fight": 19,
+                "sourceID": 26,
+                "targetID": 8,
+                "targetMarker": 2,
+                "timestamp": 2728929,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 162794,
+                "fight": 19,
+                "sourceID": 30,
+                "targetID": 322,
+                "timestamp": 2728964,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 105174,
+                "fight": 19,
+                "sourceID": 11,
+                "targetID": 322,
+                "timestamp": 2729029,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 264178,
+                "fight": 19,
+                "sourceID": 11,
+                "targetID": -1,
+                "timestamp": 2729029,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 264178,
+                "fight": 19,
+                "sourceID": 11,
+                "targetID": 322,
+                "timestamp": 2729029,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 30455,
+                "fight": 19,
+                "sourceID": 3,
+                "targetID": 322,
+                "timestamp": 2729170,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 190984,
+                "fight": 19,
+                "sourceID": 2,
+                "targetID": -1,
+                "timestamp": 2729278,
+                "type": "begincast"
+              },
+              {
+                "abilityGameID": 408385,
+                "fight": 19,
+                "sourceID": 19,
+                "targetID": 322,
+                "timestamp": 2729339,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 55090,
+                "fight": 19,
+                "sourceID": 1,
+                "targetID": 322,
+                "timestamp": 2729428,
+                "type": "cast"
+              },
+              {
+                "abilityGameID": 322109,
+                "fight": 19,
+                "sourceID": 5,
+                "targetID": 322,
+                "timestamp": 2729429,
+                "type": "cast"
+              }
+            ],
+            "nextPageTimestamp": null
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

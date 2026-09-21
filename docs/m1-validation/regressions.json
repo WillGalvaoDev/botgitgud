@@ -1,0 +1,22 @@
+{
+  "command": [
+    "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+    "-m",
+    "pytest",
+    "-o",
+    "addopts=",
+    "-m",
+    "not network",
+    "-q",
+    "--tb=short",
+    "tests/unit/test_m1_required_changes.py",
+    "--junitxml=docs/m1-validation/regressions.xml"
+  ],
+  "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+  "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+  "source_file_count": 978,
+  "started_utc": "2026-09-13T23:26:21.173685+00:00",
+  "finished_utc": "2026-09-13T23:26:28.677951+00:00",
+  "elapsed_s": 7.504261599999154,
+  "exit_code": 0
+}

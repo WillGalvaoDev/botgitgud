@@ -1,0 +1,265 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "470",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Crystelia",
+      "serverRegion": "CN",
+      "serverSlug": "熊猫酒仙"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 87.31752893236593,
+            "bestAmount": 169956.03154791,
+            "difficulty": 5,
+            "fastestKill": 205478,
+            "medianPerformance": 98.26521519563433,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 169956.03154791,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 294029,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 98.62100336027598,
+                "historicalTotalParses": 11178,
+                "lockedIn": true,
+                "rankPercent": 98.62100336027598,
+                "rankTotalParses": 11178,
+                "report": {
+                  "code": "v37mXMyk4tgz1KWH",
+                  "fightID": 2,
+                  "startTime": 1786449454282
+                },
+                "spec": "Demonology",
+                "startTime": 1786449532494,
+                "todayPercent": 98.68071952759298,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 168642.93014337,
+                "bestSpec": "Demonology",
+                "bracketData": 291,
+                "class": 10,
+                "duration": 205478,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 99.4655360136569,
+                "historicalTotalParses": 8795,
+                "lockedIn": true,
+                "rankPercent": 99.4655360136569,
+                "rankTotalParses": 8795,
+                "report": {
+                  "code": "zCfmZh8WaG37YTDK",
+                  "fightID": 17,
+                  "startTime": 1783746643302
+                },
+                "spec": "Demonology",
+                "startTime": 1783748268463,
+                "todayPercent": 98.38053992795703,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 158567.93535175,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 343768,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 95.61469131882806,
+                "historicalTotalParses": 10879,
+                "lockedIn": true,
+                "rankPercent": 95.61469131882806,
+                "rankTotalParses": 10879,
+                "report": {
+                  "code": "MpZQd62rFcVBywLN",
+                  "fightID": 22,
+                  "startTime": 1785743696871
+                },
+                "spec": "Demonology",
+                "startTime": 1785747036473,
+                "todayPercent": 95.35779937876502,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 148443.99092308,
+                "bestSpec": "Demonology",
+                "bracketData": 288,
+                "class": 10,
+                "duration": 273661,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "historicalPercent": 98.26521519563433,
+                "historicalTotalParses": 27865,
+                "lockedIn": true,
+                "rankPercent": 98.26521519563433,
+                "rankTotalParses": 27865,
+                "report": {
+                  "code": "3WLw6xRMpYD9grH1",
+                  "fightID": 118,
+                  "startTime": 1781327426788
+                },
+                "spec": "Demonology",
+                "startTime": 1781353130337,
+                "todayPercent": 98.1623369369676,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 142948.67701923,
+                "bestSpec": "Demonology",
+                "bracketData": 286,
+                "class": 10,
+                "duration": 325137,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "historicalPercent": 98.64029426633962,
+                "historicalTotalParses": 21102,
+                "lockedIn": true,
+                "rankPercent": 98.64029426633962,
+                "rankTotalParses": 21102,
+                "report": {
+                  "code": "8T6KvbcpjXfz9tD1",
+                  "fightID": 21,
+                  "startTime": 1779426804697
+                },
+                "spec": "Demonology",
+                "startTime": 1779429754223,
+                "todayPercent": 96.33385045119802,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 110297.90865426,
+                "bestSpec": "Demonology",
+                "bracketData": 281,
+                "class": 10,
+                "duration": 346858,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "historicalPercent": 58.480295606012746,
+                "historicalTotalParses": 14785,
+                "lockedIn": true,
+                "rankPercent": 58.480295606012746,
+                "rankTotalParses": 14785,
+                "report": {
+                  "code": "dcphVTLbKvGHg2Jr",
+                  "fightID": 43,
+                  "startTime": 1778303214236
+                },
+                "spec": "Demonology",
+                "startTime": 1778310095390,
+                "todayPercent": 44.36721989338223,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 110213.55424298,
+                "bestSpec": "Demonology",
+                "bracketData": 277,
+                "class": 10,
+                "duration": 323028,
+                "faction": 0,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 62.135666765813916,
+                "historicalTotalParses": 10782,
+                "lockedIn": true,
+                "rankPercent": 62.135666765813916,
+                "rankTotalParses": 10782,
+                "report": {
+                  "code": "YVjkfyhqQgA2KGzw",
+                  "fightID": 42,
+                  "startTime": 1777643245295
+                },
+                "spec": "Demonology",
+                "startTime": 1777649607673,
+                "todayPercent": 44.1884547774328,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 101158.75261927,
+                "banned": true,
+                "bestSpec": "Destruction",
+                "bracketData": 266,
+                "class": 10,
+                "duration": 368901,
+                "exploit": 44,
+                "faction": 0,
+                "guild": {
+                  "faction": 1,
+                  "id": 767985,
+                  "name": "丨烟雨南国丨"
+                },
+                "historicalPercent": 46.88619563625093,
+                "historicalTotalParses": 2272,
+                "lockedIn": true,
+                "rankPercent": 46.88619563625093,
+                "rankTotalParses": 2272,
+                "report": {
+                  "code": "Xmp6h4GdVH1BgtLA",
+                  "fightID": 52,
+                  "startTime": 1775804682577
+                },
+                "spec": "Destruction",
+                "startTime": 1775814179518,
+                "todayPercent": 40.242305052648675,
+                "todayTotalParses": 4019
+              }
+            ],
+            "totalKills": 7,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

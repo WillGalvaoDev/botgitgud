@@ -1,0 +1,263 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "484",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\n    query GetPercentile($name: String!, $serverSlug: String!, $serverRegion: String!, $encounterID: Int!, $difficulty: Int!) {\n      characterData {\n        character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n          encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n        }\n      }\n    }\n    ",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "Zarad",
+      "serverRegion": "US",
+      "serverSlug": "azralon"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 65.84177715004647,
+            "bestAmount": 117576.05128205,
+            "difficulty": 5,
+            "fastestKill": 312000,
+            "medianPerformance": 66.83988273631513,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 117576.05128205,
+                "bestSpec": "Demonology",
+                "bracketData": 288,
+                "class": 10,
+                "duration": 312000,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 71.08389026591166,
+                "historicalTotalParses": 19967,
+                "lockedIn": true,
+                "rankPercent": 71.08389026591166,
+                "rankTotalParses": 19967,
+                "report": {
+                  "code": "gCXVMN86PwYhyaDd",
+                  "fightID": 21,
+                  "startTime": 1779218630283
+                },
+                "spec": "Demonology",
+                "startTime": 1779240112502,
+                "todayPercent": 60.091750211970286,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 117560.81146044,
+                "bestSpec": "Demonology",
+                "bracketData": 288,
+                "class": 10,
+                "duration": 312030,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 71.05036601491044,
+                "historicalTotalParses": 19967,
+                "lockedIn": true,
+                "rankPercent": 71.05036601491044,
+                "rankTotalParses": 19967,
+                "report": {
+                  "code": "DXhxGd2m8cHPaNtY",
+                  "fightID": 25,
+                  "startTime": 1779235740509
+                },
+                "spec": "Demonology",
+                "startTime": 1779240468027,
+                "todayPercent": 60.05951562094631,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 114134.57738687,
+                "bestSpec": "Demonology",
+                "bracketData": 285,
+                "class": 10,
+                "duration": 358827,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 67.52075386460955,
+                "historicalTotalParses": 16541,
+                "lockedIn": true,
+                "rankPercent": 67.52075386460955,
+                "rankTotalParses": 16541,
+                "report": {
+                  "code": "FbmTgyZHMzVj1WG2",
+                  "fightID": 10,
+                  "startTime": 1778629896004
+                },
+                "spec": "Demonology",
+                "startTime": 1778634889359,
+                "todayPercent": 52.57540253956502,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 114126.62601853,
+                "bestSpec": "Demonology",
+                "bracketData": 285,
+                "class": 10,
+                "duration": 358852,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 67.50044338204056,
+                "historicalTotalParses": 16541,
+                "lockedIn": true,
+                "rankPercent": 67.50044338204056,
+                "rankTotalParses": 16541,
+                "report": {
+                  "code": "vWd43nFaw1Qxjt78",
+                  "fightID": 25,
+                  "startTime": 1778630914247
+                },
+                "spec": "Demonology",
+                "startTime": 1778635232453,
+                "todayPercent": 52.55802936858962,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 111046.61597252,
+                "bestSpec": "Demonology",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 362172,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 63.0875584543742,
+                "historicalTotalParses": 12866,
+                "lockedIn": true,
+                "rankPercent": 63.0875584543742,
+                "rankTotalParses": 12866,
+                "report": {
+                  "code": "LnN6DZGTrCpzhcjJ",
+                  "fightID": 18,
+                  "startTime": 1778015479890
+                },
+                "spec": "Demonology",
+                "startTime": 1778032224095,
+                "todayPercent": 45.953891515292526,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 111046.30936044,
+                "bestSpec": "Demonology",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 362173,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 63.08669350400534,
+                "historicalTotalParses": 12866,
+                "lockedIn": true,
+                "rankPercent": 63.08669350400534,
+                "rankTotalParses": 12866,
+                "report": {
+                  "code": "cBY9zThQ7L14jkJ3",
+                  "fightID": 19,
+                  "startTime": 1778028931526
+                },
+                "spec": "Demonology",
+                "startTime": 1778032658554,
+                "todayPercent": 45.95324173843795,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 110940.60863874,
+                "bestSpec": "Demonology",
+                "bracketData": 281,
+                "class": 10,
+                "duration": 378944,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 66.17932209058972,
+                "historicalTotalParses": 3626,
+                "lockedIn": true,
+                "rankPercent": 66.17932209058972,
+                "rankTotalParses": 3626,
+                "report": {
+                  "code": "M7qvG8XVN9hgCDay",
+                  "fightID": 22,
+                  "startTime": 1776988823072
+                },
+                "spec": "Demonology",
+                "startTime": 1776994812645,
+                "todayPercent": 45.729239205743866,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 108296.5440712,
+                "bestSpec": "Demonology",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 345146,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 60947,
+                  "name": "Titan Inc"
+                },
+                "historicalPercent": 57.22518962393026,
+                "historicalTotalParses": 10220,
+                "lockedIn": true,
+                "rankPercent": 57.22518962393026,
+                "rankTotalParses": 10220,
+                "report": {
+                  "code": "PtfBbQKRY9d6zAMC",
+                  "fightID": 1,
+                  "startTime": 1777593187707
+                },
+                "spec": "Demonology",
+                "startTime": 1777594213744,
+                "todayPercent": 40.12589846965479,
+                "todayTotalParses": 28276
+              }
+            ],
+            "totalKills": 8,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

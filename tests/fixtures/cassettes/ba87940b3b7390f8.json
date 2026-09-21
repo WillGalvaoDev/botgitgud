@@ -1,0 +1,474 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "227",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetReportRankings($code: String!, $fightIDs: [Int]!) {\n  reportData {\n    report(code: $code) {\n      rankings(fightIDs: $fightIDs)\n    }\n  }\n}\n",
+    "variables": {
+      "code": "nt8jbCvqND2PZYJR",
+      "fightIDs": [
+        21
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "rankings": {
+            "data": [
+              {
+                "bracket": 19,
+                "bracketData": 287.35,
+                "damageTakenExcludingTanks": 246865942,
+                "deaths": 9,
+                "difficulty": 5,
+                "duration": 312582,
+                "encounter": {
+                  "id": 3179,
+                  "name": "Fallen-King Salhadaar"
+                },
+                "execution": {
+                  "best": 47,
+                  "rank": 47,
+                  "rankPercent": 2,
+                  "totalParses": 47
+                },
+                "fightID": 21,
+                "guild": {
+                  "faction": 0,
+                  "id": 445932,
+                  "name": "NoSkillJustLuck",
+                  "server": {
+                    "id": 447,
+                    "name": "Malorne",
+                    "region": "EU"
+                  }
+                },
+                "kill": 1,
+                "partition": 4,
+                "reportsBlacklistForCharacters": [],
+                "roles": {
+                  "dps": {
+                    "characters": [
+                      {
+                        "amount": 147383.04828813,
+                        "best": 22,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 46,
+                        "class": "DeathKnight",
+                        "id": 75319880,
+                        "name": "Aésir",
+                        "rank": 22,
+                        "rankPercent": 47,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 41
+                      },
+                      {
+                        "amount": 71722.421636563,
+                        "best": 41,
+                        "bracket": 9,
+                        "bracketData": 257,
+                        "bracketPercent": 100,
+                        "class": "DeathKnight",
+                        "id": 102269400,
+                        "name": "Shigengrips",
+                        "rank": 41,
+                        "rankPercent": 2,
+                        "server": {
+                          "id": 406,
+                          "name": "Blackhand",
+                          "region": "EU"
+                        },
+                        "spec": "Unholy",
+                        "totalParses": 41
+                      },
+                      {
+                        "amount": 32268.678298814,
+                        "best": 46,
+                        "bracket": 10,
+                        "bracketData": 262,
+                        "bracketPercent": 100,
+                        "class": "Hunter",
+                        "id": 77416248,
+                        "name": "Âffemitwaffe",
+                        "rank": 46,
+                        "rankPercent": 2,
+                        "server": {
+                          "id": 447,
+                          "name": "Malorne",
+                          "region": "EU"
+                        },
+                        "spec": "BeastMastery",
+                        "totalParses": 46
+                      },
+                      {
+                        "amount": 116874.79445394,
+                        "best": 32,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 9,
+                        "class": "Mage",
+                        "id": 75911008,
+                        "name": "Ghosti",
+                        "rank": 32,
+                        "rankPercent": 15,
+                        "server": {
+                          "id": 402,
+                          "name": "Arthas",
+                          "region": "EU"
+                        },
+                        "spec": "Arcane",
+                        "totalParses": 37
+                      },
+                      {
+                        "amount": 110405.95107844,
+                        "best": 9,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 0,
+                        "class": "Mage",
+                        "id": 54013888,
+                        "name": "Magicmarvin",
+                        "rank": 9,
+                        "rankPercent": 9,
+                        "server": {
+                          "id": 447,
+                          "name": "Malorne",
+                          "region": "EU"
+                        },
+                        "spec": "Fire",
+                        "totalParses": 9
+                      },
+                      {
+                        "amount": 90258.140263995,
+                        "best": 24,
+                        "bracket": 19,
+                        "bracketData": 289,
+                        "bracketPercent": 100,
+                        "class": "Monk",
+                        "id": 108768596,
+                        "name": "Trìíp",
+                        "rank": 24,
+                        "rankPercent": 19,
+                        "server": {
+                          "id": 408,
+                          "name": "Blackrock",
+                          "region": "EU"
+                        },
+                        "spec": "Windwalker",
+                        "totalParses": 29
+                      },
+                      {
+                        "amount": 117036.28487885,
+                        "best": 33,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 28,
+                        "class": "Paladin",
+                        "id": 23567255,
+                        "name": "Rewoo",
+                        "rank": 33,
+                        "rankPercent": 10,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Retribution",
+                        "totalParses": 36
+                      },
+                      {
+                        "amount": 121965.88095284,
+                        "best": 33,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 5,
+                        "class": "Priest",
+                        "id": 774490,
+                        "name": "Zeatt",
+                        "rank": 33,
+                        "rankPercent": 15,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Shadow",
+                        "totalParses": 38
+                      },
+                      {
+                        "amount": 129571.69958603,
+                        "best": 31,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 12,
+                        "class": "Priest",
+                        "id": 104850094,
+                        "name": "Letterboxd",
+                        "rank": 31,
+                        "rankPercent": 20,
+                        "server": {
+                          "id": 399,
+                          "name": "Antonidas",
+                          "region": "EU"
+                        },
+                        "spec": "Shadow",
+                        "totalParses": 38
+                      },
+                      {
+                        "amount": 129775.198188,
+                        "best": 32,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 25,
+                        "class": "Shaman",
+                        "id": 79017,
+                        "name": "Geita",
+                        "rank": 32,
+                        "rankPercent": 36,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Elemental",
+                        "totalParses": 49
+                      },
+                      {
+                        "amount": 88806.105277975,
+                        "best": 23,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 0,
+                        "class": "Warlock",
+                        "id": 324656,
+                        "name": "Leelalein",
+                        "rank": 23,
+                        "rankPercent": 14,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Demonology",
+                        "totalParses": 26
+                      },
+                      {
+                        "amount": 81677.323070426,
+                        "best": 45,
+                        "bracket": 19,
+                        "bracketData": 288,
+                        "bracketPercent": 16,
+                        "class": "Warrior",
+                        "id": 37355369,
+                        "name": "Juwo",
+                        "rank": 45,
+                        "rankPercent": 9,
+                        "server": {
+                          "id": 447,
+                          "name": "Malorne",
+                          "region": "EU"
+                        },
+                        "spec": "Arms",
+                        "totalParses": 49
+                      },
+                      {
+                        "amount": 140785.89618084,
+                        "best": 34,
+                        "bracket": 19,
+                        "bracketData": 287,
+                        "bracketPercent": 62,
+                        "class": "Warrior",
+                        "id": 109585077,
+                        "name": "Brookw",
+                        "rank": 34,
+                        "rankPercent": 31,
+                        "server": {
+                          "id": 407,
+                          "name": "Blackmoore",
+                          "region": "EU"
+                        },
+                        "spec": "Arms",
+                        "totalParses": 49
+                      },
+                      {
+                        "amount": 98391.199749186,
+                        "best": 19,
+                        "bracket": 20,
+                        "bracketData": 292,
+                        "bracketPercent": 5,
+                        "class": "DemonHunter",
+                        "id": 96550646,
+                        "name": "Liraeth",
+                        "rank": 19,
+                        "rankPercent": 9,
+                        "server": {
+                          "id": 407,
+                          "name": "Blackmoore",
+                          "region": "EU"
+                        },
+                        "spec": "Havoc",
+                        "totalParses": 20
+                      }
+                    ],
+                    "name": "Damage Dealers"
+                  },
+                  "healers": {
+                    "characters": [
+                      {
+                        "amount": 5165.6557319359,
+                        "best": 7,
+                        "bracket": 20,
+                        "bracketData": 290,
+                        "bracketPercent": 59,
+                        "class": "Druid",
+                        "id": 7974432,
+                        "name": "Ramui",
+                        "rank": 7,
+                        "rankPercent": 66,
+                        "server": {
+                          "id": 447,
+                          "name": "Malorne",
+                          "region": "EU"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 20
+                      },
+                      {
+                        "amount": 9148.1755187439,
+                        "best": 7,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 75,
+                        "class": "Paladin",
+                        "id": 84210103,
+                        "name": "Alexlouis",
+                        "rank": 7,
+                        "rankPercent": 79,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Holy",
+                        "totalParses": 33
+                      },
+                      {
+                        "amount": 12632.083741226,
+                        "best": 3,
+                        "bracket": 20,
+                        "bracketData": 291,
+                        "bracketPercent": 80,
+                        "class": "Priest",
+                        "id": 39927034,
+                        "name": "Taliachen",
+                        "rank": 3,
+                        "rankPercent": 75,
+                        "server": {
+                          "id": 395,
+                          "name": "Alleria",
+                          "region": "EU"
+                        },
+                        "spec": "Holy",
+                        "totalParses": 11
+                      },
+                      {
+                        "amount": 3687.0165268634,
+                        "best": 16,
+                        "bracket": 19,
+                        "bracketData": 287,
+                        "bracketPercent": 20,
+                        "class": "Shaman",
+                        "id": 35749857,
+                        "name": "Aelio",
+                        "rank": 16,
+                        "rankPercent": 33,
+                        "server": {
+                          "id": 452,
+                          "name": "Nazjatar",
+                          "region": "EU"
+                        },
+                        "spec": "Restoration",
+                        "totalParses": 23
+                      }
+                    ],
+                    "name": "Healers"
+                  },
+                  "tanks": {
+                    "characters": [
+                      {
+                        "amount": 43700.532980146,
+                        "best": 18,
+                        "bracket": 18,
+                        "bracketData": 285,
+                        "bracketPercent": 0,
+                        "class": "Paladin",
+                        "id": 74783701,
+                        "name": "Cârrion",
+                        "rank": 18,
+                        "rankPercent": 5,
+                        "server": {
+                          "id": 408,
+                          "name": "Blackrock",
+                          "region": "EU"
+                        },
+                        "spec": "Protection",
+                        "totalParses": 18
+                      },
+                      {
+                        "amount": 51789.725576009,
+                        "best": 11,
+                        "bracket": 21,
+                        "bracketData": 293,
+                        "bracketPercent": 0,
+                        "class": "Warrior",
+                        "id": 27906449,
+                        "name": "Cptken",
+                        "rank": 11,
+                        "rankPercent": 15,
+                        "server": {
+                          "id": 477,
+                          "name": "Ysera",
+                          "region": "EU"
+                        },
+                        "spec": "Protection",
+                        "totalParses": 12
+                      }
+                    ],
+                    "name": "Tanks"
+                  }
+                },
+                "size": 20,
+                "speed": {
+                  "best": 47,
+                  "rank": 47,
+                  "rankPercent": 2,
+                  "totalParses": 47
+                },
+                "zone": 46
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

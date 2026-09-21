@@ -1,0 +1,28 @@
+{
+  "method": "GET",
+  "request_headers": {
+    "Authorization": "<redacted>"
+  },
+  "request_payload": {
+    "locale": "en_US",
+    "namespace": "static-us"
+  },
+  "response_json": {
+    "_links": {
+      "self": {
+        "href": "https://us.api.blizzard.com/data/wow/spell/111771?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "description": "Creates a demonic gateway between two locations. Activating the gateway transports the user to the other gateway. Each player can use a Demonic Gateway only once per 90 sec.",
+    "id": 111771,
+    "media": {
+      "id": 111771,
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/spell/111771?namespace=static-12.1.0_68914-us"
+      }
+    },
+    "name": "Demonic Gateway"
+  },
+  "status_code": 200,
+  "url": "https://us.api.blizzard.com/data/wow/spell/111771"
+}

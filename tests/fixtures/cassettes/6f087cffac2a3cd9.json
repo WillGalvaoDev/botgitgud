@@ -1,0 +1,290 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "accept": "*/*",
+    "accept-encoding": "gzip, deflate",
+    "accept-language": "en-US",
+    "authorization": "<redacted>",
+    "connection": "keep-alive",
+    "content-length": "473",
+    "content-type": "application/json",
+    "host": "www.warcraftlogs.com",
+    "user-agent": "python-httpx/0.28.1"
+  },
+  "request_payload": {
+    "query": "\nquery GetPercentile(\n  $name: String!, $serverSlug: String!, $serverRegion: String!,\n  $encounterID: Int!, $difficulty: Int!\n) {\n  characterData {\n    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {\n      encounterRankings(encounterID: $encounterID, metric: dps, difficulty: $difficulty)\n    }\n  }\n}\n",
+    "variables": {
+      "difficulty": 5,
+      "encounterID": 3179,
+      "name": "天选中的唯一",
+      "serverRegion": "CN",
+      "serverSlug": "安苏"
+    }
+  },
+  "response_json": {
+    "data": {
+      "characterData": {
+        "character": {
+          "encounterRankings": {
+            "averagePerformance": 58.04369454999125,
+            "bestAmount": 170082.3184337,
+            "difficulty": 5,
+            "fastestKill": 230811,
+            "medianPerformance": 69.63086294233835,
+            "metric": "dps",
+            "partition": -1,
+            "ranks": [
+              {
+                "amount": 170082.3184337,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 230811,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 99.24820939641837,
+                "historicalTotalParses": 10209,
+                "lockedIn": true,
+                "rankPercent": 99.24820939641837,
+                "rankTotalParses": 10209,
+                "report": {
+                  "code": "adcngrhYpTKyAXWk",
+                  "fightID": 20,
+                  "startTime": 1784781939238
+                },
+                "spec": "Demonology",
+                "startTime": 1784785266909,
+                "todayPercent": 98.70958915387214,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 146239.24804328,
+                "bestSpec": "Demonology",
+                "bracketData": 292,
+                "class": 10,
+                "duration": 249908,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 89.31152604212323,
+                "historicalTotalParses": 9498,
+                "lockedIn": true,
+                "rankPercent": 89.31152604212323,
+                "rankTotalParses": 9498,
+                "report": {
+                  "code": "gLYFjfG3cZ7RH8xN",
+                  "fightID": 20,
+                  "startTime": 1784190594308
+                },
+                "spec": "Demonology",
+                "startTime": 1784198292300,
+                "todayPercent": 85.37247585710188,
+                "todayTotalParses": 11175
+              },
+              {
+                "amount": 126487.79025288,
+                "bestSpec": "Demonology",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 338541,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 94.08868827101533,
+                "historicalTotalParses": 10220,
+                "lockedIn": true,
+                "rankPercent": 94.08868827101533,
+                "rankTotalParses": 10220,
+                "report": {
+                  "code": "zPJDXGhTVNAvHm8B",
+                  "fightID": 22,
+                  "startTime": 1777542929404
+                },
+                "spec": "Demonology",
+                "startTime": 1777555557842,
+                "todayPercent": 78.02272224267038,
+                "todayTotalParses": 28276
+              },
+              {
+                "amount": 115444.90279786,
+                "bestSpec": "Affliction",
+                "bracketData": 289,
+                "class": 10,
+                "duration": 291866,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 73.67414204134793,
+                "historicalTotalParses": 1706,
+                "lockedIn": true,
+                "rankPercent": 73.67414204134793,
+                "rankTotalParses": 1706,
+                "report": {
+                  "code": "ZAmTn4WjQXfh61FD",
+                  "fightID": 13,
+                  "startTime": 1779970004843
+                },
+                "spec": "Affliction",
+                "startTime": 1779973300838,
+                "todayPercent": 70.11322002264903,
+                "todayTotalParses": 2426
+              },
+              {
+                "amount": 112910.48910463,
+                "bestSpec": "Demonology",
+                "bracketData": 280,
+                "class": 10,
+                "duration": 379060,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 69.63086294233835,
+                "historicalTotalParses": 6157,
+                "lockedIn": true,
+                "rankPercent": 69.63086294233835,
+                "rankTotalParses": 6157,
+                "report": {
+                  "code": "RZr6VwhcAkdHf1np",
+                  "fightID": 13,
+                  "startTime": 1776684982158
+                },
+                "spec": "Demonology",
+                "startTime": 1776690840819,
+                "todayPercent": 69.53786391141253,
+                "todayTotalParses": 6555
+              },
+              {
+                "amount": 100053.37346948,
+                "bestSpec": "Destruction",
+                "bracketData": 287,
+                "class": 10,
+                "duration": 324562,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 30.501331315298852,
+                "historicalTotalParses": 3922,
+                "lockedIn": true,
+                "rankPercent": 30.501331315298852,
+                "rankTotalParses": 3922,
+                "report": {
+                  "code": "y28BqKa3HMjJpFg9",
+                  "fightID": 27,
+                  "startTime": 1778756955574
+                },
+                "spec": "Destruction",
+                "startTime": 1778765758029,
+                "todayPercent": 23.10938491497737,
+                "todayTotalParses": 6038
+              },
+              {
+                "amount": 93959.787548977,
+                "bestSpec": "Affliction",
+                "bracketData": 289,
+                "class": 10,
+                "duration": 287125,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 827197,
+                  "name": "全村人的希望"
+                },
+                "historicalPercent": 28.32006579451397,
+                "historicalTotalParses": 1286,
+                "lockedIn": true,
+                "rankPercent": 28.32006579451397,
+                "rankTotalParses": 1286,
+                "report": {
+                  "code": "C2Pz6hKWNZtjTGyB",
+                  "fightID": 18,
+                  "startTime": 1779365167174
+                },
+                "spec": "Affliction",
+                "startTime": 1779368419699,
+                "todayPercent": 27.037262082566457,
+                "todayTotalParses": 2426
+              },
+              {
+                "amount": 92504.971995841,
+                "bestSpec": "Destruction",
+                "bracketData": 283,
+                "class": 10,
+                "duration": 357804,
+                "faction": 1,
+                "guild": {
+                  "faction": 1,
+                  "id": 827197,
+                  "name": "全村人的希望"
+                },
+                "historicalPercent": 18.59428816543816,
+                "historicalTotalParses": 3202,
+                "lockedIn": true,
+                "rankPercent": 18.59428816543816,
+                "rankTotalParses": 3202,
+                "report": {
+                  "code": "mgP92aRhtbDz6HLw",
+                  "fightID": 29,
+                  "startTime": 1778155692592
+                },
+                "spec": "Destruction",
+                "startTime": 1778160848846,
+                "todayPercent": 14.966844718395366,
+                "todayTotalParses": 6038
+              },
+              {
+                "amount": 91494.012145063,
+                "bestSpec": "Demonology",
+                "bracketData": 281,
+                "class": 10,
+                "duration": 372003,
+                "faction": 1,
+                "guild": {
+                  "faction": null,
+                  "id": null,
+                  "name": null
+                },
+                "historicalPercent": 19.024136981427063,
+                "historicalTotalParses": 3626,
+                "lockedIn": true,
+                "rankPercent": 19.024136981427063,
+                "rankTotalParses": 3626,
+                "report": {
+                  "code": "Frx3dAHJL7pZmaMW",
+                  "fightID": 36,
+                  "startTime": 1776940385701
+                },
+                "spec": "Demonology",
+                "startTime": 1776955822598,
+                "todayPercent": 16.461413733937313,
+                "todayTotalParses": 28276
+              }
+            ],
+            "totalKills": 9,
+            "zone": 46
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

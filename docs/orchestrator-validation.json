@@ -1,0 +1,83 @@
+{
+  "status": "ORCHESTRATOR_READY",
+  "date": "2026-09-14",
+  "project_state": "NOT_STARTED",
+  "m2_started": false,
+  "real_model_generations": 0,
+  "roadmap_units": 16,
+  "count_correction": "Approved enumeration contains 16 IDs (3+4+3+3+3), previously mislabeled 17; IDs and scope preserved.",
+  "pytest": {
+    "command": ".venv/Scripts/python.exe -m pytest -q tests/unit/test_orchestrator.py --junitxml=<temporary>/orchestrator-human-block-after.xml",
+    "exit_code": 0,
+    "tests": 48,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "junit": "orchestrator-validation.xml"
+  },
+  "checks": {
+    "ruff_check": 0,
+    "ruff_format_check": 0,
+    "pyright": 0,
+    "git_diff_check": 0
+  },
+  "product_suite_rerun": false,
+  "interfaces": {
+    "claude_version": "2.1.270 (Claude Code)",
+    "codex_version": "codex-cli 0.154.0",
+    "models": {
+      "opus": "opus",
+      "sonnet": "sonnet",
+      "astra": "gpt-6-astra"
+    },
+    "authenticated": true,
+    "generation_tested": false
+  },
+  "preservation": {
+    "baseline_file_count": 1073,
+    "existing_files_changed": [
+      "docs/agent-orchestrator.md",
+      "docs/orchestrator-validation.json",
+      "docs/orchestrator-validation.xml",
+      "src/botgitgud/orchestrator/protocol.py",
+      "tests/unit/test_orchestrator.py"
+    ],
+    "all_other_baseline_files_sha256_unchanged": true
+  },
+  "sha256": {
+    "docs/agent-orchestrator.md": "519de426fd8489ac73b4a9206d101d6aae2af736fcbb62beaaa5e5c3ac155485",
+    "docs/methodology-roadmap-m2-m6.md": "b1adf1667924323836cf3494e7029e3bc4aa3e7c04ec636358f4df6af67292ec",
+    "docs/milestone-workflow.md": "9ce9ac1260283fd10680c12b8d6ca7a37bf79c82dab3958d3cda03e09b2bc82c",
+    "docs/README.md": "2491c16ebfe1c379522c0009db6d07077f918e9be27903558569c669889dd021",
+    "src/botgitgud/orchestrator/__init__.py": "349d29d1f49632d44817d2883889c2ab8e4080b306a15eab02c01ce6670df91b",
+    "src/botgitgud/orchestrator/__main__.py": "80e1bc9fd2f9d947795e72fc869995f3248ab288047744bb6e1d0838ea93b326",
+    "src/botgitgud/orchestrator/adapters.py": "5071b96bdd0df210af46702b7bc1d6fd771fe1a0a0910036c2c0758d8b324439",
+    "src/botgitgud/orchestrator/engine.py": "92785f771aaf8bef79be7d0b55ad5b6a3f4af8525351f70c75d730d498e6282c",
+    "src/botgitgud/orchestrator/gates.py": "4f87741002b4e1970f3e823b6051c3dc2295063727f6014e87852729fd6e9492",
+    "src/botgitgud/orchestrator/protocol.py": "7d6e3ba8357e2a256a9a4cfbbc872891d180cb11f10a37f3afd5020f260b4ac5",
+    "src/botgitgud/orchestrator/roadmap.py": "e4a62ddea0301f23b3ea42bf2646f3110bc6559d9bd28d2b7dc615e02e896c7f",
+    "src/botgitgud/orchestrator/storage.py": "b5d3306f501a295134a7f69134c3f926f8699921cea35477f0ef309e54f5a214",
+    "src/botgitgud/orchestrator/workspace.py": "54e1dd96dbb34d20c6a5ee7c383303dbbb7344cc0fc63aa430aafb24f020f968",
+    "tests/unit/test_orchestrator.py": "4149b74becd0bed967e9e40a884366d0ff106a6b265faad1bdd0be73209814a6"
+  },
+  "interfaces_verified_on": "2026-09-13",
+  "correction": {
+    "scope": "Accept HUMAN_BLOCK from Sonnet without changing agent authority or normative workflow.",
+    "before": {
+      "tests": 4,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "failed_tests": [
+        "test_human_block_preserves_original_cause_for_every_role[sonnet]"
+      ],
+      "observed_status": "TECH_BLOCK",
+      "expected_status": "HUMAN_BLOCK"
+    },
+    "regression": "Every role accepts HUMAN_BLOCK; engine stops and retains original cause in persisted audit; Sonnet MILESTONE_CLOSED remains invalid.",
+    "engine_changed": false,
+    "normative_workflow_changed": false,
+    "start_executed": false,
+    "real_model_generations": 0
+  }
+}

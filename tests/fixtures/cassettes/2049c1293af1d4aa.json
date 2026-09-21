@@ -1,0 +1,2573 @@
+{
+  "method": "POST",
+  "request_headers": {
+    "Accept-Language": "en-US",
+    "Authorization": "<redacted>",
+    "Content-Type": "application/json"
+  },
+  "request_payload": {
+    "query": "\n    query GetPlayerMeta($code: String!, $fightIDs: [Int]!) {\n      reportData {\n        report(code: $code) {\n          fights(fightIDs: $fightIDs) {\n            id encounterID name startTime endTime kill\n          }\n          table(fightIDs: $fightIDs, dataType: Summary, translate: true)\n          castsTable: table(fightIDs: $fightIDs, dataType: Casts, translate: true)\n        }\n      }\n    }\n    ",
+    "variables": {
+      "code": "g7vZjfwGn3PbcrCd",
+      "fightIDs": [
+        1
+      ]
+    }
+  },
+  "response_json": {
+    "data": {
+      "reportData": {
+        "report": {
+          "castsTable": {
+            "data": {
+              "entries": [
+                {
+                  "abilities": [
+                    {
+                      "guid": 49998,
+                      "icon": "spell_deathknight_butcher2.jpg",
+                      "name": "Death Strike",
+                      "total": 61,
+                      "type": 1
+                    },
+                    {
+                      "guid": 50842,
+                      "icon": "spell_deathknight_bloodboil.jpg",
+                      "name": "Blood Boil",
+                      "total": 53,
+                      "type": 32
+                    },
+                    {
+                      "guid": 206930,
+                      "icon": "inv_weapon_shortblade_40.jpg",
+                      "name": "Heart Strike",
+                      "total": 51,
+                      "type": 1
+                    },
+                    {
+                      "guid": 195182,
+                      "icon": "ability_deathknight_marrowrend.jpg",
+                      "name": "Marrowrend",
+                      "total": 33,
+                      "type": 1
+                    },
+                    {
+                      "guid": 441424,
+                      "icon": "inv_polearm_2h_titanargus_d_01.jpg",
+                      "name": "Exterminate",
+                      "total": 19,
+                      "type": 48
+                    }
+                  ],
+                  "activeTime": 327471,
+                  "activeTimeReduced": 327471,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 111462350,
+                  "icon": "DeathKnight-Blood",
+                  "id": 2,
+                  "itemLevel": 285,
+                  "name": "由乙",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 174,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 89,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 7,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 5,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 275,
+                  "type": "DeathKnight"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 30455,
+                      "icon": "spell_frost_frostblast.jpg",
+                      "name": "Ice Lance",
+                      "total": 140,
+                      "type": 16
+                    },
+                    {
+                      "guid": 116,
+                      "icon": "spell_frost_frostbolt02.jpg",
+                      "name": "Frostbolt",
+                      "total": 57,
+                      "type": 16
+                    },
+                    {
+                      "guid": 44614,
+                      "icon": "ability_deathknight_chillstreak.jpg",
+                      "name": "Flurry",
+                      "total": 37,
+                      "type": 16
+                    },
+                    {
+                      "guid": 199786,
+                      "icon": "ability_mage_glacialspike.jpg",
+                      "name": "Glacial Spike",
+                      "total": 14,
+                      "type": 16
+                    },
+                    {
+                      "guid": 212653,
+                      "icon": "spell_arcane_massdispel.jpg",
+                      "name": "Shimmer",
+                      "total": 11,
+                      "type": 64
+                    }
+                  ],
+                  "activeTime": 327240,
+                  "activeTimeReduced": 327240,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 97091244,
+                  "icon": "Mage-Frost",
+                  "id": 18,
+                  "itemLevel": 272,
+                  "name": "悠然灬而然",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 241,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 25,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 25,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 5,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 3,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 299,
+                  "type": "Mage"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 585,
+                      "icon": "spell_holy_holysmite.jpg",
+                      "name": "Smite",
+                      "total": 52,
+                      "type": 2
+                    },
+                    {
+                      "guid": 47540,
+                      "icon": "spell_holy_penance.jpg",
+                      "name": "Penance",
+                      "total": 49,
+                      "type": 2
+                    },
+                    {
+                      "guid": 17,
+                      "icon": "spell_holy_powerwordshield.jpg",
+                      "name": "Power Word: Shield",
+                      "total": 25,
+                      "type": 2
+                    },
+                    {
+                      "guid": 194509,
+                      "icon": "spell_priest_power-word.jpg",
+                      "name": "Power Word: Radiance",
+                      "total": 22,
+                      "type": 6
+                    },
+                    {
+                      "guid": 1253593,
+                      "icon": "inv12_apextalent_priest_voidshield.jpg",
+                      "name": "Void Shield",
+                      "total": 16,
+                      "type": 32
+                    }
+                  ],
+                  "activeTime": 326239,
+                  "activeTimeReduced": 326239,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 46508609,
+                  "icon": "Priest-Discipline",
+                  "id": 1,
+                  "itemLevel": 287,
+                  "name": "神恩结界",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 104,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 31,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "神恩结界",
+                      "total": 30,
+                      "type": "Priest"
+                    },
+                    {
+                      "name": "由乙",
+                      "total": 8,
+                      "type": "DeathKnight"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 7,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 238,
+                  "type": "Priest"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 30451,
+                      "icon": "spell_arcane_blast.jpg",
+                      "name": "Arcane Blast",
+                      "total": 141,
+                      "type": 64
+                    },
+                    {
+                      "guid": 44425,
+                      "icon": "ability_mage_arcanebarrage.jpg",
+                      "name": "Arcane Barrage",
+                      "total": 49,
+                      "type": 64
+                    },
+                    {
+                      "guid": 153626,
+                      "icon": "spell_mage_arcaneorb.jpg",
+                      "name": "Arcane Orb",
+                      "total": 37,
+                      "type": 64
+                    },
+                    {
+                      "guid": 205025,
+                      "icon": "spell_nature_enchantarmor.jpg",
+                      "name": "Presence of Mind",
+                      "total": 7,
+                      "type": 64
+                    },
+                    {
+                      "guid": 321507,
+                      "icon": "inv_ability_mage_radiantspark.jpg",
+                      "name": "Touch of the Magi",
+                      "total": 7,
+                      "type": 64
+                    }
+                  ],
+                  "activeTime": 325886,
+                  "activeTimeReduced": 325886,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 104308040,
+                  "icon": "Mage-Arcane",
+                  "id": 28,
+                  "itemLevel": 292,
+                  "name": "红温警告",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 201,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 61,
+                      "type": "Boss"
+                    }
+                  ],
+                  "total": 262,
+                  "type": "Mage"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 408385,
+                      "icon": "spell_holy_crusaderstrike.jpg",
+                      "name": "Crusading Strikes",
+                      "total": 170,
+                      "type": 1
+                    },
+                    {
+                      "guid": 383328,
+                      "icon": "spell_paladin_templarsverdict.jpg",
+                      "name": "Final Verdict",
+                      "total": 81,
+                      "type": 2
+                    },
+                    {
+                      "guid": 184575,
+                      "icon": "ability_paladin_bladeofjustice.jpg",
+                      "name": "Blade of Justice",
+                      "total": 44,
+                      "type": 2
+                    },
+                    {
+                      "guid": 53385,
+                      "icon": "ability_paladin_divinestorm.jpg",
+                      "name": "Divine Storm",
+                      "total": 41,
+                      "type": 2
+                    },
+                    {
+                      "guid": 20271,
+                      "icon": "spell_holy_righteousfury.jpg",
+                      "name": "Judgment",
+                      "total": 36,
+                      "type": 2
+                    }
+                  ],
+                  "activeTime": 327638,
+                  "activeTimeReduced": 327638,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 91552902,
+                  "icon": "Paladin-Retribution",
+                  "id": 13,
+                  "itemLevel": 291,
+                  "name": "摩尔迦娜",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 270,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 81,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 66,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 35,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "摩尔迦娜",
+                      "total": 6,
+                      "type": "Paladin"
+                    }
+                  ],
+                  "total": 460,
+                  "type": "Paladin"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 55090,
+                      "icon": "spell_deathknight_scourgestrike.jpg",
+                      "name": "Scourge Strike",
+                      "total": 116,
+                      "type": 32
+                    },
+                    {
+                      "guid": 47541,
+                      "icon": "spell_shadow_deathcoil.jpg",
+                      "name": "Death Coil",
+                      "total": 59,
+                      "type": 32
+                    },
+                    {
+                      "guid": 1242174,
+                      "icon": "spell_animamaldraxxus_missile.jpg",
+                      "name": "Necrotic Coil",
+                      "total": 46,
+                      "type": 33
+                    },
+                    {
+                      "guid": 458128,
+                      "icon": "inv_polearm_2h_mawnecromancerboss_d_01_darkblue.jpg",
+                      "name": "Festering Scythe",
+                      "total": 15,
+                      "type": 32
+                    },
+                    {
+                      "guid": 85948,
+                      "icon": "spell_deathknight_festering_strike.jpg",
+                      "name": "Festering Strike",
+                      "total": 15,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 327426,
+                  "activeTimeReduced": 327426,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 117326980,
+                  "icon": "DeathKnight-Unholy",
+                  "id": 15,
+                  "itemLevel": 289,
+                  "name": "噩兆王蒙葛特",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 253,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 32,
+                      "type": "Boss"
+                    }
+                  ],
+                  "total": 285,
+                  "type": "DeathKnight"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 121253,
+                      "icon": "achievement_brewery_2.jpg",
+                      "name": "Keg Smash",
+                      "total": 70,
+                      "type": 1
+                    },
+                    {
+                      "guid": 100780,
+                      "icon": "ability_monk_tigerpalm.jpg",
+                      "name": "Tiger Palm",
+                      "total": 64,
+                      "type": 1
+                    },
+                    {
+                      "guid": 205523,
+                      "icon": "ability_monk_roundhousekick.jpg",
+                      "name": "Blackout Kick",
+                      "total": 64,
+                      "type": 1
+                    },
+                    {
+                      "guid": 115181,
+                      "icon": "ability_monk_breathoffire.jpg",
+                      "name": "Breath of Fire",
+                      "total": 46,
+                      "type": 4
+                    },
+                    {
+                      "guid": 119582,
+                      "icon": "inv_misc_beer_06.jpg",
+                      "name": "Purifying Brew",
+                      "total": 39,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 326630,
+                  "activeTimeReduced": 326630,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 104613618,
+                  "icon": "Monk-Brewmaster",
+                  "id": 11,
+                  "itemLevel": 289,
+                  "name": "白的仙",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 202,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 148,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 8,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "白的仙",
+                      "total": 4,
+                      "type": "Monk"
+                    }
+                  ],
+                  "total": 362,
+                  "type": "Monk"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 408385,
+                      "icon": "spell_holy_crusaderstrike.jpg",
+                      "name": "Crusading Strikes",
+                      "total": 129,
+                      "type": 1
+                    },
+                    {
+                      "guid": 383328,
+                      "icon": "spell_paladin_templarsverdict.jpg",
+                      "name": "Final Verdict",
+                      "total": 85,
+                      "type": 2
+                    },
+                    {
+                      "guid": 184575,
+                      "icon": "ability_paladin_bladeofjustice.jpg",
+                      "name": "Blade of Justice",
+                      "total": 42,
+                      "type": 2
+                    },
+                    {
+                      "guid": 20271,
+                      "icon": "spell_holy_righteousfury.jpg",
+                      "name": "Judgment",
+                      "total": 31,
+                      "type": 2
+                    },
+                    {
+                      "guid": 24275,
+                      "icon": "inv12_ability_paladin_hammerofwrath.jpg",
+                      "name": "Hammer of Wrath",
+                      "total": 30,
+                      "type": 2
+                    }
+                  ],
+                  "activeTime": 325763,
+                  "activeTimeReduced": 325763,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 103673755,
+                  "icon": "Paladin-Retribution",
+                  "id": 9,
+                  "itemLevel": 282,
+                  "name": "Chayton",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 329,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 50,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 9,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 7,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 2,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 397,
+                  "type": "Paladin"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 34026,
+                      "icon": "ability_hunter_killcommand.jpg",
+                      "name": "Kill Command",
+                      "total": 95,
+                      "type": 1
+                    },
+                    {
+                      "guid": 217200,
+                      "icon": "ability_hunter_barbedshot.jpg",
+                      "name": "Barbed Shot",
+                      "total": 50,
+                      "type": 1
+                    },
+                    {
+                      "guid": 193455,
+                      "icon": "ability_hunter_cobrashot.jpg",
+                      "name": "Cobra Shot",
+                      "total": 50,
+                      "type": 1
+                    },
+                    {
+                      "guid": 1283818,
+                      "icon": "ability_hunter_sickem.jpg",
+                      "name": "Dire Beast",
+                      "total": 27,
+                      "type": 8
+                    },
+                    {
+                      "guid": 1264359,
+                      "icon": "ability_hunter_sickem.jpg",
+                      "name": "Wild Thrash",
+                      "total": 19,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 326547,
+                  "activeTimeReduced": 326547,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 107500949,
+                  "icon": "Hunter-BeastMastery",
+                  "id": 29,
+                  "itemLevel": 293,
+                  "name": "兽栏管理人",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 170,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 45,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 31,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 15,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 2,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 263,
+                  "type": "Hunter"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 30455,
+                      "icon": "spell_frost_frostblast.jpg",
+                      "name": "Ice Lance",
+                      "total": 145,
+                      "type": 16
+                    },
+                    {
+                      "guid": 44614,
+                      "icon": "ability_deathknight_chillstreak.jpg",
+                      "name": "Flurry",
+                      "total": 39,
+                      "type": 16
+                    },
+                    {
+                      "guid": 116,
+                      "icon": "spell_frost_frostbolt02.jpg",
+                      "name": "Frostbolt",
+                      "total": 36,
+                      "type": 16
+                    },
+                    {
+                      "guid": 199786,
+                      "icon": "ability_mage_glacialspike.jpg",
+                      "name": "Glacial Spike",
+                      "total": 13,
+                      "type": 16
+                    },
+                    {
+                      "guid": 205021,
+                      "icon": "ability_mage_rayoffrost.jpg",
+                      "name": "Ray of Frost",
+                      "total": 9,
+                      "type": 16
+                    }
+                  ],
+                  "activeTime": 326665,
+                  "activeTimeReduced": 326665,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 93768682,
+                  "icon": "Mage-Frost",
+                  "id": 10,
+                  "itemLevel": 280,
+                  "name": "丷闪现踩使丷",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 151,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 83,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 19,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 15,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 5,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 273,
+                  "type": "Mage"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 30455,
+                      "icon": "spell_frost_frostblast.jpg",
+                      "name": "Ice Lance",
+                      "total": 10,
+                      "type": 16
+                    },
+                    {
+                      "guid": 44614,
+                      "icon": "ability_deathknight_chillstreak.jpg",
+                      "name": "Flurry",
+                      "total": 4,
+                      "type": 16
+                    },
+                    {
+                      "guid": 116,
+                      "icon": "spell_frost_frostbolt02.jpg",
+                      "name": "Frostbolt",
+                      "total": 3,
+                      "type": 16
+                    },
+                    {
+                      "guid": 1248829,
+                      "icon": "spell_frost_icestorm.jpg",
+                      "name": "Blizzard",
+                      "total": 1,
+                      "type": 16
+                    },
+                    {
+                      "guid": 199786,
+                      "icon": "ability_mage_glacialspike.jpg",
+                      "name": "Glacial Spike",
+                      "total": 1,
+                      "type": 16
+                    }
+                  ],
+                  "activeTime": 32071,
+                  "activeTimeReduced": 32071,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 93145153,
+                  "icon": "Mage-Frost",
+                  "id": 12,
+                  "name": "向黎焕新",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 20,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 1,
+                      "type": "Boss"
+                    }
+                  ],
+                  "total": 21,
+                  "type": "Mage"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 105174,
+                      "icon": "ability_warlock_handofguldan.jpg",
+                      "name": "Hand of Gul'dan",
+                      "total": 76,
+                      "type": 36
+                    },
+                    {
+                      "guid": 686,
+                      "icon": "spell_shadow_shadowbolt.jpg",
+                      "name": "Shadow Bolt",
+                      "total": 63,
+                      "type": 36
+                    },
+                    {
+                      "guid": 264178,
+                      "icon": "inv__demonbolt.jpg",
+                      "name": "Demonbolt",
+                      "total": 55,
+                      "type": 36
+                    },
+                    {
+                      "guid": 196277,
+                      "icon": "inv_implosion.jpg",
+                      "name": "Implosion",
+                      "total": 17,
+                      "type": 36
+                    },
+                    {
+                      "guid": 104316,
+                      "icon": "spell_warlock_calldreadstalkers.jpg",
+                      "name": "Call Dreadstalkers",
+                      "total": 15,
+                      "type": 32
+                    }
+                  ],
+                  "activeTime": 327810,
+                  "activeTimeReduced": 327810,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 96010544,
+                  "icon": "Warlock-Demonology",
+                  "id": 8,
+                  "itemLevel": 290,
+                  "name": "洛阿神术",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 142,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 58,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 36,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 11,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 3,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 250,
+                  "type": "Warlock"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 1064,
+                      "icon": "inv_1115_shaman_chainheal.jpg",
+                      "name": "Chain Heal",
+                      "total": 69,
+                      "type": 8
+                    },
+                    {
+                      "guid": 61295,
+                      "icon": "spell_nature_riptide.jpg",
+                      "name": "Riptide",
+                      "total": 59,
+                      "type": 8
+                    },
+                    {
+                      "guid": 5394,
+                      "icon": "inv_spear_04.jpg",
+                      "name": "Healing Stream Totem",
+                      "total": 19,
+                      "type": 8
+                    },
+                    {
+                      "guid": 188389,
+                      "icon": "spell_fire_flameshock.jpg",
+                      "name": "Flame Shock",
+                      "total": 17,
+                      "type": 12
+                    },
+                    {
+                      "guid": 73685,
+                      "icon": "spell_shaman_unleashweapon_life.jpg",
+                      "name": "Unleash Life",
+                      "total": 15,
+                      "type": 8
+                    }
+                  ],
+                  "activeTime": 326164,
+                  "activeTimeReduced": 326164,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 99363100,
+                  "icon": "Shaman-Restoration",
+                  "id": 24,
+                  "itemLevel": 289,
+                  "name": "呦菜呦嗳笂",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Environment",
+                      "total": 74,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 36,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "悠然灬而然",
+                      "total": 26,
+                      "type": "Mage"
+                    },
+                    {
+                      "name": "由乙",
+                      "total": 23,
+                      "type": "DeathKnight"
+                    },
+                    {
+                      "name": "摩尔迦娜",
+                      "total": 17,
+                      "type": "Paladin"
+                    }
+                  ],
+                  "total": 265,
+                  "type": "Shaman"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 1217610,
+                      "icon": "inv_12_dh_void_ability_feast.jpg",
+                      "name": "Devour",
+                      "total": 78,
+                      "type": 106
+                    },
+                    {
+                      "guid": 473662,
+                      "icon": "inv_12_dh_void_ability_consume.jpg",
+                      "name": "Consume",
+                      "total": 62,
+                      "type": 106
+                    },
+                    {
+                      "guid": 473728,
+                      "icon": "inv_12_dh_void_ability_voidray.jpg",
+                      "name": "Void Ray",
+                      "total": 32,
+                      "type": 96
+                    },
+                    {
+                      "guid": 1221150,
+                      "icon": "inv_12_dh_void_ability_collapsingstar.jpg",
+                      "name": "Collapsing Star",
+                      "total": 17,
+                      "type": 106
+                    },
+                    {
+                      "guid": 1241937,
+                      "icon": "inv_12_dh_void_ability_voidpurge.jpg",
+                      "name": "Soul Immolation",
+                      "total": 5,
+                      "type": 4
+                    }
+                  ],
+                  "activeTime": 325717,
+                  "activeTimeReduced": 325717,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 249987223,
+                  "icon": "DemonHunter-Devourer",
+                  "id": 3,
+                  "itemLevel": 292,
+                  "name": "小怪兽豪豪",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 139,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 37,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 10,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 10,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Fractured Image",
+                      "total": 4,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 200,
+                  "type": "DemonHunter"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 114014,
+                      "icon": "inv_throwingknife_07.jpg",
+                      "name": "Shuriken Toss",
+                      "total": 3,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 2460,
+                  "activeTimeReduced": 2460,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 57846330,
+                  "icon": "Unknown",
+                  "id": 17,
+                  "itemLevel": 69,
+                  "name": "情化",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 3,
+                      "type": "Boss"
+                    }
+                  ],
+                  "total": 3,
+                  "type": "Unknown"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 116670,
+                      "icon": "ability_monk_vivify.jpg",
+                      "name": "Vivify",
+                      "total": 71,
+                      "type": 8
+                    },
+                    {
+                      "guid": 115151,
+                      "icon": "ability_monk_renewingmists.jpg",
+                      "name": "Renewing Mist",
+                      "total": 59,
+                      "type": 8
+                    },
+                    {
+                      "guid": 467307,
+                      "icon": "inv12_ability_monk_rushingwindkick.jpg",
+                      "name": "Rushing Wind Kick",
+                      "total": 57,
+                      "type": 8
+                    },
+                    {
+                      "guid": 124682,
+                      "icon": "spell_monk_envelopingmist.jpg",
+                      "name": "Enveloping Mist",
+                      "total": 57,
+                      "type": 8
+                    },
+                    {
+                      "guid": 116680,
+                      "icon": "ability_monk_thunderfocustea.jpg",
+                      "name": "Thunder Focus Tea",
+                      "total": 15,
+                      "type": 8
+                    }
+                  ],
+                  "activeTime": 326836,
+                  "activeTimeReduced": 326836,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 104701864,
+                  "icon": "Monk-Mistweaver",
+                  "id": 14,
+                  "itemLevel": 266,
+                  "name": "紫菜菜",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Environment",
+                      "total": 98,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "由乙",
+                      "total": 21,
+                      "type": "DeathKnight"
+                    },
+                    {
+                      "name": "丷闪现踩使丷",
+                      "total": 20,
+                      "type": "Mage"
+                    },
+                    {
+                      "name": "紫菜菜",
+                      "total": 20,
+                      "type": "Monk"
+                    },
+                    {
+                      "name": "Chayton",
+                      "total": 19,
+                      "type": "Paladin"
+                    }
+                  ],
+                  "total": 300,
+                  "type": "Monk"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 774,
+                      "icon": "spell_nature_rejuvenation.jpg",
+                      "name": "Rejuvenation",
+                      "total": 90,
+                      "type": 8
+                    },
+                    {
+                      "guid": 8936,
+                      "icon": "spell_nature_resistnature.jpg",
+                      "name": "Regrowth",
+                      "total": 84,
+                      "type": 8
+                    },
+                    {
+                      "guid": 18562,
+                      "icon": "inv_relics_idolofrejuvenation.jpg",
+                      "name": "Swiftmend",
+                      "total": 23,
+                      "type": 8
+                    },
+                    {
+                      "guid": 48438,
+                      "icon": "ability_druid_flourish.jpg",
+                      "name": "Wild Growth",
+                      "total": 19,
+                      "type": 8
+                    },
+                    {
+                      "guid": 33763,
+                      "icon": "inv_misc_herb_felblossom.jpg",
+                      "name": "Lifebloom",
+                      "total": 13,
+                      "type": 8
+                    }
+                  ],
+                  "activeTime": 325315,
+                  "activeTimeReduced": 325315,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 111737577,
+                  "icon": "Druid-Restoration",
+                  "id": 6,
+                  "itemLevel": 287,
+                  "name": "珐噜莎拉",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "珐噜莎拉",
+                      "total": 59,
+                      "type": "Druid"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 33,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "悠然灬而然",
+                      "total": 20,
+                      "type": "Mage"
+                    },
+                    {
+                      "name": "紫菜菜",
+                      "total": 19,
+                      "type": "Monk"
+                    },
+                    {
+                      "name": "摩尔迦娜",
+                      "total": 18,
+                      "type": "Paladin"
+                    }
+                  ],
+                  "total": 250,
+                  "type": "Druid"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 24275,
+                      "icon": "inv12_ability_paladin_hammerofwrath.jpg",
+                      "name": "Hammer of Wrath",
+                      "total": 3,
+                      "type": 2
+                    },
+                    {
+                      "guid": 20271,
+                      "icon": "spell_holy_righteousfury.jpg",
+                      "name": "Judgment",
+                      "total": 2,
+                      "type": 2
+                    },
+                    {
+                      "guid": 375576,
+                      "icon": "inv_ability_paladin_divinetoll.jpg",
+                      "name": "Divine Toll",
+                      "total": 1,
+                      "type": 2
+                    },
+                    {
+                      "guid": 255937,
+                      "icon": "inv_sword_2h_artifactashbringerfire_d_03.jpg",
+                      "name": "Wake of Ashes",
+                      "total": 1,
+                      "type": 6
+                    },
+                    {
+                      "guid": 427453,
+                      "icon": "inv_mace_1h_gryphonrider_d_02_silver.jpg",
+                      "name": "Hammer of Light",
+                      "total": 1,
+                      "type": 2
+                    }
+                  ],
+                  "activeTime": 15572,
+                  "activeTimeReduced": 15572,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 88057970,
+                  "icon": "Paladin-Retribution",
+                  "id": 31,
+                  "name": "老登",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 7,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 2,
+                      "type": "Boss"
+                    }
+                  ],
+                  "total": 9,
+                  "type": "Paladin"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 22568,
+                      "icon": "ability_druid_ferociousbite.jpg",
+                      "name": "Ferocious Bite",
+                      "total": 64,
+                      "type": 1
+                    },
+                    {
+                      "guid": 5221,
+                      "icon": "spell_shadow_vampiricaura.jpg",
+                      "name": "Shred",
+                      "total": 46,
+                      "type": 1
+                    },
+                    {
+                      "guid": 8936,
+                      "icon": "spell_nature_resistnature.jpg",
+                      "name": "Regrowth",
+                      "total": 39,
+                      "type": 8
+                    },
+                    {
+                      "guid": 155625,
+                      "icon": "spell_nature_starfall.jpg",
+                      "name": "Moonfire",
+                      "total": 34,
+                      "type": 64
+                    },
+                    {
+                      "guid": 1822,
+                      "icon": "ability_druid_disembowel.jpg",
+                      "name": "Rake",
+                      "total": 30,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 283684,
+                  "activeTimeReduced": 283684,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 137922673,
+                  "icon": "Druid-Feral",
+                  "id": 27,
+                  "itemLevel": 274,
+                  "name": "Freeloop",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 183,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 43,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 15,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Freeloop",
+                      "total": 7,
+                      "type": "Druid"
+                    },
+                    {
+                      "name": "Chayton",
+                      "total": 5,
+                      "type": "Paladin"
+                    }
+                  ],
+                  "total": 286,
+                  "type": "Druid"
+                },
+                {
+                  "abilities": [
+                    {
+                      "guid": 12294,
+                      "icon": "ability_warrior_savageblow.jpg",
+                      "name": "Mortal Strike",
+                      "total": 75,
+                      "type": 1
+                    },
+                    {
+                      "guid": 7384,
+                      "icon": "ability_meleedamage.jpg",
+                      "name": "Overpower",
+                      "total": 49,
+                      "type": 1
+                    },
+                    {
+                      "guid": 281000,
+                      "icon": "inv_sword_48.jpg",
+                      "name": "Execute",
+                      "total": 49,
+                      "type": 1
+                    },
+                    {
+                      "guid": 1269383,
+                      "icon": "ability_rogue_ambush.jpg",
+                      "name": "Heroic Strike",
+                      "total": 32,
+                      "type": 1
+                    },
+                    {
+                      "guid": 1464,
+                      "icon": "ability_warrior_decisivestrike.jpg",
+                      "name": "Slam",
+                      "total": 25,
+                      "type": 1
+                    }
+                  ],
+                  "activeTime": 325148,
+                  "activeTimeReduced": 325148,
+                  "damageAbilities": [],
+                  "gear": [],
+                  "guid": 33953637,
+                  "icon": "Warrior-Arms",
+                  "id": 16,
+                  "itemLevel": 283,
+                  "name": "丶二哈快跑",
+                  "talents": [],
+                  "targets": [
+                    {
+                      "name": "Fallen-King Salhadaar",
+                      "total": 204,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Environment",
+                      "total": 51,
+                      "type": "Boss"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 31,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Concentrated Void",
+                      "total": 1,
+                      "type": "NPC"
+                    },
+                    {
+                      "name": "Enduring Void",
+                      "total": 1,
+                      "type": "NPC"
+                    }
+                  ],
+                  "total": 288,
+                  "type": "Warrior"
+                }
+              ],
+              "exploitDetails": [],
+              "gameVersion": 1,
+              "logVersion": 17,
+              "totalTime": 328242
+            }
+          },
+          "fights": [
+            {
+              "encounterID": 3179,
+              "endTime": 750118,
+              "id": 1,
+              "kill": true,
+              "name": "Fallen-King Salhadaar",
+              "startTime": 421876
+            }
+          ],
+          "table": {
+            "data": {
+              "composition": [
+                {
+                  "guid": 111462350,
+                  "id": 2,
+                  "name": "由乙",
+                  "specs": [
+                    {
+                      "role": "tank",
+                      "spec": "Blood"
+                    }
+                  ],
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 97091244,
+                  "id": 18,
+                  "name": "悠然灬而然",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Frost"
+                    }
+                  ],
+                  "type": "Mage"
+                },
+                {
+                  "guid": 46508609,
+                  "id": 1,
+                  "name": "神恩结界",
+                  "specs": [
+                    {
+                      "role": "healer",
+                      "spec": "Discipline"
+                    }
+                  ],
+                  "type": "Priest"
+                },
+                {
+                  "guid": 104308040,
+                  "id": 28,
+                  "name": "红温警告",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Arcane"
+                    }
+                  ],
+                  "type": "Mage"
+                },
+                {
+                  "guid": 117326980,
+                  "id": 15,
+                  "name": "噩兆王蒙葛特",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Unholy"
+                    }
+                  ],
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 91552902,
+                  "id": 13,
+                  "name": "摩尔迦娜",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Retribution"
+                    }
+                  ],
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 103673755,
+                  "id": 9,
+                  "name": "Chayton",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Retribution"
+                    }
+                  ],
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 104613618,
+                  "id": 11,
+                  "name": "白的仙",
+                  "specs": [
+                    {
+                      "role": "tank",
+                      "spec": "Brewmaster"
+                    }
+                  ],
+                  "type": "Monk"
+                },
+                {
+                  "guid": 107500949,
+                  "id": 29,
+                  "name": "兽栏管理人",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "BeastMastery"
+                    }
+                  ],
+                  "type": "Hunter"
+                },
+                {
+                  "guid": 93768682,
+                  "id": 10,
+                  "name": "丷闪现踩使丷",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Frost"
+                    }
+                  ],
+                  "type": "Mage"
+                },
+                {
+                  "guid": 93145153,
+                  "id": 12,
+                  "name": "向黎焕新",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Frost"
+                    }
+                  ],
+                  "type": "Mage"
+                },
+                {
+                  "guid": 96010544,
+                  "id": 8,
+                  "name": "洛阿神术",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Demonology"
+                    }
+                  ],
+                  "type": "Warlock"
+                },
+                {
+                  "guid": 249987223,
+                  "id": 3,
+                  "name": "小怪兽豪豪",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Devourer"
+                    }
+                  ],
+                  "type": "DemonHunter"
+                },
+                {
+                  "guid": 99363100,
+                  "id": 24,
+                  "name": "呦菜呦嗳笂",
+                  "specs": [
+                    {
+                      "role": "healer",
+                      "spec": "Restoration"
+                    }
+                  ],
+                  "type": "Shaman"
+                },
+                {
+                  "guid": 57846330,
+                  "id": 17,
+                  "name": "情化",
+                  "specs": [],
+                  "type": "Unknown"
+                },
+                {
+                  "guid": 104701864,
+                  "id": 14,
+                  "name": "紫菜菜",
+                  "specs": [
+                    {
+                      "role": "healer",
+                      "spec": "Mistweaver"
+                    }
+                  ],
+                  "type": "Monk"
+                },
+                {
+                  "guid": 88057970,
+                  "id": 31,
+                  "name": "老登",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Retribution"
+                    }
+                  ],
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 111737577,
+                  "id": 6,
+                  "name": "珐噜莎拉",
+                  "specs": [
+                    {
+                      "role": "healer",
+                      "spec": "Restoration"
+                    }
+                  ],
+                  "type": "Druid"
+                },
+                {
+                  "guid": 137922673,
+                  "id": 27,
+                  "name": "Freeloop",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Feral"
+                    }
+                  ],
+                  "type": "Druid"
+                },
+                {
+                  "guid": 33953637,
+                  "id": 16,
+                  "name": "丶二哈快跑",
+                  "specs": [
+                    {
+                      "role": "dps",
+                      "spec": "Arms"
+                    }
+                  ],
+                  "type": "Warrior"
+                }
+              ],
+              "damageDone": [
+                {
+                  "guid": 111462350,
+                  "icon": "DeathKnight-Blood",
+                  "id": 2,
+                  "name": "由乙",
+                  "total": 18276637,
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 97091244,
+                  "icon": "Mage-Frost",
+                  "id": 18,
+                  "name": "悠然灬而然",
+                  "total": 35075990,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 46508609,
+                  "icon": "Priest-Discipline",
+                  "id": 1,
+                  "name": "神恩结界",
+                  "total": 11210221,
+                  "type": "Priest"
+                },
+                {
+                  "guid": 104308040,
+                  "icon": "Mage-Arcane",
+                  "id": 28,
+                  "name": "红温警告",
+                  "total": 48639532,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 91552902,
+                  "icon": "Paladin-Retribution",
+                  "id": 13,
+                  "name": "摩尔迦娜",
+                  "total": 49245148,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 117326980,
+                  "icon": "DeathKnight-Unholy",
+                  "id": 15,
+                  "name": "噩兆王蒙葛特",
+                  "total": 47015265,
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 104613618,
+                  "icon": "Monk-Brewmaster",
+                  "id": 11,
+                  "name": "白的仙",
+                  "total": 23053704,
+                  "type": "Monk"
+                },
+                {
+                  "guid": 103673755,
+                  "icon": "Paladin-Retribution",
+                  "id": 9,
+                  "name": "Chayton",
+                  "total": 34405449,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 107500949,
+                  "icon": "Hunter-BeastMastery",
+                  "id": 29,
+                  "name": "兽栏管理人",
+                  "total": 39260463,
+                  "type": "Hunter"
+                },
+                {
+                  "guid": 93768682,
+                  "icon": "Mage-Frost",
+                  "id": 10,
+                  "name": "丷闪现踩使丷",
+                  "total": 42689431,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 93145153,
+                  "icon": "Mage-Frost",
+                  "id": 12,
+                  "name": "向黎焕新",
+                  "total": 389584,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 27893,
+                  "icon": "abilities/inv_sword_07.jpg",
+                  "id": 4,
+                  "name": "Rune Weapon",
+                  "total": 3953,
+                  "type": "Pet"
+                },
+                {
+                  "guid": 96010544,
+                  "icon": "Warlock-Demonology",
+                  "id": 8,
+                  "name": "洛阿神术",
+                  "total": 54763849,
+                  "type": "Warlock"
+                },
+                {
+                  "guid": 99363100,
+                  "icon": "Shaman-Restoration",
+                  "id": 24,
+                  "name": "呦菜呦嗳笂",
+                  "total": 2700866,
+                  "type": "Shaman"
+                },
+                {
+                  "guid": 249987223,
+                  "icon": "DemonHunter-Devourer",
+                  "id": 3,
+                  "name": "小怪兽豪豪",
+                  "total": 47014003,
+                  "type": "DemonHunter"
+                },
+                {
+                  "guid": 57846330,
+                  "icon": "Unknown",
+                  "id": 17,
+                  "name": "情化",
+                  "total": 35107,
+                  "type": "Unknown"
+                },
+                {
+                  "guid": 104701864,
+                  "icon": "Monk-Mistweaver",
+                  "id": 14,
+                  "name": "紫菜菜",
+                  "total": 3728293,
+                  "type": "Monk"
+                },
+                {
+                  "guid": 88057970,
+                  "icon": "Paladin-Retribution",
+                  "id": 31,
+                  "name": "老登",
+                  "total": 115011,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 111737577,
+                  "icon": "Druid-Restoration",
+                  "id": 6,
+                  "name": "珐噜莎拉",
+                  "total": 460827,
+                  "type": "Druid"
+                },
+                {
+                  "guid": 137922673,
+                  "icon": "Druid-Feral",
+                  "id": 27,
+                  "name": "Freeloop",
+                  "total": 26546537,
+                  "type": "Druid"
+                },
+                {
+                  "guid": 33953637,
+                  "icon": "Warrior-Arms",
+                  "id": 16,
+                  "name": "丶二哈快跑",
+                  "total": 40254307,
+                  "type": "Warrior"
+                }
+              ],
+              "damageTaken": [
+                {
+                  "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                  "guid": 1285504,
+                  "name": "Dark Radiation",
+                  "total": 50404470,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_twistedfaith.jpg",
+                  "guid": 1284963,
+                  "name": "Destabilizing Strikes",
+                  "total": 26465490,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_debuff.jpg",
+                  "guid": 1260835,
+                  "name": "Despotic Command",
+                  "total": 12161995,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_112_raiddimensius_blackhole.jpg",
+                  "guid": 1250828,
+                  "name": "Void Exposure",
+                  "total": 3539973,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_rogue_cheatdeath.jpg",
+                  "guid": 124255,
+                  "name": "Stagger",
+                  "total": 4422354,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_groundsate.jpg",
+                  "guid": 1245592,
+                  "name": "Torturous Extract",
+                  "total": 3911966,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_felarmour.jpg",
+                  "guid": 387846,
+                  "name": "Fel Armor",
+                  "total": 122436,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_12_profession_mining_miningspecializations_overloded.jpg",
+                  "composite": true,
+                  "guid": 1302265,
+                  "name": "Omnium Folio",
+                  "total": 28201,
+                  "type": 110
+                },
+                {
+                  "abilityIcon": "inv_112_etherealwraps_empowered_blue.jpg",
+                  "guid": 1254018,
+                  "name": "Entropic Unraveling",
+                  "total": 34101757,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_deathwing_bloodcorruption_earth.jpg",
+                  "guid": 210380,
+                  "name": "Blessing of Dawn",
+                  "total": 1150650,
+                  "type": 2
+                },
+                {
+                  "abilityIcon": "inv_axe_02.jpg",
+                  "guid": 1,
+                  "name": "Melee",
+                  "total": 10380958,
+                  "type": 1
+                },
+                {
+                  "abilityIcon": "inv_cosmicvoid_missile.jpg",
+                  "guid": 1250686,
+                  "name": "Twisting Obscurity",
+                  "total": 78720273,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_priest_mindspike.jpg",
+                  "guid": 1251213,
+                  "name": "Twilight Spikes",
+                  "total": 1066805,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "inv_mace_2h_etherealking_d_01.jpg",
+                  "guid": 1250803,
+                  "name": "Shattering Twilight",
+                  "total": 4168197,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "spell_shadow_demonicfortitude.jpg",
+                  "guid": 32409,
+                  "name": "Shadow Word: Death",
+                  "total": 163947,
+                  "type": 32
+                },
+                {
+                  "abilityIcon": "ability_deathwing_sealarmorbreachtga.jpg",
+                  "guid": 111400,
+                  "name": "Burning Rush",
+                  "total": 217164,
+                  "type": 4
+                },
+                {
+                  "abilityIcon": "inv_mace_2h_etherealking_d_01.jpg",
+                  "guid": 1262989,
+                  "name": "Shattering Twilight",
+                  "total": 3273993,
+                  "type": 32
+                }
+              ],
+              "deathEvents": [
+                {
+                  "ability": {
+                    "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                    "guid": 1285504,
+                    "name": "Dark Radiation",
+                    "type": 32
+                  },
+                  "deathTime": 31348,
+                  "guid": 88057970,
+                  "icon": "Paladin-Retribution",
+                  "id": 31,
+                  "name": "老登",
+                  "type": "Paladin"
+                },
+                {
+                  "ability": {
+                    "abilityIcon": "inv_enchant_essencecosmicgreater.jpg",
+                    "guid": 1285504,
+                    "name": "Dark Radiation",
+                    "type": 32
+                  },
+                  "deathTime": 37396,
+                  "guid": 93145153,
+                  "icon": "Mage-Frost",
+                  "id": 12,
+                  "name": "向黎焕新",
+                  "type": "Mage"
+                },
+                {
+                  "ability": {
+                    "abilityIcon": "inv_112_etherealwraps_empowered_blue.jpg",
+                    "guid": 1254018,
+                    "name": "Entropic Unraveling",
+                    "type": 32
+                  },
+                  "deathTime": 107255,
+                  "guid": 57846330,
+                  "icon": "Unknown",
+                  "id": 17,
+                  "name": "情化",
+                  "type": "Unknown"
+                },
+                {
+                  "ability": {
+                    "abilityIcon": "spell_priest_mindspike.jpg",
+                    "guid": 1251213,
+                    "name": "Twilight Spikes",
+                    "type": 32
+                  },
+                  "deathTime": 219438,
+                  "guid": 137922673,
+                  "icon": "Druid-Feral",
+                  "id": 27,
+                  "name": "Freeloop",
+                  "type": "Druid"
+                }
+              ],
+              "exploitDetails": [],
+              "gameVersion": 1,
+              "healingDone": [
+                {
+                  "guid": 111462350,
+                  "icon": "DeathKnight-Blood",
+                  "id": 2,
+                  "name": "由乙",
+                  "total": 19815683,
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 97091244,
+                  "icon": "Mage-Frost",
+                  "id": 18,
+                  "name": "悠然灬而然",
+                  "total": 810867,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 46508609,
+                  "icon": "Priest-Discipline",
+                  "id": 1,
+                  "name": "神恩结界",
+                  "total": 47888570,
+                  "type": "Priest"
+                },
+                {
+                  "guid": 104308040,
+                  "icon": "Mage-Arcane",
+                  "id": 28,
+                  "name": "红温警告",
+                  "total": 1381026,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 91552902,
+                  "icon": "Paladin-Retribution",
+                  "id": 13,
+                  "name": "摩尔迦娜",
+                  "total": 3280758,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 117326980,
+                  "icon": "DeathKnight-Unholy",
+                  "id": 15,
+                  "name": "噩兆王蒙葛特",
+                  "total": 3368641,
+                  "type": "DeathKnight"
+                },
+                {
+                  "guid": 103673755,
+                  "icon": "Paladin-Retribution",
+                  "id": 9,
+                  "name": "Chayton",
+                  "total": 3043721,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 104613618,
+                  "icon": "Monk-Brewmaster",
+                  "id": 11,
+                  "name": "白的仙",
+                  "total": 13573159,
+                  "type": "Monk"
+                },
+                {
+                  "guid": 107500949,
+                  "icon": "Hunter-BeastMastery",
+                  "id": 29,
+                  "name": "兽栏管理人",
+                  "total": 1798725,
+                  "type": "Hunter"
+                },
+                {
+                  "guid": 93768682,
+                  "icon": "Mage-Frost",
+                  "id": 10,
+                  "name": "丷闪现踩使丷",
+                  "total": 1107663,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 93145153,
+                  "icon": "Mage-Frost",
+                  "id": 12,
+                  "name": "向黎焕新",
+                  "total": 48514,
+                  "type": "Mage"
+                },
+                {
+                  "guid": 96010544,
+                  "icon": "Warlock-Demonology",
+                  "id": 8,
+                  "name": "洛阿神术",
+                  "total": 2303972,
+                  "type": "Warlock"
+                },
+                {
+                  "guid": 99363100,
+                  "icon": "Shaman-Restoration",
+                  "id": 24,
+                  "name": "呦菜呦嗳笂",
+                  "total": 36123311,
+                  "type": "Shaman"
+                },
+                {
+                  "guid": 249987223,
+                  "icon": "DemonHunter-Devourer",
+                  "id": 3,
+                  "name": "小怪兽豪豪",
+                  "total": 3964414,
+                  "type": "DemonHunter"
+                },
+                {
+                  "guid": 57846330,
+                  "icon": "Unknown",
+                  "id": 17,
+                  "name": "情化",
+                  "total": 199971,
+                  "type": "Unknown"
+                },
+                {
+                  "guid": 104701864,
+                  "icon": "Monk-Mistweaver",
+                  "id": 14,
+                  "name": "紫菜菜",
+                  "total": 49853969,
+                  "type": "Monk"
+                },
+                {
+                  "guid": 111737577,
+                  "icon": "Druid-Restoration",
+                  "id": 6,
+                  "name": "珐噜莎拉",
+                  "total": 42837235,
+                  "type": "Druid"
+                },
+                {
+                  "guid": 88057970,
+                  "icon": "Paladin-Retribution",
+                  "id": 31,
+                  "name": "老登",
+                  "total": 43881,
+                  "type": "Paladin"
+                },
+                {
+                  "guid": 137922673,
+                  "icon": "Druid-Feral",
+                  "id": 27,
+                  "name": "Freeloop",
+                  "total": 2262425,
+                  "type": "Druid"
+                },
+                {
+                  "guid": 33953637,
+                  "icon": "Warrior-Arms",
+                  "id": 16,
+                  "name": "丶二哈快跑",
+                  "total": 2744323,
+                  "type": "Warrior"
+                }
+              ],
+              "itemLevel": 245.5,
+              "logFileDetails": "",
+              "logVersion": 17,
+              "playerDetails": {
+                "dps": [
+                  {
+                    "combatantInfo": [],
+                    "guid": 97091244,
+                    "healthstoneUse": 0,
+                    "icon": "Mage-Frost",
+                    "id": 18,
+                    "maxItemLevel": 272,
+                    "minItemLevel": 272,
+                    "name": "悠然灬而然",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "熊猫酒仙",
+                    "specs": [
+                      "Frost"
+                    ],
+                    "type": "Mage"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 104308040,
+                    "healthstoneUse": 0,
+                    "icon": "Mage-Arcane",
+                    "id": 28,
+                    "maxItemLevel": 292,
+                    "minItemLevel": 292,
+                    "name": "红温警告",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "霜之哀伤",
+                    "specs": [
+                      "Arcane"
+                    ],
+                    "type": "Mage"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 117326980,
+                    "healthstoneUse": 0,
+                    "icon": "DeathKnight-Unholy",
+                    "id": 15,
+                    "maxItemLevel": 289,
+                    "minItemLevel": 289,
+                    "name": "噩兆王蒙葛特",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "国王之谷",
+                    "specs": [
+                      "Unholy"
+                    ],
+                    "type": "DeathKnight"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 91552902,
+                    "healthstoneUse": 0,
+                    "icon": "Paladin-Retribution",
+                    "id": 13,
+                    "maxItemLevel": 291,
+                    "minItemLevel": 291,
+                    "name": "摩尔迦娜",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "达隆米尔",
+                    "specs": [
+                      "Retribution"
+                    ],
+                    "type": "Paladin"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 103673755,
+                    "healthstoneUse": 1,
+                    "icon": "Paladin-Retribution",
+                    "id": 9,
+                    "maxItemLevel": 282,
+                    "minItemLevel": 282,
+                    "name": "Chayton",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "死亡之翼",
+                    "specs": [
+                      "Retribution"
+                    ],
+                    "type": "Paladin"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 107500949,
+                    "healthstoneUse": 0,
+                    "icon": "Hunter-BeastMastery",
+                    "id": 29,
+                    "maxItemLevel": 293,
+                    "minItemLevel": 293,
+                    "name": "兽栏管理人",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "白银之手",
+                    "specs": [
+                      "BeastMastery"
+                    ],
+                    "type": "Hunter"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 93768682,
+                    "healthstoneUse": 0,
+                    "icon": "Mage-Frost",
+                    "id": 10,
+                    "maxItemLevel": 280,
+                    "minItemLevel": 280,
+                    "name": "丷闪现踩使丷",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "冰风岗",
+                    "specs": [
+                      "Frost"
+                    ],
+                    "type": "Mage"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 93145153,
+                    "healthstoneUse": 0,
+                    "icon": "Mage-Frost",
+                    "id": 12,
+                    "name": "向黎焕新",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "伊森利恩",
+                    "specs": [
+                      "Frost"
+                    ],
+                    "type": "Mage"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 96010544,
+                    "healthstoneUse": 0,
+                    "icon": "Warlock-Demonology",
+                    "id": 8,
+                    "maxItemLevel": 290,
+                    "minItemLevel": 290,
+                    "name": "洛阿神术",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "冰风岗",
+                    "specs": [
+                      "Demonology"
+                    ],
+                    "type": "Warlock"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 249987223,
+                    "healthstoneUse": 0,
+                    "icon": "DemonHunter-Devourer",
+                    "id": 3,
+                    "maxItemLevel": 292,
+                    "minItemLevel": 292,
+                    "name": "小怪兽豪豪",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "亡语者",
+                    "specs": [
+                      "Devourer"
+                    ],
+                    "type": "DemonHunter"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 88057970,
+                    "healthstoneUse": 0,
+                    "icon": "Paladin-Retribution",
+                    "id": 31,
+                    "name": "老登",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "阿斯塔洛",
+                    "specs": [
+                      "Retribution"
+                    ],
+                    "type": "Paladin"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 137922673,
+                    "healthstoneUse": 0,
+                    "icon": "Druid-Feral",
+                    "id": 27,
+                    "maxItemLevel": 274,
+                    "minItemLevel": 274,
+                    "name": "Freeloop",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "末日行者",
+                    "specs": [
+                      "Feral"
+                    ],
+                    "type": "Druid"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 33953637,
+                    "healthstoneUse": 0,
+                    "icon": "Warrior-Arms",
+                    "id": 16,
+                    "maxItemLevel": 283,
+                    "minItemLevel": 283,
+                    "name": "丶二哈快跑",
+                    "potionUse": 2,
+                    "region": "CN",
+                    "server": "主宰之剑",
+                    "specs": [
+                      "Arms"
+                    ],
+                    "type": "Warrior"
+                  }
+                ],
+                "healers": [
+                  {
+                    "combatantInfo": [],
+                    "guid": 46508609,
+                    "healthstoneUse": 1,
+                    "icon": "Priest-Discipline",
+                    "id": 1,
+                    "maxItemLevel": 287,
+                    "minItemLevel": 287,
+                    "name": "神恩结界",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "主宰之剑",
+                    "specs": [
+                      "Discipline"
+                    ],
+                    "type": "Priest"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 99363100,
+                    "healthstoneUse": 0,
+                    "icon": "Shaman-Restoration",
+                    "id": 24,
+                    "maxItemLevel": 289,
+                    "minItemLevel": 289,
+                    "name": "呦菜呦嗳笂",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "燃烧之刃",
+                    "specs": [
+                      "Restoration"
+                    ],
+                    "type": "Shaman"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 104701864,
+                    "healthstoneUse": 0,
+                    "icon": "Monk-Mistweaver",
+                    "id": 14,
+                    "maxItemLevel": 266,
+                    "minItemLevel": 266,
+                    "name": "紫菜菜",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "遗忘海岸",
+                    "specs": [
+                      "Mistweaver"
+                    ],
+                    "type": "Monk"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 111737577,
+                    "healthstoneUse": 0,
+                    "icon": "Druid-Restoration",
+                    "id": 6,
+                    "maxItemLevel": 287,
+                    "minItemLevel": 287,
+                    "name": "珐噜莎拉",
+                    "potionUse": 0,
+                    "region": "CN",
+                    "server": "白银之手",
+                    "specs": [
+                      "Restoration"
+                    ],
+                    "type": "Druid"
+                  }
+                ],
+                "tanks": [
+                  {
+                    "combatantInfo": [],
+                    "guid": 111462350,
+                    "healthstoneUse": 0,
+                    "icon": "DeathKnight-Blood",
+                    "id": 2,
+                    "maxItemLevel": 285,
+                    "minItemLevel": 285,
+                    "name": "由乙",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "罗宁",
+                    "specs": [
+                      "Blood"
+                    ],
+                    "type": "DeathKnight"
+                  },
+                  {
+                    "combatantInfo": [],
+                    "guid": 104613618,
+                    "healthstoneUse": 0,
+                    "icon": "Monk-Brewmaster",
+                    "id": 11,
+                    "maxItemLevel": 289,
+                    "minItemLevel": 289,
+                    "name": "白的仙",
+                    "potionUse": 1,
+                    "region": "CN",
+                    "server": "血色十字军",
+                    "specs": [
+                      "Brewmaster"
+                    ],
+                    "type": "Monk"
+                  }
+                ]
+              },
+              "totalTime": 328242
+            }
+          }
+        }
+      }
+    }
+  },
+  "status_code": 200,
+  "url": "https://www.warcraftlogs.com/api/v2/client"
+}

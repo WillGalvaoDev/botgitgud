@@ -1,0 +1,43 @@
+{
+  "verdict": "REQUIRES_CHANGES",
+  "source_files": 976,
+  "source_sha256": "e399a8c07d37b3a49c549dcfb582e2012582e2b6c0c97341a9b2b239f9b4435d",
+  "raw_sha256": "983b0a3ed9294925e70c60da62c871da87d629261d3d9c4568e67c25cd426926",
+  "suites": {
+    "independent-suite-final.xml": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0",
+      "tests": "2529",
+      "time": "656.232",
+      "timestamp": "2026-09-12T23:31:35.991668-03:00",
+      "hostname": "galvao"
+    },
+    "independent-focus.xml": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "78",
+      "time": "6.871",
+      "timestamp": "2026-09-12T17:41:39.021724-03:00",
+      "hostname": "galvao"
+    },
+    "independent-git-check.xml": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "1",
+      "time": "11.388",
+      "timestamp": "2026-09-12T23:43:22.374781-03:00",
+      "hostname": "galvao"
+    }
+  },
+  "ruff": "PASS",
+  "pyright": "0 errors, 0 warnings",
+  "probe_groups": 12,
+  "git_failure_explanation": "Isolated copy omitted .git; the exact failed test passed in the workspace without source changes. Not a full-suite green claim.",
+  "evidence_regeneration": "All structured content matches delivered artifact except generation timestamp."
+}
