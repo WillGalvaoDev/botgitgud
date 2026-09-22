@@ -37,6 +37,13 @@ estado da tentativa como condição necessária, não suficiente, de comparaçã
 relaxa covariáveis (M2.2) nem altera `pipeline`/`cohort_match` (M2.3). Evidências,
 replay e o status corrente estão em [`m2-1-review-evidence.md`](m2-1-review-evidence.md).
 
+[`m2-2-specification.md`](m2-2-specification.md) define os contratos e critérios da
+M2.2 (seleção da população por métrica): matriz métrica × covariável, ladder de
+relaxamento e distinção entre população descritiva e aspiracional, a partir da
+elegibilidade básica de M2.1. Não faz wiring em `pipeline`/`cohort_match`/relatório
+(M2.3) nem antecipa interpretação estatística (M3/B06). Evidências, replay e o
+status corrente estão em [`m2-2-review-evidence.md`](m2-2-review-evidence.md).
+
 O [`roadmap aprovado M2–M6`](methodology-roadmap-m2-m6.md) contém 16 submilestones,
 com dependências, escopo, aceite e evidências. Todas permanecem não iniciadas.
 O [`workflow operacional`](milestone-workflow.md) define Opus como analista/arquiteto,
@@ -109,3 +116,7 @@ Registros de estados passados, preservados como evidência. **Não são procedim
 ## M2.1 manual closure - 2026-09-22
 
 [M2.1 MILESTONE_CLOSED](m2-1-closure.md) after independent Astra review. M2.2 NOT_STARTED; orchestrator suspended.
+
+## M2.2 manual closure - 2026-09-22
+
+[M2.2 MILESTONE_CLOSED](m2-2-closure.md) after independent Astra review (review, re-review, final review). Macro M2 open; orchestrator suspended.
