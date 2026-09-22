@@ -105,3 +105,7 @@ Registros de estados passados, preservados como evidência. **Não são procedim
 - **Experimentos Phase 4:** seção [Experimentos](#experimentos--fase-4-experimental).
 - **Registros históricos:** [`archive/`](archive/).
 - **Implementação legada congelada:** [`../legacy/README.md`](../legacy/README.md).
+
+## M2.1 manual closure - 2026-09-22
+
+[M2.1 MILESTONE_CLOSED](m2-1-closure.md) after independent Astra review. M2.2 NOT_STARTED; orchestrator suspended.

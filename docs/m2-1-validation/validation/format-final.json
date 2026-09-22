@@ -1,0 +1,11 @@
+{
+  "command": [
+    "ruff",
+    "format",
+    "--check",
+    "."
+  ],
+  "exit_code": 0,
+  "stdout": "329 files already formatted\n",
+  "stderr": ""
+}

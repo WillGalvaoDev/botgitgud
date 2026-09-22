@@ -1,3 +1,7 @@
+# Direct validation completed - 2026-09-22
+
+**MILESTONE_CLOSED** after independent Astra review. Actual executed results and review are recorded in [closure](m2-1-closure.md). Historical authoring notes below are retained; statements about pending gates are superseded by the direct-validation package.
+
 # M2.1 — evidências de elegibilidade básica das referências
 
 Status: **IMPLEMENTATION_READY**. Resubmissão corrigindo o formato do pacote de

@@ -1,0 +1,15 @@
+{
+  "command": [
+    "C:\\Users\\wsgon\\OneDrive\\Desktop\\BotGITGUD\\.venv\\Scripts\\python.exe",
+    "-B",
+    "-m",
+    "ruff",
+    "format",
+    "--check",
+    "."
+  ],
+  "exit_code": 1,
+  "seconds": 0.7144181728363037,
+  "stdout": "unformatted: File would be reformatted\n   --> src\\botgitgud\\analysis\\reference_eligibility.py:269:34\n    |\n268 |     excluded_reasons = {\n    -         r.reference_id: r.reasons\n    -         for r in results\n    -         if r.decision is not EligibilityDecision.ELIGIBLE\n269 +         r.reference_id: r.reasons for r in results if r.decision is not EligibilityDecision.ELIGIBLE\n270 |     }\n    |\n\nunformatted: File would be reformatted\n   --> tests\\unit\\test_m2_1_reference_eligibility.py:389:29\n    |\n388 |     target = _target()\n    -     below_threshold = tuple(\n    -         _make_log(character_name=f\"Ref{i}\") for i in range(COHORT_MIN_HARD - 1)\n    -     )\n389 +     below_threshold = tuple(_make_log(character_name=f\"Ref{i}\") for i in range(COHORT_MIN_HARD - 1))\n390 |     population_below = evaluate_references(target, below_threshold)\n    |\n\n2 files would be reformatted, 327 files already formatted\n",
+  "stderr": ""
+}
