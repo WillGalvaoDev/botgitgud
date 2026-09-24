@@ -1,4 +1,4 @@
-"""T-DG.3 (docs/fase4-data-acquisition-plan.md §4.1, §6, §9, §11) — Estágio A
+"""T-DG.3 (docs/phase4.md) — Estágio A
 of the Data Acquisition Gate: windowed, resumable, idempotent discovery of
 reports via reportData.reports.
 
@@ -38,7 +38,7 @@ log = structlog.get_logger(__name__)
 # working (§13.2's density probes).
 MAX_DISCOVERY_PAGE = 25
 DISCOVERY_PAGE_LIMIT = 100
-# docs/fase4-data-acquisition-plan.md §6: 12h primary window (1,988 reports/day
+# docs/phase4.md: 12h primary window (1,988 reports/day
 # measured for zone 46, comfortably under the 2,500 = 25*100 cap with margin),
 # split to 6h on cap exhaustion.
 DEFAULT_WINDOW_SPAN_MS = 12 * 3600 * 1000

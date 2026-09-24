@@ -1,6 +1,5 @@
-"""Permanent regressions for the independent review (user items 01-12).
+"""Permanent M1 regressions (measurement, accounting and persistence contracts).
 
-Original evidence is archived in docs/reviews/m1-independent-2026-09-13.
 Fixtures describe valid collection intervals unless a test corrupts them explicitly.
 """
 

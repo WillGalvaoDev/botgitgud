@@ -1,6 +1,6 @@
 """T0.6 — cooldown cadence and MAJOR/MINOR classification.
 
-Fixes achado 3.3 (docs/relario.md): legacy/bot.py:465-474 derives
+Fixes achado 3.3 of the audit of the original bot, which derived
 `avg_cd_duration` from the *instant of the first cast* whenever a spell has
 only one observed usage — a single-use consumable item cast once at 200s
 gets treated as a "200-second cooldown". A real long cooldown used once
@@ -101,7 +101,7 @@ def is_eligible(
     blacklist: frozenset[int],
     n_with_spell: int | None = None,
 ) -> bool:
-    """Eligibility filter, replacing legacy/bot.py's discover_clean_major_cds.
+    """Eligibility filter, replacing the original bot's discover_clean_major_cds.
 
     The interval condition is deliberately permissive when unknown: a
     single-usage ability (interval median = None) is never excluded on that

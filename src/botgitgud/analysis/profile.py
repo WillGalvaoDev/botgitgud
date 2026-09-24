@@ -1,4 +1,4 @@
-"""T1.6 — reference-cohort statistical profile, replacing bot.py's
+"""T1.6 — reference-cohort statistical profile, replacing the original bot's
 build_cd_reference_profile/discover_eligible_spell_ids. Same math as
 Fase 0 (T0.7/T0.8), adapted to the T1.2 domain models: input is
 Sequence[PlayerLog] instead of a list of raw dicts, output is

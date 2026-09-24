@@ -122,7 +122,7 @@ class _LockBackend(Protocol):
 
 
 class _WindowsLockBackend:
-    """Verificado empiricamente (docs/v1-process-supervision.md): uma
+    """Verificado empiricamente (docs/operations.md): uma
     segunda `locking()` no mesmo byte range — mesmo reaberto pelo MESMO
     processo — levanta `OSError`, exatamente o sinal de "alguém já
     segura isto" que `SupervisorLock.acquire` precisa.

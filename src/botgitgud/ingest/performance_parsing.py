@@ -75,7 +75,7 @@ def compute_downtime_s(
 ) -> float:
     """Sum, over every death, of (this player's next own cast, or fight
     end, whichever comes first) minus the death time. No WCL API exposes a
-    revive timestamp (same gap as docs/desvios.md D-28's missing cooldown
+    revive timestamp (same gap as docs/architecture.md D-28's missing cooldown
     data) — but a dead character cannot cast, so their own next cast is
     the earliest observable proof they were back up. A player who dies and
     never casts again (e.g. a wipe) correctly gets downtime running to

@@ -16,7 +16,7 @@ def _sorted_floats(max_size: int = 12) -> st.SearchStrategy[list[float]]:
     ).map(sorted)
 
 
-# -- explicit regression test: the exact bug from relario.md achado 3.1 -----
+# -- explicit regression test: the exact bug from audit achado 3.1 -----
 
 
 def test_missed_casts_are_reported() -> None:

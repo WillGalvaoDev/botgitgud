@@ -42,7 +42,7 @@ def test_cohort_of_20_is_ok() -> None:
 
 
 def test_invariant_metric_uses_whole_pool_within_sanity_band() -> None:
-    """Uptime%/active-time%/damage-per-cast: docs/implementacao.md's own
+    """Uptime%/active-time%/damage-per-cast: docs/architecture.md's own
     normalization table says these use the whole ±35% pool, unadjusted.
     within_sanity_band is the gate that pool is built from.
     """

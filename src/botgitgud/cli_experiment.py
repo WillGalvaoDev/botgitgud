@@ -1,5 +1,5 @@
 """SAE.6 — `experiment-plan` and `experiment-status`
-(docs/fase4-statistical-architecture-experiment.md §14 of the task brief).
+(docs/phase4.md).
 
 Both are strictly read-only over the local warehouse and never touch the
 WCL API, mirroring `dataset-status`. `experiment-plan` sizes and prices a

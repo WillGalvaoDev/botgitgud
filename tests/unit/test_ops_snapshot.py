@@ -1,6 +1,6 @@
 """R3-01 (reaberta) — o snapshot operacional que o `serve` publica enquanto
 segura o lock do DuckDB, e que `ops-status` lê quando não consegue abrir o
-warehouse. Ver docs/desvios.md D-34.
+warehouse. Ver docs/architecture.md D-34.
 """
 
 from __future__ import annotations

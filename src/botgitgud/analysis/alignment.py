@@ -1,8 +1,8 @@
 """T0.5 — monotonic sequence alignment between a player's cast timeline and
 a reference timeline.
 
-Corrects achado 3.1 (docs/relario.md), the most severe finding of the audit:
-the legacy nearest-neighbor matcher (`legacy/bot.py:570-576`) always maps
+Corrects achado 3.1 of the audit of the original bot, its most severe finding:
+the original nearest-neighbor matcher always mapped
 each player cast to whichever reference time is closest, which can never
 report a missed cooldown usage and is systematically biased toward "green".
 

@@ -1,5 +1,5 @@
 """T0.9 — supported-spec registry and scope gate (§1.4 of
-docs/implementacao.md): this tool analyzes DPS specs only.
+docs/architecture.md): this tool analyzes DPS specs only.
 
 Verified live against the WCL API (docs/schema_confirmado.md): both
 `characterRankings`'s className/specName arguments and `playerDetails[].type`

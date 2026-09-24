@@ -1,8 +1,8 @@
 """T-DG.3/T-DG.4 split of cli.py's Data Acquisition Gate subcommands
 (`discover`, `triage`) out of cli.py itself, to keep it under the 300-line
-limit (docs/implementacao.md T1.6's rule, still enforced repo-wide) now
+limit (T1.6's rule, still enforced repo-wide) now
 that both stages have their own argparse wiring. See
-docs/fase4-data-acquisition-plan.md for the full design; cli.py wires
+docs/phase4.md for the full design; cli.py wires
 `build_deps` in via `functools.partial` to avoid a circular import (this
 module needs it, cli.py already owns it for every other subcommand).
 """
@@ -43,7 +43,7 @@ def add_discover_parser(
     p = sub.add_parser(
         "discover",
         help="Estágio A do Data Acquisition Gate: descoberta janelada e resumível de "
-        "reports (docs/fase4-data-acquisition-plan.md).",
+        "reports (docs/phase4.md).",
     )
     p.add_argument("--zone", required=True, type=int, help="zoneID da WCL.")
     p.add_argument("--start-ms", required=True, type=int, help="Início da janela total (epoch ms).")
@@ -73,7 +73,7 @@ def add_triage_parser(
     p = sub.add_parser(
         "triage",
         help="Estágio B do Data Acquisition Gate: triagem via report.rankings de todo "
-        "report descoberto e ainda não triado (docs/fase4-data-acquisition-plan.md).",
+        "report descoberto e ainda não triado (docs/phase4.md).",
     )
     p.add_argument(
         "--zone", type=int, default=None, help="Restringe aos reports desta zoneID (opcional)."

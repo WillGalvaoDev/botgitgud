@@ -1,5 +1,5 @@
 """SAE.3 — the experiment's feature contract
-(docs/fase4-statistical-architecture-experiment.md §7, §9).
+(docs/phase4.md).
 
 One registry, one role per column, so a cross-target model can tell contexts
 apart and nothing that leaks can reach a model by accident.

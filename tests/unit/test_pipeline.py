@@ -1,13 +1,11 @@
 """T1.6 — end-to-end tests for analysis/pipeline.py's run_analysis, the
-orchestrator that replaces bot.py's run_analysis. Exercises the real
+analysis pipeline. Exercises the real
 WclClient/LogFetcher/Store/SpellCatalog stack against a fake httpx
 transport (no network), the same pattern as test_log_fetcher.py.
 
-test_scope_rejection_triggers_zero_ranking_queries is this task's
-replacement for the old test_bot_scope_gate.py (which exercised the
-now-deleted root bot.py directly): same invariant — an out-of-scope spec
-must never spend a ranking-query API point — verified against the real
-pipeline instead of a monkeypatched module.
+test_scope_rejection_triggers_zero_ranking_queries: an out-of-scope spec
+must never spend a ranking-query API point, verified against the real
+pipeline.
 """
 
 from __future__ import annotations
@@ -775,7 +773,7 @@ def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(
 
 
 def test_cold_build_persists_a_candidate_pool_for_reuse(tmp_path: Path) -> None:
-    """T2.1 (docs/desvios.md D-25): the Store caches the raw candidate
+    """T2.1 (docs/architecture.md D-25): the Store caches the raw candidate
     pool, not an aggregated profile — matching is per-player and always
     runs fresh (see analysis/cohort_match.py).
     """

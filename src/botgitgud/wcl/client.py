@@ -1,7 +1,7 @@
 """T0.3 — robust WCL v2 GraphQL client: timeouts, retry/backoff, auth-token
 expiry, and a rate-limit budget floor.
 
-See docs/desvios.md D-7: takes a local `WclClientConfig` instead of the
+See docs/architecture.md D-7: takes a local `WclClientConfig` instead of the
 `Settings` type the spec sketches, since `Settings` (pydantic-settings) is
 only built in T1.1. Same public surface (`query()`, `points_remaining`).
 """

@@ -1,5 +1,5 @@
 """`experiment-decide` — the Statistical Architecture Decision Gate
-(docs/fase4-architecture-decision.md): leave-one-spec/encounter-out for
+(docs/phase4.md): leave-one-spec/encounter-out for
 MODEL_GLOBAL, macro/micro aggregation, paired bootstrap, a Ridge
 diagnostic, seed sensitivity, error/calibration/range diagnostics, and
 Phase4Target density from the frozen plan.

@@ -1,5 +1,5 @@
 """T2.1 — curated spell IDs for the `has_augmentation` and `external_buffs`
-covariates (docs/implementacao.md T2.1). Same ID-only philosophy as
+covariates (T2.1). Same ID-only philosophy as
 domain/blacklist.py: no lexical matching, no attempt at exhaustiveness —
 this covariate is explicitly allowed to degrade (be relaxed) in the
 matching cascade when it doesn't discriminate cleanly, so a few missing

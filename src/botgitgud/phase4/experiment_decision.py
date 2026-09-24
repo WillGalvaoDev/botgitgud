@@ -1,4 +1,4 @@
-"""Statistical Architecture Decision Gate (docs/fase4-architecture-decision.md):
+"""Statistical Architecture Decision Gate (docs/phase4.md):
 leave-one-spec/encounter-out for `MODEL_GLOBAL`, macro/micro aggregation,
 paired bootstrap of model deltas, seed sensitivity, error/calibration/range
 diagnostics, and Phase4Target density from the frozen plan. Offline, over

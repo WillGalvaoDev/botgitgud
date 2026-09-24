@@ -527,7 +527,7 @@ def test_repeated_worker_analyses_still_produce_a_single_benchmark_job(tmp_path:
 
 def test_discord_direct_path_triggers_after_delivery() -> None:
     """18 (Discord direct path). O handler `cmd_analisar` é glue assíncrono
-    fora da cobertura unitária (docs/desvios.md D-22), então a prova é
+    fora da cobertura unitária (docs/architecture.md D-22), então a prova é
     estrutural, via AST — a mesma técnica que `test_report_contract.py` já
     usa para provar um call site: a chamada existe, e vem DEPOIS de
     `deliver_completed_report` (CL.5; antigo `send_report`) no corpo da

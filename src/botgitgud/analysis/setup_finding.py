@@ -2,7 +2,7 @@
 `SetupFinding`, que vocabulário ele pode carregar, e que vocabulário ele
 NUNCA pode carregar.
 
-Princípio de produto (docs/production-readiness-cold-build.md e a revisão
+Princípio de produto (docs/operations.md e a revisão
 arquitetural do Encounter Benchmark, EB.0-EB.5): Setup Analysis responde
 
     "Como o setup observado do jogador se compara ao que aparece no

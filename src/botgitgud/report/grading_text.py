@@ -1,5 +1,5 @@
 """T2.3 split of quantile-grading rendering out of report/text.py, to keep
-both files under the 300-line limit (docs/implementacao.md T2.3).
+both files under the 300-line limit (T2.3).
 
 Replaces the old fixed 10s/25s `_match_status` thresholds with a grade
 relative to each position's own empirical reference distribution

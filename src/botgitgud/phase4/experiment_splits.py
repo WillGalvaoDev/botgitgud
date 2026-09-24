@@ -1,5 +1,5 @@
 """SAE.4 — validation split protocols S1-S5
-(docs/fase4-statistical-architecture-experiment.md §8).
+(docs/phase4.md).
 
 The centre of the experiment: the granularity question is only answerable
 if the validation protocol actually isolates what it claims to. A plain

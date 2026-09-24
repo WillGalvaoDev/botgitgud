@@ -1,18 +1,18 @@
 """SAE.1 — domain contracts for the statistical architecture experiment
-(docs/fase4-statistical-architecture-experiment.md).
+(docs/phase4.md).
 
 Pure vocabulary: model granularities (A-E), split protocols (S1-S5),
 percentile buckets and the experiment's API budget. No I/O, no API calls,
 no model training — every other SAE module imports its terms from here so
 the planner, the dataset layer and the split layer cannot drift apart.
 
-The census (docs/fase4-target-census.md) measured that one model per
+The census (docs/phase4.md) measured that one model per
 Phase4Target is arithmetically unaffordable: 662 supported targets, none
 projected to reach 5.000 observations within 90 days. This module exists to
 make the *alternatives* expressible so they can be compared empirically.
 
 Nothing here decides a winner, and nothing here relaxes the Fase 4 gate of
-5.000 (docs/fase4-data-acquisition-plan.md §10.3) — that gate governs the
+5.000 (docs/phase4.md) — that gate governs the
 final Fase 4, while this experiment deliberately trades depth for width.
 """
 
@@ -96,7 +96,7 @@ def grouping_key(granularity: ModelGranularity, target: Phase4Target) -> str:
         return _GLOBAL_KEY
     raise NotImplementedError(
         "MODEL_HIERARCHICAL is an extension point only "
-        "(docs/fase4-statistical-architecture-experiment.md §5); "
+        "(docs/phase4.md); "
         "A-D must produce results first"
     )
 
@@ -148,7 +148,7 @@ MODELLABLE_ROLES: frozenset[FeatureRole] = frozenset(
 
 # Ceiling for the WHOLE experimental Stage C, not per run.
 EXPERIMENT_MAX_API_POINTS = 25_000.0
-# Measured cost model (docs/fase4-data-acquisition-plan.md §8.3): the event
+# Measured cost model (docs/phase4.md): the event
 # pages of a fight are fetched once and filtered client-side per player, so a
 # second player from the same fight costs only the buffs/debuffs pair.
 # 15 + 2 == 17 reproduces ingest/backfill_planner.py's measured solo-fight cost.

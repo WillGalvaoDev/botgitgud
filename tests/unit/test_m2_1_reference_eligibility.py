@@ -1,6 +1,6 @@
 """M2.1 — reference eligibility policy tests.
 
-Matrix defined before implementation (SPEC §9.1-9.6, docs/m2-1-specification.md):
+Matrix defined before implementation (contract: docs/methodology.md §3):
 one case per closed reason code of §6, composite multi-axis cases, typed
 abstentions, N-independence (isolated vs batch, permutation, size), absence of
 repair by scarcity, determinism/canonical round-trip, a read-only replay of
@@ -8,7 +8,7 @@ real metadata (tests/fixtures/gate1_scope; data/raw has no Parquet files in this
 workspace, declared explicitly rather than fabricated), and two structural
 checks anchoring AC5 (import allowlist, via ast) and AC6 (the Ruff/Pyright
 configuration the documented commands rely on, via tomllib) to the real
-repository instead of prose. See docs/m2-1-review-evidence.md for the full
+repository instead of prose. See docs/methodology.md for the full
 critério -> teste -> resultado table.
 """
 
@@ -503,7 +503,7 @@ def test_replay_gate1_scope_rankings_census_matches_manual_expectation() -> None
     workspace: tests/fixtures/gate1_scope/phase1_rankings.json, 20 characters
     of one real fight (same encounter/difficulty/partition/kill/duration for
     all 20, since it is a single fight). Expectation computed by hand from the
-    fixture; recorded in docs/m2-1-review-evidence.md.
+    fixture; recorded in docs/methodology.md.
     """
     before = snapshot_directory(_GATE1_FIXTURE_DIR)
     logs = _load_gate1_rankings_logs()
@@ -543,7 +543,7 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
             f"corpus real ausente em {CORPUS_ROOT}; a prova de cobertura real "
             "do M2.1 nesta suíte é "
             "test_replay_gate1_scope_rankings_census_matches_manual_expectation "
-            "(replay de tests/fixtures/gate1_scope); ver docs/m2-1-review-evidence.md §4"
+            "(replay de tests/fixtures/gate1_scope); ver docs/methodology.md"
         )
     from botgitgud.ingest.parquet_codec import read_parquet_log
 
@@ -606,7 +606,7 @@ def test_reference_eligibility_module_imports_are_limited_to_the_declared_allowl
 def test_pyproject_declares_the_ruff_and_pyright_configuration_used_by_documented_commands() -> (
     None
 ):
-    # AC6: anchors the commands documented in review-evidence.md §5 to the
+    # Anchors the documented quality commands (README, CI) to the
     # real repository configuration, instead of citing the commands as proof.
     pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
     config = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))

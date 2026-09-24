@@ -71,11 +71,9 @@ def test_forbidden_paths_are_rejected(path: str) -> None:
         "spells.json",
         "src/botgitgud/cli.py",
         "tests/fixtures/cassettes/0014b69d2fc243b5.json",
-        "tests/golden/test_legacy_output.py",
-        "legacy/bot.py",
-        "deploy/caddy/Caddyfile.template",
+        "tests/golden/test_new_pipeline_output.py",
         "deploy/systemd/botgitgud.service",
-        "docs/runbook.md",
+        "docs/operations.md",
         "scripts/bot-supervisor.ps1",
     ],
 )
@@ -167,7 +165,7 @@ def test_webhook_url_is_detected(tmp_path: Path) -> None:
 
 def test_ordinary_text_is_not_flagged(tmp_path: Path) -> None:
     (tmp_path / "ok.md").write_text(
-        "Este projeto nunca versiona .env. Ver docs/runbook.md.", encoding="utf-8"
+        "Este projeto nunca versiona .env. Ver docs/operations.md.", encoding="utf-8"
     )
     result = check_secret_markers(tmp_path, ["ok.md"])
     assert result.status is CheckStatus.OK
@@ -235,7 +233,6 @@ def test_this_repository_passes_the_publication_check() -> None:
             REPO_ROOT / ".env.example",
             REPO_ROOT / "spells.json",
             REPO_ROOT / "src" / "botgitgud" / "cli.py",
-            REPO_ROOT / "legacy" / "bot.py",
         ]
     ]
     results = run_publication_safety(REPO_ROOT, tracked)

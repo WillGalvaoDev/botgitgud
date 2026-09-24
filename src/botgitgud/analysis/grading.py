@@ -1,5 +1,5 @@
 """T2.3 — quantile-based grading, bootstrap CI, and Benjamini-Hochberg
-multiple-comparison control (docs/implementacao.md T2.3, corrige achados
+multiple-comparison control (T2.3, corrige achados
 3.6/3.7 e o `stdev` morto).
 
 Replaces the fixed 10s/25s thresholds (report/text.py's old

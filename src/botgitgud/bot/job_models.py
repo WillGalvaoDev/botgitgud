@@ -1,5 +1,5 @@
 """T1.8 split of bot/jobs.py's data model out of JobQueue's logic, to keep
-both files under the 300-line limit (docs/implementacao.md T1.6's rule,
+both files under the 300-line limit (T1.6's rule,
 still enforced repo-wide). See jobs.py's module docstring for context.
 """
 
@@ -33,14 +33,12 @@ JobType = Literal["analyze", "build_cohort", "benchmark_build"]
 
 # RC.2 — o estado da ANALISE e o estado da ENTREGA sao fatos diferentes. Uma
 # falha do Discord nao pode reescrever "a analise terminou" como "o job
-# falhou": o incidente real produziu exatamente esse buraco (analise done,
-# relatorio perdido, usuario sem nada). Ver docs/rc-discord-delivery-
-# resilience.md.
+# falhou" (docs/operations.md §7).
 DeliveryStatus = Literal["pending", "delivered", "failed"]
 
 INTERACTIVE_RESERVE_PCT = 0.25
 
-# docs/desvios.md D-20: the literal `jobs` DDL in docs/implementacao.md has
+# docs/architecture.md D-20: the literal `jobs` DDL in docs/architecture.md has
 # no column to distinguish an `analyze` job from a `build_cohort` job, but
 # §5 explicitly requires "duas filas com prioridade" between them — added
 # `job_type`.
@@ -193,7 +191,7 @@ class BudgetStatus:
     literal default numbers, the floor always binds before the reserve
     ever would. The two thresholds still compose correctly in general
     (any account with a high enough limitPerHour that reserve > floor
-    gets a real middle tier); see docs/desvios.md D-21.
+    gets a real middle tier); see docs/architecture.md D-21.
     """
 
     points_remaining: float

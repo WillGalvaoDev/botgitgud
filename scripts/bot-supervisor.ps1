@@ -10,7 +10,7 @@
     only job is to guarantee the venv interpreter and the repo root are used,
     independent of how or from where it was launched -- never relies on PATH.
 
-    See docs/v1-process-supervision.md for the full design.
+    See docs/operations.md for the full design.
 
 .NOTES
     Does not read or print any secret. .env is loaded by Python's own

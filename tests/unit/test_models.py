@@ -72,7 +72,7 @@ def test_player_build_default_external_buffs_is_empty_frozenset() -> None:
 
 
 def test_fight_ref_partition_defaults_to_none() -> None:
-    """docs/desvios.md D-12(a): partition is nullable — resolved separately
+    """docs/architecture.md D-12(a): partition is nullable — resolved separately
     at ingestion time, not always known when a FightRef is first built.
     """
     fight = _fight()

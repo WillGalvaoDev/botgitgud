@@ -1,5 +1,5 @@
 """SAE.3 — the experimental feature dataset
-(docs/fase4-statistical-architecture-experiment.md §8).
+(docs/phase4.md).
 
 A materialization layer **separate from T4.1's final dataset**: T4.1 builds
 depth for one target under the 5.000 gate, this builds width across many

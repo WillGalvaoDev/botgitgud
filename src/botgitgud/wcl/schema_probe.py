@@ -5,7 +5,7 @@ Confirma, por introspecção GraphQL (e, para campos que retornam o escalar
 vivo já registrada em docs/schema_confirmado.md), todo campo que o documento
 de implementação assume existir.
 
-Ver docs/desvios.md D-2: este script NUNCA sobrescreve docs/schema_confirmado.md
+Ver docs/architecture.md D-2: este script NUNCA sobrescreve docs/schema_confirmado.md
 (documento curado, referenciado por número de seção a partir de tarefas
 posteriores). A saída mecânica deste script vai para docs/schema_probe_output.md.
 """
@@ -144,7 +144,7 @@ def render_markdown(results: list[CheckResult]) -> str:
         "> Gerado automaticamente. Reexecute com "
         "`python -m botgitgud.wcl.schema_probe` para atualizar.",
         "> Este arquivo é sempre seguro de sobrescrever — a fonte de verdade curada é "
-        "`docs/schema_confirmado.md` (ver `docs/desvios.md` D-2).",
+        "`docs/schema_confirmado.md` (ver `docs/architecture.md` D-2).",
         "",
         "| Campo | Uso | Depende de | Veredito | Detalhe |",
         "|---|---|---|---|---|",

@@ -1,6 +1,6 @@
 """T1.3 — DuckDB + Parquet storage layer.
 
-See docs/desvios.md D-12 for four gaps in this task's own spec (FightRef
+See docs/architecture.md D-12 for four gaps in this task's own spec (FightRef
 missing `partition`, `CohortProfile` never defined anywhere, a PRIMARY KEY
 that contradicts the "raw data is immutable" principle stated as
 obligatory in the same section, and a parquet path template that collides
@@ -12,7 +12,7 @@ Layout:
     └── raw/
         └── encounter_id=<E>/difficulty=<D>/partition=<P>/<file>.parquet
 
-docs/desvios.md D-25 (T2.1): the T1.7 `profiles/<cohort_id>.parquet` +
+docs/architecture.md D-25 (T2.1): the T1.7 `profiles/<cohort_id>.parquet` +
 `cohorts` table (a pre-aggregated CohortProfile cached per bucket) is gone
 — T2.1's per-player covariate matching (analysis/cohort_match.py) means
 the aggregate can no longer be precomputed once and reused across every
@@ -42,7 +42,7 @@ serializado... nunca abra conexões a partir dos workers" requirement: a
 worker thread calling write_log()/enqueue_job() never touches the
 connection directly outside the lock, and the lock (not a literal
 dedicated thread + work queue) is what actually enforces one-at-a-time
-access — see docs/desvios.md D-19 for why this achieves the same
+access — see docs/architecture.md D-19 for why this achieves the same
 contract with a simpler, deadlock-free mechanism.
 """
 
@@ -73,10 +73,10 @@ CREATE TABLE IF NOT EXISTS logs (
 """
 # T-DG.5: `kill` was already on FightRef/Parquet (T1.2) but never promoted
 # to this flat, indexable table — the Data Acquisition Gate's validity
-# contract (docs/fase4-data-acquisition-plan.md §10.2) needs to filter on
+# contract (docs/phase4.md) needs to filter on
 # it at SQL level without opening every log's Parquet file (same reasoning
 # T-DG.0 used for `partition`).
-# docs/desvios.md D-12(c): deliberately no PRIMARY KEY — a second insert for
+# docs/architecture.md D-12(c): deliberately no PRIMARY KEY — a second insert for
 # the same (report_code, fight_id, player_name) must SUCCEED (immutability:
 # re-ingestion adds a row with a later ingested_at; reads take the latest).
 
@@ -198,7 +198,7 @@ class Store:
         )
         raw_dir.mkdir(parents=True, exist_ok=True)
 
-        # docs/desvios.md D-12(d): player + ingestion timestamp in the
+        # docs/architecture.md D-12(d): player + ingestion timestamp in the
         # filename — a bare <report_code>_<fight_id> would collide across
         # the many players in one fight, and across re-ingestions of the
         # same player.
@@ -256,9 +256,8 @@ class Store:
         # SQL nao garante ordem — e o DuckDB varre em paralelo —, e esta lista
         # decide a ordem dos logs de referencia, que por sua vez decide a ordem
         # de apresentacao do relatorio. Um contrato de ordem implicito nessa
-        # posicao foi exatamente o que produziu o flake B4 no lado legado; aqui
-        # ele fica explicito antes de virar um. Ver docs/v1-readiness-
-        # determinism.md.
+        # posicao ja produziu um relatorio nao deterministico; aqui ele fica
+        # explicito (docs/architecture.md §6).
         with self._lock:
             rows = self._conn.execute(
                 "SELECT report_code, fight_id, player_name, duration_s "

@@ -1,5 +1,5 @@
 """SAE.5 — comparable metrics for the architecture experiment
-(docs/fase4-statistical-architecture-experiment.md §11-§12).
+(docs/phase4.md-§12).
 
 Pure Python on purpose: numpy is not a project dependency (§1.2 forbids
 undeclared ones) and these formulas are short enough that adding one would

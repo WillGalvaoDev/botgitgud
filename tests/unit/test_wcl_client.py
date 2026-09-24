@@ -264,7 +264,7 @@ def test_refresh_budget_never_raises_even_below_floor() -> None:
 # Reproduces the incident: a transient network failure during the periodic
 # budget refresh (never the main query itself) used to propagate a raw
 # httpx.TransportError straight out of query() and crash the caller
-# (docs/fase4-experiment-collection.md).
+# (docs/phase4.md).
 
 
 @pytest.mark.parametrize(

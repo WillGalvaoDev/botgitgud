@@ -1,7 +1,7 @@
 """Static, explicit spell-ID blacklist for major/minor CD detection.
 
-Replaces legacy/bot.py's lexical substring filter (achado 3.12,
-docs/relario.md), which false-positived on real ability names. Empirical
+Replaces the original bot's lexical substring filter (achado 3.12 of its
+audit), which false-positived on real ability names. Empirical
 proof from this project's own tracked spells.json: "Festering Scythe"
 (id 458128) and "Festering Strike" (id 85948) — real Death Knight
 abilities with nothing to do with rings — both contain the substring

@@ -2,7 +2,7 @@
 priority scheduling, and a budget-aware claim step, all backed by a
 `jobs` table in the same DuckDB warehouse Store already owns (so every
 write in the process serializes through Store's one lock — see
-ingest/store.py's module docstring and docs/desvios.md D-19). Data model
+ingest/store.py's module docstring and docs/architecture.md D-19). Data model
 in bot/job_models.py (T1.8 split, see that module's docstring).
 """
 

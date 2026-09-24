@@ -1,6 +1,6 @@
 """RC.3/RC.9/RC.10/CL.5 — fronteira de entrega no Discord.
 
-Incidente 1 (docs/rc-discord-delivery-resilience.md): `channel.send(...,
+Incidente 1 (docs/operations.md): `channel.send(...,
 file=...)` levantou `discord.Forbidden` 403/50013, a excecao subiu por
 `_notify_outcome` e `_worker_loop` e matou a task do worker.
 

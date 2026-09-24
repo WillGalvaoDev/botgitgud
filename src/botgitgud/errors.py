@@ -1,4 +1,4 @@
-"""Error hierarchy for botgitgud (§1.3 of docs/implementacao.md).
+"""Error hierarchy for botgitgud.
 
 BotGitGudError
 ├── ConfigError

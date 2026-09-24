@@ -6,7 +6,7 @@ from botgitgud.domain.cooldowns import BASE_COOLDOWNS_S, get_base_cooldown
 
 
 def test_starts_empty_no_unverified_values_fabricated() -> None:
-    """docs/desvios.md: neither Blizzard's nor WCL's spell API exposes a
+    """docs/architecture.md: neither Blizzard's nor WCL's spell API exposes a
     cooldown field (verified live) — this table is deliberately empty
     rather than seeded with unverified guesses.
     """

@@ -1,5 +1,5 @@
 """T3.1 — quantile-graded findings for the performance features beyond
-casts (docs/implementacao.md T3.1, items 1/3/2/5 of its priority table:
+casts (T3.1, items 1/3/2/5 of its priority table:
 active_time_pct, uptimes, deaths/downtime_s, resource_waste — items 3
 `damage_by_ability` and 6 `avg_targets_per_cast` feed T3.2 instead, they
 have no report section of their own here).

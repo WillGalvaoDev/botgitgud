@@ -1,10 +1,8 @@
 """T0.8 — cohort size thresholds and duration-band filtering/normalization.
 
-See docs/desvios.md D-9: the literal grep target in the acceptance criteria
-(src/botgitgud/ingest/rankings.py) is Phase 1 file layout (T1.3/T1.4) that
-doesn't exist yet in Fase 0. This module holds the same logic and is wired
-into bot.py, consistent with how T0.5-T0.7 built focused analysis/* modules
-instead of building out the Fase-1 architecture early.
+Candidate discovery itself lives in ingest/rankings.py (D-9,
+docs/architecture.md); this module holds only thresholds, bands and
+normalization.
 
 Corrects achados 3.9 (absolute ±30s duration filter) and 3.10/the missing
 cohort-size guard: docs/schema_confirmado.md §8 measured that

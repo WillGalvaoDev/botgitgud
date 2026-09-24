@@ -1,6 +1,6 @@
 """T3.1 — labels for WCL's `resourceChangeType` (docs/schema_confirmado.md
 §10/§12), which mirrors WoW's own `Enum.PowerType`. Unlike spell cooldowns
-(docs/desvios.md D-28, no API exposes them and the project refuses to
+(docs/architecture.md D-28, no API exposes them and the project refuses to
 fabricate per-spell tuning values), power types are a small, stable,
 publicly-documented Blizzard game constant that hasn't changed across
 expansions — safe to curate here. Live-verified (docs/schema_confirmado.md

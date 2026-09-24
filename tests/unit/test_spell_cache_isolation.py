@@ -3,7 +3,7 @@
 Incidente: rodar o bot de verdade reescrevia o `spells.json` rastreado (100 ->
 362 entradas, campo `category` removido pela migracao da T0.4), sujando a
 working tree e quebrando os golden tests legados, que dependem do formato
-antigo. Ver docs/spell-cache-runtime-separation.md.
+antigo. Ver docs/operations.md.
 """
 
 from __future__ import annotations
@@ -154,14 +154,3 @@ def test_production_never_depends_on_category(tmp_path: Path) -> None:
     path = tmp_path / "spells.json"
     _seed(path, {"111": {"name": "Fireball", "source": "wcl"}})
     assert SpellCatalog(path, blizzard=None).get(111).name == "Fireball"
-
-
-# -- o seed versionado continua determinístico para o legado -----------------------
-
-
-def test_versioned_seed_keeps_the_legacy_shape_the_golden_tests_need() -> None:
-    """legacy/bot.py exige `category`; o seed rastreado precisa mante-lo."""
-    data = json.loads(VERSIONED_SEED.read_text(encoding="utf-8"))
-    assert len(data) == 100
-    for entry in data.values():
-        assert set(entry) == {"name", "source", "category"}

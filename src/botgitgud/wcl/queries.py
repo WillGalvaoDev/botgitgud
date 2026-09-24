@@ -1,7 +1,5 @@
-"""T1.6 — GraphQL query strings, centralized (docs/implementacao.md §1.1
-lists this module explicitly). Previously scattered as module-level
-constants inside ingest/log_fetcher.py and bot.py; consolidated here so
-every caller (LogFetcher, ingest/rankings.py) shares one copy.
+"""T1.6 — GraphQL query strings, centralized (docs/architecture.md
+lists this module explicitly), so every caller (LogFetcher, ingest/rankings.py) shares one copy.
 """
 
 from __future__ import annotations
@@ -177,7 +175,7 @@ query GetPlayerDebuffs($code: String!, $fightIDs: [Int]!, $sourceID: Int!) {
 }
 """
 
-# T-DG.1 (docs/fase4-data-acquisition-plan.md §4.3, docs/schema_confirmado.md
+# T-DG.1 (docs/phase4.md, docs/schema_confirmado.md
 # §13.3): bulk per-fight source of rankPercent + partition, discovered
 # during the Fase 4 data-gate investigation. Costs 2.0 points regardless of
 # player count and measured 100% rankPercent coverage (169/169 live), versus
@@ -194,7 +192,7 @@ query GetReportRankings($code: String!, $fightIDs: [Int]!) {
 }
 """
 
-# T-DG.4 (docs/fase4-data-acquisition-plan.md §4.3, docs/schema_confirmado.md
+# T-DG.4 (docs/phase4.md, docs/schema_confirmado.md
 # §13.3 update): `fightIDs` omitted entirely — measured live to return EVERY
 # ranked fight of the report in one call (6/6 fights, same ~2.0 pts/fight as
 # the single-fight form above), letting Estágio B triage a report without
@@ -210,7 +208,7 @@ query GetReportRankingsAllFights($code: String!) {
 }
 """
 
-# T-DG.3 (docs/fase4-data-acquisition-plan.md §4.1, docs/schema_confirmado.md
+# T-DG.3 (docs/phase4.md, docs/schema_confirmado.md
 # §13.2): Estágio A discovery — reportData.reports is the source that scales
 # (no characterRankings/fightRankings leaderboard-size ceiling), but the WCL
 # server itself rejects page > 25 ("The maximum allowed page is 25 until the

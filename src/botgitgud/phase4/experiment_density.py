@@ -1,9 +1,9 @@
 """Phase4Target density and coverage from the frozen plan — how many
 observations each target already has (not assumed uniform), and how much
 completing the remaining pending rows could plausibly change that.
-Read-only over `StoredCampaign`, no model fitting (docs/fase4-architecture-
-decision.md §10-11). Split out of `experiment_decision.py` to keep that
-module under the line-count convention — this is a distinct concern
+Read-only over `StoredCampaign`, no model fitting (docs/phase4.md). Split
+out of `experiment_decision.py` to keep that module under the line-count
+convention — this is a distinct concern
 (frozen-plan bookkeeping, not model evaluation).
 """
 
@@ -114,7 +114,7 @@ def coverage_completed_vs_planned(stored: StoredCampaign) -> CoverageComparison:
 
 class ArchitectureDecision(StrEnum):
     """§12 vocabulary — assigned by reasoned reading of the measured
-    evidence (docs/fase4-architecture-decision.md §17), never a mechanical
+    evidence (docs/phase4.md), never a mechanical
     score: the task brief explicitly forbids an arbitrary scoring formula.
     """
 

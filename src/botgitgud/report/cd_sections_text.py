@@ -1,7 +1,7 @@
 """T3.2 split of report/text.py's CD-comparison rendering (missed usage +
 MAJOR/MINOR blocks + collapsed minor-deviations section) into its own
 module, to make room for the new "de onde veio o gap de DPS" section
-without pushing text.py past the 300-line limit (docs/implementacao.md
+without pushing text.py past the 300-line limit (docs/architecture.md
 T1.6). Pure extraction — no behavior change from the T2.3-era code.
 """
 

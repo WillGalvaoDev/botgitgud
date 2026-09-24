@@ -1,7 +1,7 @@
 """T1.6 — pure parsing of raw WCL GraphQL JSON into domain-model pieces.
 
 Split out of LogFetcher._fetch_from_api (T1.4) so ingest/log_fetcher.py
-stays under the 300-line limit (docs/implementacao.md T1.6), and so this
+stays under the 300-line limit (T1.6), and so this
 parsing logic is unit-testable without any network mocking.
 """
 
@@ -43,7 +43,7 @@ class PlayerMatch:
 
 
 def extract_talent_pairs(talent_tree: list[dict[str, Any]]) -> frozenset[tuple[int, int]]:
-    """T2.2 step 1 (docs/implementacao.md T2.2): the raw (nodeID, rank) set
+    """T2.2 step 1 (T2.2): the raw (nodeID, rank) set
     from combatantInfo.talentTree (docs/schema_confirmado.md §4 —
     combatantInfo.talents comes back empty; the real loadout is in
     talentTree) — the input to Jaccard clustering. Unlike
@@ -148,7 +148,7 @@ def find_player_in_details(player_details: dict[str, Any], player: str) -> Playe
     a report/fight whose `table(dataType: Summary)` JSON scalar has
     `playerDetails` as an empty list instead of the usual
     {dps,healers,tanks: [...]} object (observed against the real API while
-    recording T1.6's fixtures, docs/desvios.md D-14) — treated the same as
+    recording T1.6's fixtures, docs/architecture.md D-14) — treated the same as
     "player not found" rather than crashing the whole reference-cohort
     fetch over one malformed log.
     """

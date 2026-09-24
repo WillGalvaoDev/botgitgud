@@ -1,8 +1,8 @@
-"""T0.7 — replaces legacy/bot.py's compare_major_cds_clean.
+"""T0.7 — replaces the original bot's compare_major_cds_clean.
 
 Combines T0.5 (monotonic alignment) and T0.6 (cadence/classification) into
 one comparison per spell, and fixes a second bug on top of achado 3.1:
-legacy/bot.py:561 skips any spell the player never cast at all
+the original bot skips any spell the player never cast at all
 (`if not user_times: continue`), hiding the worst possible finding — "you
 never used this ability" — from the report entirely. Eligible spells with
 zero player usage are now included; `align([], ref_times)` naturally
@@ -199,7 +199,7 @@ def compare_all_spells(
     reference_n: int,
     gap_penalty: float = 25.0,  # see this function's own docstring below
 ) -> list[SpellComparison]:
-    """T1.6/T2.4: replaces bot.py's compare_all_spells — one SpellComparison
+    """T1.6/T2.4: replaces the original bot's compare_all_spells — one SpellComparison
     per eligible spell, in the given order (discover_eligible_spell_ids'
     own descending-presence order). Zero-usage abilities are never skipped
     (see this module's docstring). Alignment is phase-partitioned

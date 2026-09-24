@@ -1,7 +1,7 @@
 """`experiment-evaluate` — runs the statistical architecture matrix
 (Baseline 0/1, LightGBM x granularities A-D x splits S1-S5 x feature
 families F1/F2) against whatever has already been `completed` for a
-campaign (docs/fase4-statistical-architecture-results.md).
+campaign (docs/phase4.md).
 
 Strictly offline: this module opens `Store` directly and never constructs a
 `WclClient` — unlike cli_experiment.py's other commands, "zero WCL calls"

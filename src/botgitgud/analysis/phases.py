@@ -1,4 +1,4 @@
-"""T2.4 — phase-cycle-aware interval derivation (docs/implementacao.md
+"""T2.4 — phase-cycle-aware interval derivation (docs/architecture.md
 T2.4, corrige achado 3.2, rotação-fantasma).
 
 docs/schema_confirmado.md §7 (verified live against the Zarad fixture):

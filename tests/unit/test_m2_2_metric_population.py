@@ -1,6 +1,6 @@
 """M2.2 — per-metric population selection tests.
 
-Matrix defined before implementation (SPEC §12, docs/m2-2-specification.md):
+Matrix defined before implementation (contract: docs/methodology.md §4):
 covariate isolation per metric class, exact membership per contracted metric
 (AC1), the relaxation ladder including the no-advance-past-floor rule and
 zero-delta steps (AC2), invariance to M2.1 scarcity (AC3), descriptive vs.
@@ -10,7 +10,7 @@ abstention (C06), the read-only B04 sensitivity artifact, a read-only replay
 of real metadata (tests/fixtures/gate1_scope; data/raw has no Parquet files in
 this workspace, declared explicitly rather than fabricated), and two
 structural checks anchoring AC6 (import allowlist via ast; Ruff/Pyright
-config via tomllib) to the real repository. See docs/m2-2-review-evidence.md
+config via tomllib) to the real repository. See docs/methodology.md
 for the full critério -> teste -> resultado table.
 """
 
@@ -384,7 +384,7 @@ def test_player_casts_per_minute_uses_the_positional_ladder_ceiling() -> None:
 # efeito sobre N". Each test below isolates exactly one covariate (the other
 # three, plus identity/attempt-state/partition/damage-scope, are held equal
 # to the target) and reads N/membership directly from the strict-level
-# sensitivity row (independent review R3 completion) — this proves the
+# sensitivity row — this proves the
 # isolation itself, without the ladder's own floor-seeking dynamics (already
 # covered separately above) interfering with the reading.
 
@@ -780,7 +780,7 @@ def test_repeated_evaluation_and_canonical_dict_round_trip_are_stable() -> None:
     assert canonical_first == canonical_second
 
 
-# --- reference_id collision safety (independent review R1/R2 correction) -----
+# --- reference_id collision safety ------------------------------------------------
 #
 # M2.1 SPEC §4 explicitly preserves repeated reference_id entries and never
 # establishes a uniqueness precondition; M2.2 does not deduplicate either
@@ -1044,7 +1044,7 @@ def test_replay_gate1_scope_rankings_census_matches_manual_expectation() -> None
     LEGACY_UNSCOPED, no measurement_provenance), so every metric_id lands at
     n=0 regardless of the one M2.1-eligible reference (Rohanlock) — this is
     the honest, calculated-by-hand result of this specific fixture, not a
-    fabricated number. Expectation recorded in docs/m2-2-review-evidence.md.
+    fabricated number. Expectation recorded in docs/methodology.md.
     """
     before = snapshot_directory(_GATE1_FIXTURE_DIR)
     logs = _load_gate1_rankings_logs()
@@ -1093,7 +1093,7 @@ def test_replay_gate1_scope_rankings_census_covers_all_six_contracted_metrics() 
     `damage_scope` defaults to LEGACY_UNSCOPED and no ability lookup is ever
     reached), while `player_casts_per_minute` and `aura_uptime_fraction` take
     independent code paths and fail on their own missing collection/uptime
-    data. Table preserved in docs/m2-2-review-evidence.md.
+    data. Table preserved in docs/methodology.md.
     """
     before = snapshot_directory(_GATE1_FIXTURE_DIR)
     logs = _load_gate1_rankings_logs()
@@ -1129,7 +1129,7 @@ def test_covariate_sensitivity_over_real_gate1_scope_metadata() -> None:
     unknown in this fixture (only ranking metadata was captured, no build
     snapshot), so both covariates are INADMISSIBLE_TARGET_UNKNOWN and never
     enter the ladder — only duration widens. Table preserved in
-    docs/m2-2-review-evidence.md.
+    docs/methodology.md.
     """
     before = snapshot_directory(_GATE1_FIXTURE_DIR)
     logs = _load_gate1_rankings_logs()
@@ -1168,7 +1168,7 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
             f"corpus real ausente em {CORPUS_ROOT}; a prova de cobertura real "
             "do M2.2 nesta suíte é "
             "test_replay_gate1_scope_rankings_census_matches_manual_expectation "
-            "(replay de tests/fixtures/gate1_scope); ver docs/m2-2-review-evidence.md"
+            "(replay de tests/fixtures/gate1_scope); ver docs/methodology.md"
         )
     from botgitgud.ingest.parquet_codec import read_parquet_log
 

@@ -1,6 +1,6 @@
 """T2.1 split of LogFetcher's best-effort auxiliary fetches (percentile,
 buffs) out of ingest/log_fetcher.py, to keep it under the 300-line limit
-(docs/implementacao.md T1.6's rule, still enforced repo-wide). Both
+(T1.6's rule, still enforced repo-wide). Both
 functions take `query_fn` (LogFetcher._query, bound) instead of being
 methods, so they don't need LogFetcher's internals — just something that
 issues a GraphQL query and counts it.

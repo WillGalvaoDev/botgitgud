@@ -1,5 +1,5 @@
 """`experiment-calibrate` — Phase 4 Global Model Validation & Calibration
-Gate (docs/fase4-global-model-validation.md). Freezes the already-decided
+Gate (docs/phase4.md). Freezes the already-decided
 candidate (MODEL_GLOBAL, F2, LightGBM) and asks whether its raw
 predictions are calibrated, whether a simple auditable calibrator helps
 without leaking validation labels, and what confidence should be

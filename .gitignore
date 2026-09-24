@@ -29,7 +29,7 @@ coverage.xml
 
 # -- estado operacional / runtime -------------------------------------------
 # `data/` guarda TODO o estado durável: warehouse DuckDB, raw Parquet,
-# relatorios HTML emitidos, logs JSONL, ops-snapshot e os arquivos de
+# logs JSONL, ops-snapshot, artefatos por analise e os arquivos de
 # controle (stop.request/bot.pid/supervisor.lock). Nada disso e versionavel
 # -- e nada disso jamais foi commitado (auditado em GH.0).
 data/
@@ -38,7 +38,7 @@ data/
 
 # Backups do estado durável. `deploy-backup` tem `--dest` relativo por
 # padrao: rodado da raiz do repositorio, criaria aqui um arquivo com o
-# warehouse e os relatorios inteiros.
+# warehouse inteiro.
 backups/
 botgitgud-backup-*.tar.gz
 *.tar.gz
@@ -48,9 +48,12 @@ botgitgud-backup-*.tar.gz
 
 # -- scratch de gravacao de cassettes ---------------------------------------
 # As cassettes versionadas ficam em tests/fixtures/cassettes/ (necessarias
-# para a suite offline); estes dois diretorios sao scratch de re-gravacao.
-tests/fixtures/_record_scratch/
+# para a suite offline); este diretorio e scratch de re-gravacao.
 tests/fixtures/_record_scratch_new/
+
+# Saida mecanica de `python -m botgitgud.wcl.schema_probe`, regenerada sob
+# demanda; a fonte de verdade curada e docs/schema_confirmado.md.
+docs/schema_probe_output.md
 
 # -- IDE / SO ---------------------------------------------------------------
 .idea/

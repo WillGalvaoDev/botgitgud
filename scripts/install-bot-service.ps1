@@ -13,7 +13,7 @@
     logic already handles). "If the task is already running, do not start a
     new instance" (-MultipleInstances IgnoreNew) is a second, independent
     layer of duplicate-instance protection on top of the supervisor's own
-    OS-level lock (see docs/v1-process-supervision.md).
+    OS-level lock (see docs/operations.md).
 
 .PARAMETER TaskName
     Name of the Scheduled Task. Default: BotGitGudSupervisor.

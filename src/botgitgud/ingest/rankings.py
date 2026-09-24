@@ -1,5 +1,5 @@
 """T1.6 — cohort candidate discovery via characterRankings, replacing
-bot.py's fetch_top_logs_for_cds. Resolves docs/desvios.md D-9 (that task
+the original bot's fetch_top_logs_for_cds. Resolves docs/architecture.md D-9 (that task
 predicted this exact move once the Fase 1 ingest/ package existed).
 
 The raw per-reference-player timeline fetch that used to live inside

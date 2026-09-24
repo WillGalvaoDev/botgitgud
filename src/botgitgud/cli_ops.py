@@ -1,6 +1,6 @@
 """Local operational diagnostics and crash recovery for the v1.0 runbook.
 
-R3-01 reaberta após o smoke A de R1-01 (docs/desvios.md D-34): enquanto
+R3-01 reaberta após o smoke A de R1-01 (docs/architecture.md D-34): enquanto
 `serve` roda, ele segura o arquivo do DuckDB e nenhuma outra conexão entra —
 nem `read_only=True`. Por isso `ops-status` tem dois modos:
 

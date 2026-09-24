@@ -1,7 +1,7 @@
-"""T0.7 — text report renderer, replacing legacy/bot.py's
+"""T0.7 — text report renderer, replacing the original bot's
 generate_coach_report_string.
 
-Changes from the legacy renderer (docs/implementacao.md T0.7):
+Changes from the legacy renderer (T0.7):
 1. A "USOS PERDIDOS" section at the top lists every MISSED usage by
    ability — the achado 3.1 fix made visible in the report itself.
 2. Each ability shows "Usos: <n_user> (coorte: <n_ref_mediana>)".

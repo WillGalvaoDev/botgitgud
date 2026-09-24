@@ -21,7 +21,7 @@ def test_three_usages_median_interval() -> None:
 
 
 def test_single_usage_unknown_base_cooldown_classified_major_and_eligible() -> None:
-    """legacy/bot.py descartava justamente essas — cooldowns longos usados uma vez."""
+    """O bot original descartava justamente essas — cooldowns longos usados uma vez."""
     cadence = compute_cadence([200.0], n_usages_median=1.0, base_cooldown=None)
     assert classify_cd_type(cadence) == "MAJOR"
     assert is_eligible(999, presence=0.85, cadence=cadence, blacklist=MAJOR_CD_BLACKLIST) is True
@@ -86,7 +86,7 @@ def test_ring_of_peace_is_not_filtered_by_name() -> None:
 def test_no_lexical_filters_anywhere_in_src() -> None:
     """achado 3.12: elegibilidade de spell nunca pode depender do NOME.
 
-    `legacy/bot.py:523` decidia com
+    o bot original decidia com
     `any(x in name_lower for x in ["potion", "healthstone", ..., "trinket"])`,
     e por isso este guard bane essas palavras em `src/`.
 

@@ -170,7 +170,7 @@ def evaluate_cell(
     if granularity not in IMPLEMENTED_GRANULARITIES:
         raise NotImplementedError(
             f"{granularity} is not implemented for evaluation "
-            "(docs/fase4-statistical-architecture-experiment.md §5: E is an "
+            "(docs/phase4.md: E is an "
             "extension point only, A-D must produce results first)"
         )
 

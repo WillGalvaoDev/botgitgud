@@ -32,7 +32,7 @@ def _extract_payload(request: httpx.Request) -> dict[str, Any] | None:
 class RecordingTransport(httpx.BaseTransport):
     """Writer side: makes the real call, saves a cassette, returns the
     real response. Response bodies are redacted by save_cassette()
-    (docs/desvios.md D-6) before ever touching disk.
+    (docs/architecture.md D-6) before ever touching disk.
     """
 
     def __init__(self, real_transport: httpx.BaseTransport | None = None) -> None:

@@ -1,4 +1,4 @@
-"""T-DG.4 (docs/fase4-data-acquisition-plan.md §4.3, §6, §11) — Estágio B:
+"""T-DG.4 (docs/phase4.md) — Estágio B:
 triagem via reportData.report.rankings, spec/encontro-agnóstica by
 construction (the user-approved plan explicitly forbids fixing a target
 before the census: "não fixe ainda uma spec/encontro"). report.rankings

@@ -4,8 +4,10 @@
 **Log de referência:** `PtfBbQKRY9d6zAMC` fight 1 — Zarad (Warlock Demonology, Azralon-US)
 **Método:** queries diretas à API v2 com as credenciais do projeto.
 
-> Este arquivo é **entrada** para a T0.1, não saída. Os itens marcados ✅ já estão confirmados e
-> **não precisam ser re-verificados**. Os marcados ❓ continuam sendo tarefa da T0.1.
+> Fonte de verdade curada sobre o que a API do Warcraft Logs de fato retorna; o código cita suas
+> seções por número. Itens ✅ foram confirmados ao vivo. O veredito mecânico campo a campo é
+> regenerado sob demanda por `python -m botgitgud.wcl.schema_probe` em
+> `docs/schema_probe_output.md` (não versionado).
 
 ---
 
@@ -80,7 +82,7 @@ gameVersion, healingDone, itemLevel, logFileDetails, logVersion, playerDetails, 
     como `104316` resolve normalmente). `gameData` também não tem campo `talent` (introspecção
     `__type("GameData").fields` não lista nenhum). Do lado Blizzard, `/data/wow/talent/{id}` e
     `/data/wow/spell-tree-node/{id}` retornam 404 ao vivo. **Não há resolução de nome de talento
-    disponível neste projeto** — D-26 em `docs/desvios.md`. `nodeID` é a posição na árvore, `id` é
+    disponível neste projeto** — D-26 em `docs/architecture.md` §8. `nodeID` é a posição na árvore, `id` é
     o identificador do talento nessa posição (não confundir os dois — `compute_talent_hash`/
     `extract_talent_pairs` usam `(nodeID, rank)`, não `id`).
   - `specIDs`: `[266]` (id numérico da spec — mais robusto que o nome).
@@ -177,7 +179,7 @@ Chaves de cada ranking:
 
 | Descoberta | Impacto |
 |---|---|
-| ❌ **NÃO existe campo `percentile`** | `legacy/bot.py:361` faz `r.get("percentile", 99.0)` → retorna **99.0 sempre**. O cabeçalho "Parse méd: 99 (min 99 - max 99)" é **ficção em 100% dos relatórios já gerados**. Ver §9 para a fonte real. |
+| ❌ **NÃO existe campo `percentile`** | O bot original fazia `r.get("percentile", 99.0)` → retorna **99.0 sempre**. O cabeçalho "Parse méd: 99 (min 99 - max 99)" é **ficção em 100% dos relatórios já gerados**. Ver §9 para a fonte real. |
 | ❌ **NÃO existem `talents` nem `gear`** no ranking | O clustering de build (T2.2) exige buscar o `combatantInfo` de cada log de referência — não há atalho. |
 | ✅ `amount` = DPS | Métrica direta, sem query extra. |
 | ✅ `bracketData` = bracket de item level (ex. `292`) | Permite pareamento de ilvl **sem** fetch adicional. Zarad = ilvl 283, top ranker = bracket 292. |
@@ -260,14 +262,14 @@ Formato confirmado:
 - `gameData.ability(id)` (WCL) — tipo GraphQL `GameAbility` — expõe só `id, icon, name`. Mesma
   lacuna do lado da WCL.
 - **Consequência:** `domain/cooldowns.py`'s tabela curada (fonte 2 da T2.5) começa vazia — não há
-  fonte de API verificável para preenchê-la. Ver D-28 em `docs/desvios.md`.
+  fonte de API verificável para preenchê-la. Ver D-28 em `docs/architecture.md` §8.
 
 ---
 
 ## 11. Itens da sondagem original — resolvidos em T0.1
 
 Todos os itens abaixo foram fechados durante a execução formal da T0.1
-(`src/botgitgud/wcl/schema_probe.py`, saída completa em `docs/schema_probe_output.md`).
+(`src/botgitgud/wcl/schema_probe.py`).
 
 | Item | Resultado |
 |---|---|
@@ -296,7 +298,7 @@ Todos os itens abaixo foram fechados durante a execução formal da T0.1
 
 ## 13. Fatos verificados na sondagem do portão de dados da Fase 4 (2026-08-20)
 
-> Sondagens ao vivo feitas para `docs/fase4-data-acquisition-plan.md`. Custo total: 530 pontos.
+> Sondagens ao vivo feitas para o plano de aquisição de dados da Fase 4 (`docs/phase4.md`). Custo total: 530 pontos.
 > Os números completos e o raciocínio de custo estão naquele documento; aqui ficam só os fatos de
 > schema/API, que são o escopo deste arquivo.
 
@@ -397,9 +399,8 @@ Augmentation 2,40/kill, Unholy DK 1,40, Devourer DH 1,30, Shadow 1,20, Ret/Eleme
 
 ## 0. Tabela de veredito — cobertura da T0.1
 
-> Ver `docs/desvios.md` D-2: esta seção satisfaz "todo campo da tabela da T0.1 tem veredito
-> registrado" sem duplicar o conteúdo narrativo abaixo. A saída mecânica completa e re-executável
-> está em `docs/schema_probe_output.md` (gerada por `python -m botgitgud.wcl.schema_probe`).
+> Veredito resumido por campo; a saída mecânica completa é regenerada por
+> `python -m botgitgud.wcl.schema_probe` (D-2, `docs/architecture.md` §8).
 
 | Campo da tabela T0.1 | Veredito | Seção com o detalhe |
 |---|---|---|

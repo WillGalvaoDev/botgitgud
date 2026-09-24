@@ -2,7 +2,7 @@
 
 O smoke A de R1-01 provou que enquanto `serve` roda ele segura o arquivo do
 DuckDB, e o DuckDB 1.5.5 nega até `read_only=True` a partir de outro processo
-(docs/desvios.md D-34). Logo `ops-status` não tem como ler a fila enquanto o
+(docs/architecture.md D-34). Logo `ops-status` não tem como ler a fila enquanto o
 bot está no ar — exatamente quando o operador mais precisa dela.
 
 A solução mínima é o próprio bot, que já é o dono da conexão, publicar um

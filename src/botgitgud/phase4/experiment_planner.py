@@ -1,5 +1,5 @@
 """SAE.2 — read-only, deterministic multi-target sampler for the experimental
-Stage C campaign (docs/fase4-statistical-architecture-experiment.md §6-§7).
+Stage C campaign (docs/phase4.md-§7).
 
 Produces a campaign; it never executes it. Like ingest/backfill_planner.py
 it takes only a `Store` — no `WclClient`, no `LogFetcher` — so it cannot

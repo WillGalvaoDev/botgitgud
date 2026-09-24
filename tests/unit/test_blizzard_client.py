@@ -15,7 +15,7 @@ def test_client_constructs_without_error() -> None:
     """Regression test: httpx.Timeout(connect=..., read=...) without write/pool
     raises ValueError unless a default is also given — this slipped through
     T0.4 because every existing test used a fake stub instead of the real
-    class, and only got caught wiring the real thing into bot.py in T0.7.
+    class, and only got caught wiring the real thing in T0.7.
     """
     client = BlizzardClient(_config())
     client.close()

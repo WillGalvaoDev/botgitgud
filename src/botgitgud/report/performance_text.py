@@ -1,5 +1,5 @@
 """T3.1 split of report/text.py's own growth — rendering for the
-performance features beyond casts (docs/implementacao.md T3.1's
+performance features beyond casts (T3.1's
 normative report order, items 2/3/4/5: deaths/downtime, active time,
 uptimes, resource waste — all BEFORE usos perdidos/timing, items 6/7).
 """

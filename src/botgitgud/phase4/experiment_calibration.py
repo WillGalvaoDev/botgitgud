@@ -1,8 +1,8 @@
 """Phase 4 — Global Model Validation & Calibration Gate
-(docs/fase4-global-model-validation.md).
+(docs/phase4.md).
 
 Freezes the already-decided candidate (`MODEL_GLOBAL`, F2, LightGBM —
-docs/fase4-architecture-decision.md §17-18) and asks a narrower question:
+docs/phase4.md) and asks a narrower question:
 are its raw predictions well-calibrated, and can a simple, auditable
 calibrator fix that without leaking validation labels into the fit?
 

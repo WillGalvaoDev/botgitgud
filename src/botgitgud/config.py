@@ -1,7 +1,7 @@
 """T1.1 — typed configuration, the single source of truth for every
 constant introduced across Fases 0-3.
 
-See docs/desvios.md D-10: the T1.1 pseudocode in docs/implementacao.md
+See docs/architecture.md D-10: the T1.1 pseudocode in docs/architecture.md
 lists stale cohort defaults (cohort_min_hard=10, cohort_min_warn=30,
 duration_tolerance_pct=0.07) that predate the T0.8 correction — T0.8's own
 section explicitly revises these after measuring the real API

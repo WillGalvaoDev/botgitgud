@@ -43,7 +43,7 @@ def test_secret_value_still_retrievable_via_get_secret_value() -> None:
 
 
 def test_defaults_match_t08_revised_cohort_values_not_the_stale_t11_draft() -> None:
-    """docs/desvios.md D-10: T1.1's own pseudocode has stale cohort defaults
+    """docs/architecture.md D-10: T1.1's own pseudocode has stale cohort defaults
     (10/30/±7%) that predate the T0.8 correction. Settings must match what
     T0.6/T0.8 actually implemented and tested (8/20/±35%/±12%), not the draft.
     """
@@ -56,8 +56,8 @@ def test_defaults_match_t08_revised_cohort_values_not_the_stale_t11_draft() -> N
 
 
 def test_missing_required_credential_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Other test modules import bot.py/legacy_bot at collection or run time,
-    # which calls load_dotenv() — that permanently populates os.environ for
+    # Other test modules may call load_dotenv() at collection or run time,
+    # which — that permanently populates os.environ for
     # the rest of this pytest process. _env_file=None only disables reading
     # the .env FILE; it does not stop pydantic-settings from still reading
     # real OS environment variables. Without clearing them here, this test

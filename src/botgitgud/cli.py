@@ -1,5 +1,5 @@
-"""T1.6/T1.7 — CLI entrypoint, replacing bot.py's Discord-only interface
-for batch/debug work (docs/implementacao.md §1.1/T1.6 step 4): lets the
+"""T1.6/T1.7 — CLI entrypoint, replacing the original bot's Discord-only interface
+for batch/debug work (T1.6 step 4): lets the
 pipeline be exercised without Discord.
 
 Every public command is implemented. The former `backfill` placeholder was
@@ -353,7 +353,7 @@ def _start_operational_log(settings: Settings, *, command: str) -> str:
 
 
 def _cmd_serve(_args: argparse.Namespace) -> int:
-    """T1.8 (docs/desvios.md D-23): no task in the plan ever wires
+    """T1.8 (docs/architecture.md D-23): no task in the plan ever wires
     bot/discord_bot.py's build_bot() into an actual entrypoint — this is
     the only place that starts the long-running Discord bot process.
     """
@@ -423,7 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
         "build-cohort", help="Aquece o(s) pool(s) de candidatos de coorte para um encontro/spec."
     )
     p_build_cohort.add_argument("--encounter", required=True, type=int, help="encounterID da WCL.")
-    # docs/desvios.md D-13: a especificação do documento não inclui --class,
+    # docs/architecture.md D-13: a especificação do documento não inclui --class,
     # mas className+specName são ambos obrigatórios em characterRankings —
     # specName sozinho não desambigua (ex.: "Frost" existe para Death
     # Knight e Mage). "class" é palavra reservada em Python: dest="klass".

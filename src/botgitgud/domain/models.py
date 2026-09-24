@@ -2,8 +2,8 @@
 throughout Fase 0 (achado 4.7). No function in analysis/ should accept or
 return a raw dict or tuple — only these types.
 
-See docs/desvios.md D-11: CohortCriteria lives here (not in T1.5, where
-docs/implementacao.md's own pseudocode introduces it) because T1.2's own
+See docs/architecture.md D-11: CohortCriteria lives here (not in T1.5, where
+docs/architecture.md's own pseudocode introduces it) because T1.2's own
 Cohort.criteria field needs the type to already exist, and T1.5
 chronologically comes after T1.2 in task order despite being its
 dependency here.
@@ -112,7 +112,7 @@ class FightRef:
     difficulty: int
     duration_s: float
     kill: bool
-    partition: int | None = None  # zone/patch metadata; see docs/desvios.md D-12(a)
+    partition: int | None = None  # zone/patch metadata; see docs/architecture.md D-12(a)
     # T2.4: always populated by ingest (single fallback interval spanning
     # the whole fight for phase-less encounters) — never empty in a
     # PlayerLog that came from LogFetcher.
@@ -146,7 +146,7 @@ class TalentNode:
     Jaccard clustering already uses; `spell_id` is `talentTree[].id`, kept
     because it is the only bridge from a talent to an observable cast.
 
-    docs/desvios.md D-26: `spell_id` does NOT resolve through
+    docs/architecture.md D-26: `spell_id` does NOT resolve through
     `gameData.ability` and there is no talent-name catalog anywhere in this
     project — it is an identity, never a display name.
     """
@@ -164,7 +164,7 @@ class SetupProfile:
 
     Exists so the Encounter Benchmark can ask "what are high performers
     using?" independently of the analyzed player's own choices; see
-    docs/production-readiness-cold-build.md and the architecture review for
+    docs/operations.md and the architecture review for
     why deriving that from the player's own matched cohort is circular.
 
     `stats` holds the LOWEST observed value per stat (`stats.<name>.min`),
@@ -355,9 +355,9 @@ class RankingCandidate:
 
 @dataclass(frozen=True, slots=True)
 class SpellProfile:
-    """T1.3 (docs/desvios.md D-12(b)): one spell's aggregate stats across a
-    cohort — formalizes the shape build_cd_reference_profile() (Fase 0,
-    bot.py) already produces ad-hoc as a dict.
+    """T1.3 (docs/architecture.md D-12(b)): one spell's aggregate stats across a
+    cohort — formalizes the shape build_cd_reference_profile() produces as
+    a dict.
     """
 
     spell_id: int
@@ -395,7 +395,7 @@ class SpellProfile:
 class RunManifest:
     """T1.5: every rendered report and every persisted cohort carries this,
     so any result can be traced back to the exact cohort, code, and
-    settings that produced it (docs/implementacao.md T1.5).
+    settings that produced it (T1.5).
     """
 
     cohort_id: str

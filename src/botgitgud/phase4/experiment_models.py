@@ -6,7 +6,7 @@ scikit-learn and LightGBM are optional-extra dependencies (`pyproject.toml`
 `[ml]`) — this module is the first one in the project allowed to import
 them, now that a real experimental campaign has data to train on. SHAP
 stays uninstalled: attribution is out of scope until a model beats the
-baselines (docs/fase4-statistical-architecture-experiment.md §3, §10).
+baselines (docs/phase4.md).
 
 Every fitted object here is trained from a single fold's *training* rows
 only — `FittedFeatureSpace.fit` decides which columns exist from the

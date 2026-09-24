@@ -3,7 +3,7 @@ correlation_id that follows a request through every nested call via
 structlog's contextvars mechanism (no need to thread it through every
 function signature).
 
-B5 (`docs/v1-operational-logging.md`): o console é efêmero. Um soak de 24h
+B5 (`docs/operations.md`): o console é efêmero. Um soak de 24h
 precisa de uma trilha cronológica que sobreviva ao terminal e ao processo, então
 `enable_file_logging` acrescenta um segundo destino — JSON Lines, rotacionado,
 sob `data/logs/` — **sem** substituir o console nem as três fontes de verdade

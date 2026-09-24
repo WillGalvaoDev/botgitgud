@@ -1,4 +1,4 @@
-"""T1.6/T1.8 — Discord glue, replacing bot.py's cmd_analisar. Parses the
+"""T1.6/T1.8 — Discord glue, replacing the original bot's cmd_analisar. Parses the
 raw command input, tries the fast synchronous path first (T1.7's warm
 cohort lookup), falls back to T1.8's persistent job queue on a cache
 miss, and a background worker loop drains that queue. No analysis logic
@@ -8,7 +8,7 @@ allowed to do that broad a translation (§1.3).
 
 Like every command handler in this module, the async event-loop wiring
 here is Discord glue that stays outside unit-test coverage — see
-docs/desvios.md D-22. The logic it calls (run_analysis, JobQueue,
+docs/architecture.md D-22. The logic it calls (run_analysis, JobQueue,
 run_claimed_job) is fully unit-tested elsewhere.
 """
 

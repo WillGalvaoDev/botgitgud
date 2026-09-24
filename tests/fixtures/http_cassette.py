@@ -32,7 +32,7 @@ _SECRET_RESPONSE_KEYS = {"access_token", "refresh_token", "id_token"}
 def redact_response_body(body: Any) -> Any:
     """OAuth token endpoints return the actual credential IN the response body,
     not just in a header. A cassette must never carry a real, usable token —
-    this one is valid for ~1 year (see docs/desvios.md D-6). The redacted
+    this one is valid for ~1 year (see docs/architecture.md D-6). The redacted
     value only needs to be *some* string: replay matches cassettes by
     (method, url, request payload), never by header/token content, so a
     placeholder round-trips correctly through the rest of the pipeline.

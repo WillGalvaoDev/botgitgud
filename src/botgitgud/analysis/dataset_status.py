@@ -1,4 +1,4 @@
-"""T-DG.5 (docs/fase4-data-acquisition-plan.md §10) — objective inspection
+"""T-DG.5 (docs/phase4.md) — objective inspection
 of Data Acquisition Gate progress: candidate discovery/triage counts from
 ingest/discovery_store.py, and — for one declared target
 `(class_name, spec_name, encounter_id, difficulty, partition)` — the full

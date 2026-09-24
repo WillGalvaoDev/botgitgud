@@ -48,7 +48,7 @@ def test_find_player_in_details_returns_none_when_absent() -> None:
 
 
 def test_find_player_in_details_tolerates_playerdetails_as_a_list() -> None:
-    """Observed against the real API (docs/desvios.md D-14): some reports'
+    """Observed against the real API (docs/architecture.md D-14): some reports'
     playerDetails comes back as [] instead of {dps: [], healers: [], ...}.
     """
     assert find_player_in_details([], "Zarad") is None  # type: ignore[arg-type]

@@ -1,16 +1,11 @@
-"""T1.6 — golden test for the new (Deps/pipeline-based) analysis output,
-replacing the T0.7 version that loaded the now-deleted root bot.py by
-file path. Same fixture log, same httpx ReplayTransport, same T0.7
-acceptance criterion: the new report differs from the frozen legacy
-snapshot, and that difference includes the USOS PERDIDOS section.
+"""Golden test for the pipeline's analysis output against the recorded Zarad
+fixture log, replayed through the httpx ReplayTransport (no network).
 
-Unlike the old new_bot_runner.py-based version, this needs no CWD
-isolation: every path (SpellCatalog, Store) is passed explicitly to Deps
-rather than resolved as a bot.py-relative default (T1.6's whole point).
-The repo's spells.json is copied into tmp_path so the catalog starts
-pre-seeded exactly as it was when tests/fixtures/record.py captured these
-cassettes — otherwise the pipeline would hit Blizzard fallback calls that
-were never recorded, and ReplayTransport would fail the test outright.
+Every path (SpellCatalog, Store) is passed explicitly to Deps. The repo's
+spells.json is copied into tmp_path so the catalog starts pre-seeded exactly
+as it was when tests/fixtures/record.py captured these cassettes — otherwise
+the pipeline would hit Blizzard fallback calls that were never recorded, and
+ReplayTransport would fail the test outright.
 """
 
 from __future__ import annotations
@@ -146,35 +141,17 @@ def test_new_pipeline_has_no_raw_ability_ids(tmp_path: Path) -> None:
     assert re.search(r"Ability \d+", report_text) is None
 
 
-def test_new_pipeline_differs_from_legacy_and_shows_missed_usage(tmp_path: Path) -> None:
-    """Critério de aceite original da T0.7: 'o novo snapshot difere do da
-    T0.2 e a diferença contém a seção USOS PERDIDOS'.
-
-    M2.3: that second half is no longer demonstrable by THIS specific real
-    fixture. As established in
-    test_zarad_fixture_exercises_eight_fundamental_abilities, the Zarad
-    cassette is a genuinely old-partition log once M2.1 is wired into
-    production — every reference candidate is PARTITION_MISMATCH, the
-    ledger is empty, and `compare_all_spells` (the "USOS PERDIDOS" source)
-    is never computed (M2.3 §6.2): showing that section here would mean
-    fabricating a comparison M2.1 correctly says is unavailable, which the
-    SPEC forbids. Re-recording a fresher cassette is out of scope for M2.3
-    (no live network access, no new queries). What remains true, and is
-    still exactly what this test protects, is the T0.7 invariant that the
-    new pipeline never silently reproduces the legacy report — here it
-    honestly reports the population as unavailable instead, a state legacy
-    had no concept of at all.
+def test_zarad_fixture_reports_the_ledger_comparison_as_unavailable(tmp_path: Path) -> None:
+    """The Zarad cassette is an old-partition log: every reference candidate
+    is PARTITION_MISMATCH under M2.1, so the ledger is empty and the
+    dependent comparisons (including the missed-usage sections) are never
+    computed. The report must say so explicitly instead of fabricating a
+    comparison (docs/methodology.md, insufficiency contract).
     """
-    legacy_snapshot_path = (
-        Path(__file__).resolve().parent / "__snapshots__" / "test_legacy_output.ambr"
-    )
-    legacy_text = legacy_snapshot_path.read_text(encoding="utf-8")
-
     report_text = _run_new_pipeline(tmp_path)
 
-    assert report_text != legacy_text
     assert "NO_REFERENCES" in report_text
-    assert "NO_REFERENCES" not in legacy_text
+    assert "USOS PERDIDOS" not in report_text
 
 
 def test_new_pipeline_never_fabricates_parse_med(tmp_path: Path) -> None:

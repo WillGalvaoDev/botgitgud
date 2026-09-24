@@ -241,7 +241,7 @@ def test_explicit_duration_bucket_builds_only_that_bucket(tmp_path: Path) -> Non
 
 
 def test_persisted_candidate_pool_is_readable_from_the_store(tmp_path: Path) -> None:
-    """T2.1 (docs/desvios.md D-25): build_cohorts warms the candidate-pool
+    """T2.1 (docs/architecture.md D-25): build_cohorts warms the candidate-pool
     cache, not an aggregated profile — matching happens per-player, in
     analysis/pipeline.py.
     """

@@ -1,5 +1,5 @@
 """T2.2 — Jaccard similarity between two talent builds
-(docs/implementacao.md T2.2, recomendação 6.3b).
+(T2.2, recomendação 6.3b).
 
 EC.4: the report-level consumer that used to live here (`cluster_builds`/
 `analyze_build_divergence`/`BuildDivergence`) was removed. It clustered the
@@ -19,7 +19,7 @@ here — `cohort_match.py`'s v1 matching policy still uses them to decide
 whether a candidate's build is "close enough to the target" (unrelated to
 the removed report-level clustering/divergence finding).
 
-D-26 (docs/desvios.md): WCL's `talentTree[].id` does not resolve through
+D-26 (docs/architecture.md): WCL's `talentTree[].id` does not resolve through
 `gameData.ability(id)` (verified live — returns null for real talent
 entries, unlike genuine spell IDs), and no Blizzard Game Data endpoint for
 the new-style talent-tree node IDs was found either (`/data/wow/talent/{id}`

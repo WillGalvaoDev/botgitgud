@@ -1,6 +1,6 @@
 """T1.6 split of schema_probe.py's static FIELD_TABLE data out of the probe
 logic itself, to keep schema_probe.py under the 300-line file limit
-(docs/implementacao.md T1.6). Pure data, no behavior change.
+(T1.6). Pure data, no behavior change.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ FIELD_TABLE: list[FieldCheck] = [
             "characterRankings retorna JSON escalar (não introspectável). Confirmado ao vivo em "
             "schema_confirmado.md §8: presentes {amount, bracketData, class, duration, faction, "
             "guild, hardModeLevel, name, report, server, spec, startTime}. AUSENTES: "
-            "'percentile' e 'talents'/'gear' NÃO existem — legacy/bot.py:361 fabrica 99.0 sempre; "
+            "'percentile' e 'talents'/'gear' NÃO existem; "
             "o parse real vem de characterData.character.encounterRankings.ranks[].rankPercent "
             "(schema_confirmado.md §9)."
         ),

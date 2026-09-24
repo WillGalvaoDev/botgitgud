@@ -3,7 +3,7 @@ from raw DamageDone events. The only correct way to build a per-ability
 breakdown: `entry.abilities` on the `table(dataType: DamageDone)` response
 is truncated (5 of 29 real abilities for the Zarad fixture) and
 `entry.pets` double-counts against `entry.total` if added to it — see
-docs/desvios.md. Aggregating raw events by `abilityGameID`, restricted to
+docs/architecture.md. Aggregating raw events by `abilityGameID`, restricted to
 sourceID in {player_id} union {pet_ids}, reproduces `entry.total` exactly
 (live-verified: 0.00% error).
 """
@@ -119,7 +119,7 @@ def aggregate_damage_by_ability(
     (0/absent for a pure pet-cast ability, e.g. a Wild Imp's Fel Firebolt —
     the player never personally cast it).
 
-    docs/desvios.md D-29: avg_targets_per_cast is a whole-fight average
+    docs/architecture.md D-29: avg_targets_per_cast is a whole-fight average
     (distinct targets hit / total casts of that ability), not a strict
     per-cast-instance average — WCL exposes no per-cast target grouping,
     and implementacao.md gives no exact formula for this feature (unlike

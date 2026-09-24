@@ -1,6 +1,6 @@
 """T1.6 split of store.py's Parquet (de)serialization out of the Store
 class itself, to keep both files under the 300-line limit
-(docs/implementacao.md T1.6). Pure encode/decode, no DuckDB access — see
+(T1.6). Pure encode/decode, no DuckDB access — see
 ingest/store.py's module docstring for why nested PlayerLog fields are
 JSON-string columns rather than native Arrow nested types.
 """

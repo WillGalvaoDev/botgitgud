@@ -1,5 +1,5 @@
 """T2.1 — multivariate cohort matching with ordered covariate degradation
-(docs/implementacao.md T2.1, achado 3.4).
+(T2.1, achado 3.4).
 
 encounter_id/difficulty/partition/class_name/spec_name are exact-matched
 already by ingest/rankings.py's characterRankings query (never checked
@@ -7,7 +7,7 @@ here) — this module only filters the ALREADY-fetched candidate PlayerLogs
 on the remaining covariates: duration_s, item_level, tier_pieces,
 has_augmentation, external_buffs, talent_cluster.
 
-docs/desvios.md D-24 (resolved by T2.2): `talent_cluster` now uses
+docs/architecture.md D-24 (resolved by T2.2): `talent_cluster` now uses
 analysis/talent_cluster.py's Jaccard similarity — a candidate matches
 "strictly" when its build is >= JACCARD_THRESHOLD similar to the target's,
 same pairwise-to-target shape as item_level/tier_pieces (this is a
@@ -111,7 +111,7 @@ class HygieneReport:
 
 @dataclass(frozen=True, slots=True)
 class DuplicateConflictReport:
-    """M2.3 §4.0 (D-M23-07): report of `quarantine_conflicting_duplicates`."""
+    """Report of `quarantine_conflicting_duplicates` (docs/methodology.md §5.2)."""
 
     n_input: int
     n_output: int
@@ -122,7 +122,8 @@ class DuplicateConflictReport:
 def quarantine_conflicting_duplicates(
     target: PlayerLog, candidates: Sequence[PlayerLog]
 ) -> tuple[list[PlayerLog], DuplicateConflictReport]:
-    """M2.3 v003 §4.0 (D-M23-07): puts in quarantine every OBSERVATION —
+    """M2.3 quarantine (docs/methodology.md §5.2): puts in quarantine every
+    OBSERVATION —
     same player, same pull, `(report_code, fight_id, player_identity)`,
     never `dedup_priority` — whose representations disagree by value
     (`!=`), and closes the exclusion by `damage_reference_id`: every
@@ -131,14 +132,14 @@ def quarantine_conflicting_duplicates(
     encodes `report_code:fight_id`, so this only ever reaches across
     `player_identity` within the SAME pull — e.g. the same character name
     on two different servers, which `player_identity` tells apart but
-    `reference_id` does not (v002's re-review, R3: grouping by the hygiene
-    tie key instead of the observation let a third representation with a
-    different `dedup_priority` escape the group and win the pull, taking
-    its id past this quarantine while its own duplicates were removed).
+    `reference_id` does not. Grouping by the hygiene tie key instead of the
+    observation would let a third representation with a different
+    `dedup_priority` escape the group, win the pull and carry a quarantined
+    id downstream.
 
     Runs BEFORE `hygienic_candidates`, on the whole fetched list;
     `match_cohort`/`hygienic_candidates` never call this and are therefore
-    untouched by it (SPEC §8 invariant 2). An observation whose
+    untouched by it (`match_cohort` output is unchanged for any input). An observation whose
     representations are all equal by `==` is not a conflict and passes
     through untouched — the hygiene `min()` already collapses it to the
     same value regardless of which element it picks.
@@ -147,7 +148,7 @@ def quarantine_conflicting_duplicates(
     are excluded later by `hygienic_candidates`'s own counters, never
     double-counted here. Conflict membership depends only on the multiset
     of candidates, never on their order, so a fixed input always
-    quarantines the same ids under any permutation (SPEC §8 invariant 6).
+    quarantines the same ids under any permutation.
     """
     target_identity = player_identity(target)
 

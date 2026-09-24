@@ -1,4 +1,4 @@
-"""T3.3 — renders the "🎯 TOP 3 AÇÕES" section (docs/implementacao.md
+"""T3.3 — renders the "🎯 TOP 3 AÇÕES" section (docs/architecture.md
 T3.3's mandated report structure, item 2 — right after the header, before
 "de onde veio o gap de DPS").
 """

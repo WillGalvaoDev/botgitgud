@@ -1,6 +1,6 @@
 """T0.4 — thread-safe, append-only-in-memory spell name catalog.
 
-Corrects three achados from docs/relario.md:
+Corrects three achados from the audit of the original bot:
 - 3.8: `category` (trackable/non-trackable) is no longer persisted globally.
   That classification is a property of (spell, spec, encounter), not of the
   spell alone — persisting it made the legacy tool non-reproducible.
@@ -239,16 +239,15 @@ class SpellCatalog:
         )
 
 
-# -- seed versionado vs cache de runtime (D-4 / D-35) ---------------------------
+# -- seed versionado vs cache de runtime (D-35) ----------------------------------
 #
-# O `spells.json` da raiz e um SEED versionado: entra no Git, e lido pelo
-# legacy/bot.py (que ainda espera o campo `category` do formato antigo) e serve
-# de ponto de partida no primeiro boot. Producao NUNCA escreve nele.
+# O `spells.json` da raiz e um SEED versionado: entra no Git e serve de ponto de
+# partida no primeiro boot. Producao NUNCA escreve nele.
 #
 # O cache mutavel de runtime vive em `settings.data_dir` — diretorio ja ignorado
 # pelo Git —, e e o unico destino de learn()/flush(). Sem essa separacao, rodar
 # o bot de verdade sujava um arquivo rastreado e quebrava os golden tests
-# legados (incidente registrado em docs/spell-cache-runtime-separation.md).
+# legados (incidente registrado em docs/operations.md).
 
 
 def runtime_catalog_path(data_dir: Path) -> Path:

@@ -139,7 +139,7 @@ def test_default_budget_matches_the_approved_ceiling() -> None:
 
 def test_solo_observation_costs_seventeen_points() -> None:
     """Reproduces ingest/backfill_planner.py's measured 17 pts/observation
-    when no fight is shared (docs/fase4-data-acquisition-plan.md §8.3).
+    when no fight is shared (docs/phase4.md).
     """
     budget = ExperimentBudget()
     assert budget.estimate_points(n_fights=1, n_observations=1) == 17.0

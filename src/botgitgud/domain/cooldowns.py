@@ -1,4 +1,4 @@
-"""T2.5 — curated base-cooldown table (docs/implementacao.md T2.5).
+"""T2.5 — curated base-cooldown table (T2.5).
 
 **Source 1 (Blizzard's spell API), verified live and confirmed
 unavailable**: `GET /data/wow/spell/{id}` returns only `id, name,

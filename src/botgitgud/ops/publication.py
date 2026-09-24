@@ -53,7 +53,7 @@ FORBIDDEN_PATH_PATTERNS: tuple[tuple[str, str], ...] = (
 # Marcadores de conteúdo que indicam material de chave privada embutido.
 # Deliberadamente restritos a blocos PEM/OpenSSH: são inequívocos, ao
 # contrário de heurísticas de entropia, que produziriam falso positivo em
-# cima das 632 cassettes de teste deste repositório.
+# cima das cassettes de teste deste repositório.
 PRIVATE_KEY_MARKERS: tuple[str, ...] = (
     "BEGIN RSA PRIVATE KEY",
     "BEGIN OPENSSH PRIVATE KEY",

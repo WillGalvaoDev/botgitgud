@@ -1,4 +1,4 @@
-"""T1.6/T1.7 — the analysis orchestrator, replacing bot.py's run_analysis.
+"""T1.6/T1.7 — the analysis pipeline (`run_analysis`).
 
 `Deps` is a plain container of injected dependencies (client, fetcher,
 store, catalog, settings) — no singletons, no module-level globals (§1.3).
@@ -12,7 +12,7 @@ the live rankings API. `allow_cold_build=False` (used by the Discord path)
 turns a cache miss into CohortNotReady instead of a synchronous 100-log
 fetch — "o caminho interativo... nunca baixa 100 logs de forma síncrona".
 
-T2.1 (docs/desvios.md D-25): the Store now caches the raw candidate pool
+T2.1 (docs/architecture.md D-25): the Store now caches the raw candidate pool
 per cohort_id instead of a pre-aggregated CohortProfile — per-player
 covariate matching (analysis/cohort_match.py) means the aggregate can't be
 precomputed once and shared across every player who lands in the same
@@ -588,14 +588,11 @@ def run_analysis(
             expected_partition=partition,
             expected_difficulty=criteria.difficulty,
         )
-    # M2.3 v002 §4.0 (D-M23-07): quarentena de representações divergentes
-    # ANTES da higiene, sobre a lista buscada inteira — resolve R1 (a
-    # invariância de permutação de §8.6 e a saída idêntica de match_cohort
-    # de §8.2 não podem valer juntas quando duas representações do mesmo
-    # jogador/pull empatam na chave de deduplicação e divergem por valor;
-    # a quarentena exclui o grupo inteiro em vez de escolher uma).
-    # match_cohort/hygienic_candidates diretamente NUNCA chamam isto — só
-    # este caminho de produção.
+    # M2.3: quarentena de representações divergentes ANTES da higiene, sobre
+    # a lista buscada inteira (docs/methodology.md §5.2). Sem ela, duas
+    # representações do mesmo jogador/pull empatadas na chave de deduplicação
+    # seriam escolhidas pela ordem de chegada; a quarentena exclui a
+    # observação inteira em vez de escolher uma. match_cohort não a chama.
     quarantined, quarantine_report = quarantine_conflicting_duplicates(player_log, reference_logs)
     # M2.3 §4: higiene uma única vez, alimentando M2.1 (comparabilidade
     # básica) e, a partir dele, dois ramos independentes — o ledger de M1

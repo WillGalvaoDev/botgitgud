@@ -722,7 +722,7 @@ def test_fetch_partition_is_none_when_report_rankings_unavailable(tmp_path: Path
 
 
 def test_fetch_persists_partition_to_store_and_parquet_path(tmp_path: Path) -> None:
-    """docs/fase4-data-acquisition-plan.md T-DG.0 acceptance criterion: a
+    """docs/phase4.md T-DG.0 acceptance criterion: a
     new ingestion no longer writes logs.partition = NULL nor a
     partition=unknown parquet path when the API provides a real partition.
     """

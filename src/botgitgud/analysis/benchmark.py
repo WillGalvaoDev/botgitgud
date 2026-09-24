@@ -2,7 +2,7 @@
 Benchmark: what identifies one benchmark population, and what policy
 governs how it will eventually be built.
 
-Ver a revisão arquitetural (docs/production-readiness-cold-build.md): a
+Ver a revisão arquitetural (docs/operations.md): a
 Execution Cohort de hoje filtra candidatos pelas escolhas do PRÓPRIO
 jogador analisado (cohort_match.py, covariável talent_cluster), então uma
 build ruim é validada contra outros que fizeram a mesma escolha ruim. O

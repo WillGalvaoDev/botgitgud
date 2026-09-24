@@ -1,6 +1,6 @@
 # Linux/systemd deployment
 
-Companion to `docs/v1-process-supervision.md` (the authority on the supervision *policy*:
+Companion to `docs/operations.md` §3 (the authority on the supervision *policy*:
 restart/backoff/storm-breaker/clean-stop, all in `src/botgitgud/ops/supervisor.py`,
 platform-independent). This document covers the Linux *launcher* — systemd instead of Task
 Scheduler + PowerShell — and the scripted deploy preparation around it.
@@ -12,8 +12,8 @@ response, without attachment or URL.
 
 | Stage | Status | Where |
 |---|---|---|
-| Bootstrap, `.env` template, preflight, systemd install, backup/restore | **Ready and tested offline** (CL.8) | `deploy/` |
-| Provisioning the Oracle VM, SSH access | **Blocked on the VM existing** (CL.7) | manual, see `docs/` roadmap |
+| Bootstrap, `.env` template, preflight, systemd install, backup/restore | **Ready and tested offline** | `deploy/` |
+| Provisioning the VM, SSH access | **Not provisioned** | manual, out of scope here |
 | **First production start of the bot** | **Ready once the VM and credentials exist** | `deploy/install-systemd.sh --start` |
 
 Everything under `deploy/` is exercised by the offline suite (`tests/unit/test_deploy_prep.py`,
@@ -272,7 +272,7 @@ sudo systemctl start botgitgud
 tail -20 /opt/botgitgud/data/logs/botgitgud.jsonl   # confirm process.started
 ```
 
-Always stop before touching `/opt/botgitgud` — single-owner warehouse (`docs/warehouse-policy.md`).
+Always stop before touching `/opt/botgitgud` — single-owner warehouse (`docs/operations.md` §5).
 
 ## Filesystem ownership
 
@@ -285,4 +285,4 @@ Always stop before touching `/opt/botgitgud` — single-owner warehouse (`docs/w
 ## Windows stays available
 
 `scripts/*.ps1` and Task Scheduler remain fully functional and unmodified — this is an additional
-launcher, not a replacement. See `docs/v1-process-supervision.md`.
+launcher, not a replacement. See `docs/operations.md` §3.

@@ -3,7 +3,7 @@ build_cohort) and record the outcome. Pure/synchronous — no asyncio, no
 Discord — so it's testable without a live event loop or bot connection.
 The async loop that claims jobs and calls this lives in
 bot/discord_bot.py, Discord glue that (like every command handler in that
-module already) stays outside unit-test coverage — see docs/desvios.md
+module already) stays outside unit-test coverage — see docs/architecture.md
 D-22.
 
 dedup_key doubles as the job's own parameters, parsed back out here:
@@ -69,7 +69,7 @@ def run_claimed_job(queue: JobQueue, job: Job, deps: Deps) -> JobOutcome:
 
     RateLimitBudgetExceeded mid-job is not a job failure: T1.8 §3 requires
     it go back to `queued` for after pointsResetIn, with whatever partial
-    progress LogFetcher/Store already made kept (docs/desvios.md D-18) —
+    progress LogFetcher/Store already made kept (docs/architecture.md D-18) —
     never marked `failed`.
     """
     if job.job_type == "benchmark_build":

@@ -1,5 +1,5 @@
 """T3.1 — report/text.py's section ordering + rendering for the
-performance-beyond-casts findings (docs/implementacao.md T3.1's own
+performance-beyond-casts findings (T3.1's own
 normative order: 1. Mortes/downtime 2. Active time 3. Uptimes 4. Waste de
 recurso 5. Usos perdidos de CD 6. Timing de CD — "Build" was item 1 under
 T2.2/T3.1, removed by EC.4; see analysis/talent_cluster.py's docstring).

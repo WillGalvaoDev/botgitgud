@@ -1,5 +1,5 @@
-"""M2.3 — integration and closure tests for comparability (SPEC §9,
-docs/m2-3-specification.md): connects M2.1 (reference_eligibility.py) and
+"""M2.3 — integration tests for comparability (docs/methodology.md §5):
+connects M2.1 (reference_eligibility.py) and
 M2.2 (metric_population.py) — both unmodified, byte-identical — to
 run_analysis, the report contract and persisted comparability-provenance-v1.
 
@@ -10,23 +10,11 @@ replays (§5, AC1), ledger insufficiency with a sufficient metric (§6.2),
 the aspirational-ledger guard exercised through run_analysis (§6.3),
 provenance round-trip through encode/decode and Store persistence (§7,
 AC2), determinism/permutation of full run_analysis provenance including
-the §4.0 duplicate-conflict quarantine (D-M23-07, R1), contract/render
+the duplicate-conflict quarantine, contract/render
 safety (§6.4), a read-only replay of real metadata, and structural checks
 anchoring AC5 (M2.1/M2.2 untouched) and AC6.
 
-v002 correction (docs/submilestones/M2.3/independent-review.md R1/R2):
-adds the §4.0 quarantine tests (both R1 counterexamples, in each fetch
-order), replaces the `_stage`-only population/permutation tests with real
-run_analysis replays that check MetricComparison/contract/render and the
-M1 accounting identity, replaces the self-composing match_cohort
-equivalence test with one against the actual pre-M2.3 implementation
-loaded from git history, fixes the class-mismatch fixture (compatible
-references now actually share the target's class/spec), fixes the
-ledger-insufficient fixture's missing `report_rankings` response (which
-made every reference PARTITION_UNKNOWN instead of exercising §6.2's real
-scenario), and replaces the aspirational-guard test that copied
-pipeline.py's own logic with one that exercises the production guard
-itself through run_analysis.
+Contracts: docs/methodology.md §3-§5.
 """
 
 from __future__ import annotations
@@ -123,8 +111,7 @@ def _run_analysis_with_fake_references(
     own log and the candidate pool are faked, everything downstream
     (quarantine, hygiene, M2.1, the ledger, M2.2 populations, dps_gap,
     performance, the contract and rendering) runs unmodified production
-    code. Same technique the independent review validated in
-    `docs/submilestones/M2.3/independent-probes.py.txt`. Returns
+    code. Returns
     `(result, deps)` — `deps.store` stays open so a caller that needs the
     persisted `runs` row can query it with `with deps.store as store:`.
     """
@@ -145,8 +132,8 @@ def _run_analysis_with_fake_references(
 def _load_pre_m23_match_cohort() -> Any:
     """Loads the actual pre-M2.3 `match_cohort` — the single function that
     did hygiene and covariate degradation together, at the M2.2 closure
-    commit the SPEC names as this unit's base — from git history and execs
-    it as a real module. This is the independent oracle SPEC §9.1
+    commit this unit was built on — from git history and execs
+    it as a real module. This is the independent oracle the equivalence contract
     requires: not the new code compared to its own composition, but the
     real prior implementation. Its own imports (unchanged dependencies)
     resolve normally since it executes as ordinary Python; it needs a real
@@ -181,7 +168,7 @@ _M22_CLOSURE_SHA = "b6241df9b53f98226f975f8b227474b700ce0e08"  # HEAD: M2.2 clos
 def _load_m22_closure_module(name: str, path: str) -> Any:
     """Execs `path` exactly as committed at the M2.2 closure (git history) as
     a real module — the pre-M2.3 consumers (`match_cohort`, `compare_metrics`,
-    `compare_damage`) that SPEC §9's "N antes/depois" table is measured on.
+    `compare_damage`) that the per-consumer "N antes/depois" table is measured on.
     """
     import sys
     import types
@@ -203,7 +190,7 @@ def _load_m22_closure_module(name: str, path: str) -> Any:
 
 
 # Numbers a renderer must never publish for a comparison that was not computed
-# (SPEC §6.4/§9.7): a cohort/reference statistic, gap or delta, or any DPS/percent
+# (docs/methodology.md): a cohort/reference statistic, gap or delta, or any DPS/percent
 # quantity. Legitimate numbers (the player's own observation, the N actually
 # used by a computed comparison) are checked positively by each test instead.
 _UNCOMPUTED_COMPARISON_CLAIM = re.compile(
@@ -243,10 +230,10 @@ _NO_PRIORITY_DISCORD_TEXT = (
 )
 
 
-def test_uncomputed_comparison_number_check_rejects_the_reviews_mutation() -> None:
-    """R2.1: the review replaced the Discord renderer's return with a fabricated
-    median/gap and the permanent test still passed. This pins the checker that
-    now guards every insufficient-ledger scenario against exactly that text.
+def test_uncomputed_comparison_number_check_rejects_fabricated_comparison_text() -> None:
+    """Pins the checker that guards every insufficient-ledger scenario: a
+    renderer that published a median/gap for a comparison that was never
+    computed must be rejected, while the real answer passes.
     """
     fabricated = "Comparacao da coorte: mediana 123456.7 DPS; gap 99999.9 DPS."
     with pytest.raises(AssertionError, match="non-computed comparison"):
@@ -271,7 +258,7 @@ def _report_as_tuple(report: Any) -> tuple[object, ...]:
 
 
 def test_match_cohort_equals_the_actual_pre_m23_implementation() -> None:
-    """SPEC v002 §9.1: the independent oracle is the REAL prior
+    """The independent oracle is the REAL prior
     implementation (git history), not the new code compared to its own
     `hygienic_candidates` + `match_covariates` composition — that
     comparison is close to tautological, since `match_cohort` is DEFINED
@@ -337,13 +324,13 @@ def test_match_cohort_equals_the_actual_pre_m23_implementation() -> None:
 
 
 def test_match_cohort_equals_the_actual_pre_m23_implementation_with_divergent_duplicates() -> None:
-    """SPEC v002 §9.1: `match_cohort` itself (old or new) never runs the §4.0
+    """`match_cohort` itself (old or new) never runs the
     quarantine — for a pull-tie between two representations that disagree
     by value, both implementations keep picking by arrival order, and they
     must keep agreeing WITH EACH OTHER in each order (proof the refactor
     didn't change `match_cohort`'s own, still order-dependent, behaviour;
     only the new production `run_analysis` path — via quarantine — no
-    longer depends on that order, see the R1 tests below).
+    longer depends on that order, see the run_analysis tests below).
     """
     old_match_cohort = _load_pre_m23_match_cohort()
     target = _cm_target()
@@ -359,7 +346,7 @@ def test_match_cohort_equals_the_actual_pre_m23_implementation_with_divergent_du
         assert _report_as_tuple(old_report) == _report_as_tuple(new_report)
 
 
-# --- §4.0/§9.8: duplicate-conflict quarantine (D-M23-07, R1) --------------------
+# --- duplicate-conflict quarantine (docs/methodology.md §5.2) -------------------
 
 
 def test_quarantine_removes_a_divergent_group_entirely() -> None:
@@ -421,11 +408,10 @@ def test_quarantine_leaves_same_pull_different_percentile_intact() -> None:
 
 
 def test_quarantine_same_player_same_pull_different_percentile_is_a_conflict() -> None:
-    """v003/R3: the SAME player on the SAME pull with a different percentile
-    (and every other field equal) is now a conflict — `dedup_priority`
-    (which embeds the percentile) is no longer part of the grouping key, so
-    this can no longer escape the group the way it did in v002. Both
-    representations are removed; neither's percentile is preferred.
+    """The SAME player on the SAME pull with a different percentile (and
+    every other field equal) is a conflict — `dedup_priority` (which embeds
+    the percentile) is not part of the grouping key. Both representations
+    are removed; neither's percentile is preferred.
     """
     target = _cm_target()
     low = _cm_log(name="Dup", report_code="SAMEPULL", percentile=20.0)
@@ -475,7 +461,7 @@ def test_quarantine_conflicting_ids_are_ordered_and_deduplicated() -> None:
 
 
 def test_quarantine_is_invariant_to_permutation_as_a_multiset_and_report() -> None:
-    """SPEC §4.0/§8 invariant 6: conflict membership depends only on the
+    """Conflict membership depends only on the
     multiset of candidates, never on their order — a fixed small input
     quarantines the same ids, and the survivors are the same objects
     (as a set, regardless of relative order), under every permutation.
@@ -497,17 +483,13 @@ def test_quarantine_is_invariant_to_permutation_as_a_multiset_and_report() -> No
         assert report.excluded_logs == baseline_report.excluded_logs
 
 
-def test_quarantine_removes_the_r3_composite_counterexample_entirely() -> None:
-    """SPEC v003 §4.0's own normative example (R3 from
-    `independent-rereview.md`): three representations of
-    `REPORT:501:Duplicate`, same player/pull — A and B share a percentile
-    (analogous to "same dedup_priority") but differ elsewhere, and C shares
-    B's other fields but has a different percentile (analogous to a
-    different `dedup_priority`). In v002, grouping by the hygiene tie key
-    (which embeds `dedup_priority`) let C — the odd one out on that key —
-    escape the group formed by A/B and survive, taking its shared id past
-    the quarantine. v003 groups by the observation instead, so all three
-    are one conflicting group, removed together, in every order.
+def test_quarantine_removes_a_composite_observation_entirely() -> None:
+    """Three representations of `REPORT:501:Duplicate`, same player/pull —
+    A and B share a percentile but differ elsewhere, and C shares B's other
+    fields but has a different percentile (a different `dedup_priority`).
+    Grouping by the hygiene tie key would let C escape A/B's group and
+    carry the id downstream; grouping by the observation makes all three
+    one conflicting group, removed together, in every order.
     """
     target = _cm_target()
     a = _cm_log(
@@ -533,7 +515,7 @@ def test_quarantine_removes_the_r3_composite_counterexample_entirely() -> None:
 
 
 def test_quarantine_closes_exclusion_by_id_across_different_servers() -> None:
-    """SPEC v003 §4.0.5 (the fecho por id): a homonym on a DIFFERENT server
+    """Exclusion is closed by id: a homonym on a DIFFERENT server
     in the same pull is a separate observation (`player_identity` includes
     `server`) but shares the same `damage_reference_id` (which does not).
     Once the first observation is quarantined for internal conflict, the
@@ -557,8 +539,8 @@ def test_quarantine_closes_exclusion_by_id_across_different_servers() -> None:
         assert report.conflicting_ids == (damage_reference_id(divergent_a),)
 
 
-def _r1_counterexample_target_and_clean_refs() -> tuple[PlayerLog, list[PlayerLog]]:
-    """SPEC v002's own R1 counterexample setup: target Warlock/Demonology,
+def _duplicate_scenario_target_and_clean_refs() -> tuple[PlayerLog, list[PlayerLog]]:
+    """Divergent-duplicate scenario setup: target Warlock/Demonology,
     duration 300, partition 4 (`_make_log`'s defaults), plus 16 clean
     references so the ledger/metrics stay genuinely SUFFICIENT and the
     quarantined id's absence is a positive check, not a vacuous one.
@@ -574,10 +556,10 @@ def _r1_counterexample_target_and_clean_refs() -> tuple[PlayerLog, list[PlayerLo
     return target, clean_refs
 
 
-def test_run_analysis_r1_uptime_divergent_duplicate_quarantined_and_order_invariant(
+def test_run_analysis_uptime_divergent_duplicate_quarantined_and_order_invariant(
     tmp_path: Path,
 ) -> None:
-    """SPEC v002 §9.8/R1 counterexample: same `REPORT:501:UptimeDuplicate`
+    """Same `REPORT:501:UptimeDuplicate`
     id, same class/spec/partition/duration/dedup priority (percentile is
     always None from `_make_log`, so `dedup_priority` ties on
     `(report_code, fight_id)` alone) — one with `uptime` absent, one
@@ -585,7 +567,7 @@ def test_run_analysis_r1_uptime_divergent_duplicate_quarantined_and_order_invari
     provenance/JSON, with the id excluded from eligibility, the ledger and
     every metric population — never chosen by either representation.
     """
-    target, clean_refs = _r1_counterexample_target_and_clean_refs()
+    target, clean_refs = _duplicate_scenario_target_and_clean_refs()
     missing = _make_log(
         character_name="UptimeDuplicate",
         class_name="Warlock",
@@ -633,14 +615,14 @@ def test_run_analysis_r1_uptime_divergent_duplicate_quarantined_and_order_invari
         deps_reversed.store.close()
 
 
-def test_run_analysis_r1_class_divergent_duplicate_quarantined_and_order_invariant(
+def test_run_analysis_class_divergent_duplicate_quarantined_and_order_invariant(
     tmp_path: Path,
 ) -> None:
-    """SPEC v002 §9.8/R1's second counterexample: same id, divergent
+    """Same id, divergent
     `class_name`/`spec_name` on the build — same fate as the uptime
     variant, in both orders.
     """
-    target, clean_refs = _r1_counterexample_target_and_clean_refs()
+    target, clean_refs = _duplicate_scenario_target_and_clean_refs()
     class_match = _make_log(
         character_name="ClassDuplicate",
         class_name="Warlock",
@@ -687,7 +669,7 @@ def test_run_analysis_identical_duplicate_stays_collapsed_by_hygiene_not_quarant
     collapses them to one, exactly as before M2.3, and the id stays
     admitted in both fetch orders.
     """
-    target, clean_refs = _r1_counterexample_target_and_clean_refs()
+    target, clean_refs = _duplicate_scenario_target_and_clean_refs()
 
     def make_identical() -> PlayerLog:
         return _make_log(
@@ -723,17 +705,13 @@ def test_run_analysis_identical_duplicate_stays_collapsed_by_hygiene_not_quarant
         deps_reversed.store.close()
 
 
-def test_run_analysis_r3_composite_counterexample_quarantined_in_every_permutation(
+def test_run_analysis_composite_observation_quarantined_in_every_permutation(
     tmp_path: Path,
 ) -> None:
-    """SPEC v003 §9.8/R3 (`independent-rereview.md`): the exact composite
-    counterexample from SPEC §4.0 — A/B/C, all `REPORT:501:Duplicate` — via
-    real `run_analysis`, across all SIX permutations of the three fetch
-    orders. In v002 (grouping by the hygiene tie key), C's different
-    `dedup_priority` let it escape A/B's conflicting group and reach
-    `eligibility`/`ledger`/every population; v003 groups by the observation
-    (ignores `dedup_priority`) and closes the exclusion by id, so all three
-    are removed together, regardless of order.
+    """The composite A/B/C observation (all `REPORT:501:Duplicate`) via real
+    `run_analysis`, across all SIX permutations of the three fetch orders:
+    grouping by the observation (not `dedup_priority`) and closing the
+    exclusion by id removes all three together, regardless of order.
 
     Checked at every boundary the id could otherwise leak through:
     eligibility (eligible/indeterminate/ineligible), the ledger, every
@@ -741,7 +719,7 @@ def test_run_analysis_r3_composite_counterexample_quarantined_in_every_permutati
     manifest JSON, and the JSON read back from the `runs` row in the Store —
     byte-identical across all six permutations.
     """
-    target, clean_refs = _r1_counterexample_target_and_clean_refs()
+    target, clean_refs = _duplicate_scenario_target_and_clean_refs()
     a = _make_log(
         character_name="Duplicate",
         class_name="Warlock",
@@ -757,8 +735,7 @@ def test_run_analysis_r3_composite_counterexample_quarantined_in_every_permutati
         uptime=0.5,
     )
     # C shares every field with B except a different percentile — a
-    # different `dedup_priority` from A/B, which is exactly what let it
-    # escape the tie-key-grouped quarantine in v002.
+    # different `dedup_priority` from A/B.
     c = dataclasses.replace(b, percentile=99.0)
     assert a != b
     assert b != c
@@ -844,12 +821,9 @@ def test_class_mismatched_reference_stays_out_of_ledger_and_every_metric_populat
     fetch_cohort_logs would have silently entered R_log before M2.3. M2.1
     now excludes it (CLASS_MISMATCH) before match_covariates ever runs.
 
-    R2 fix: `compatible` must actually SHARE the target's class/spec —
-    `_cohort_log`/`_make_log`'s own default (Mage/Fire) previously made
-    every "compatible" reference class-mismatched too (target is Warlock/
-    Demonology), so the ledger/populations were vacuously empty and the
-    test proved only exclusion, never genuine positive selection alongside
-    the negative one.
+    `compatible` explicitly shares the target's class/spec (the factory
+    default is Mage/Fire), so the test proves positive selection alongside
+    the exclusion instead of passing on vacuously empty populations.
     """
     target = _cohort_log("Target", class_name="Warlock", spec_name="Demonology")
     compatible = [
@@ -877,9 +851,8 @@ def test_class_mismatched_reference_stays_out_of_ledger_and_every_metric_populat
 
 
 def _mixed_population_fixture() -> tuple[PlayerLog, list[PlayerLog], PlayerLog]:
-    """R2 fix's shared fixture (from the independent review's own validated
-    probe, `docs/submilestones/M2.3/independent-probes.py.txt`, "mixed"
-    case): 30 clean references (COHORT_STRETCH_N-sized ledger; half omit
+    """Shared populations-differ fixture: 30 clean references
+    (COHORT_STRETCH_N-sized ledger; half omit
     complete damage collection, excluded from damage-derived metrics but
     not from the ledger or from metrics that don't need damage data), 4
     tier_pieces-mismatched references (excluded from the ledger — never
@@ -910,14 +883,14 @@ def _mixed_population_fixture() -> tuple[PlayerLog, list[PlayerLog], PlayerLog]:
 def test_run_analysis_population_routing_larger_and_smaller_than_ledger_in_same_replay(
     tmp_path: Path,
 ) -> None:
-    """SPEC v002 §9.2/AC1 (R2 fix): a REAL run_analysis replay, at the
+    """AC1: a REAL run_analysis replay, at the
     production min_n (COHORT_TARGET_N via COHORT_STRETCH_N here), where at
     least one metric's DESCRIPTIVE population is LARGER than R_log
     (aura_uptime_fraction — tier_pieces NOT_ADMITTED) and at least one is
     SMALLER (gross_ability_dps — excludes incomplete damage collection) in
     the SAME replay, checked against the IDs/values MetricComparison, the
     contract and the render actually consume — not select_metric_populations
-    in isolation, and not `_stage`'s hardcoded min_n=8 (R2's complaint).
+    in isolation.
     """
     target, references, wrong = _mixed_population_fixture()
 
@@ -951,7 +924,7 @@ def test_run_analysis_population_routing_larger_and_smaller_than_ledger_in_same_
         for summary in provenance.metrics.values():
             assert wrong_id not in summary.descriptive.member_ids
 
-        # R2 residual finding 2 (§9.6): the identity must be checked against
+        # The M1 identity must be checked against
         # a result this fixture is EXPECTED to produce, not skipped if the
         # comparison happens to come back empty — assert the quantitative
         # case actually materialized before computing the identity over it.
@@ -973,13 +946,13 @@ def test_run_analysis_population_routing_larger_and_smaller_than_ledger_in_same_
 
         cli_text, discord_text = _render_all(result, contract)
         assert "Traceback" not in cli_text
-        # R2 residual finding 1: with a SUFFICIENT ledger and a real
+        # With a SUFFICIENT ledger and a real
         # quantitative comparison, the render must show the actual computed
         # gap — not just avoid crashing — the mirror-image check of the
         # insufficient-ledger tests, which assert its ABSENCE.
         assert "Comparação indisponível" not in cli_text
         assert "Gap observado" in cli_text
-        # R2.1 (SPEC §9.7): the Discord text is verified by CONTENT, not by the
+        # The Discord text is verified by CONTENT, not by the
         # absence of a Traceback. Here the ledger comparison IS computed, so the
         # published claim must carry the N that comparison actually used (its
         # accepted quantitative references), never the ledger-input N or a
@@ -995,7 +968,7 @@ def test_run_analysis_population_routing_larger_and_smaller_than_ledger_in_same_
 
 
 def test_run_analysis_consumer_n_before_and_after_m23_on_the_mixed_replay(tmp_path: Path) -> None:
-    """SPEC §9 (last paragraph)/AC6: the per-consumer "N antes/depois" table for
+    """AC6: the per-consumer "N antes/depois" table for
     the populations-differ replay, MEASURED — not narrated. "Antes" runs the real
     pre-M2.3 consumers (`match_cohort`, `compare_metrics`, `compare_damage`)
     loaded from the M2.2 closure commit on the same references, at production
@@ -1058,7 +1031,7 @@ def test_run_analysis_consumer_n_before_and_after_m23_on_the_mixed_replay(tmp_pa
         for metric_id, comparison in after_metrics.items():
             assert comparison.reference_ids == provenance.metrics[metric_id].descriptive.member_ids
 
-        # Why gross_ability_dps went 35 -> 16 (SPEC §9: exclusions with their codes):
+        # Why gross_ability_dps went 35 -> 16 (docs/methodology.md):
         # 14 references without complete damage collection, 4 outside the tier band,
         # 1 rejected by M2.1 (class) — 35 entries - 19 excluded = 16 members.
         exclusions = dict(provenance.metrics["gross_ability_dps:1"].descriptive.exclusion_counts)
@@ -1073,7 +1046,7 @@ def test_run_analysis_consumer_n_before_and_after_m23_on_the_mixed_replay(tmp_pa
 
 
 def test_run_analysis_population_routing_is_invariant_to_reference_order(tmp_path: Path) -> None:
-    """SPEC v002 §9.6/§9.8 (R2 fix): the permutation check for the
+    """The permutation check for the
     populations-differ replay must go through real `run_analysis`
     provenance, not `_stage` — a permuted fetch order must not change
     which ids land in the ledger vs. in any metric's population, nor the
@@ -1109,10 +1082,8 @@ def test_run_analysis_population_routing_is_invariant_to_reference_order(tmp_pat
 def test_run_analysis_aspirational_ledger_guard_never_passes_non_finite_dps_and_respects_the_floor(
     tmp_path: Path,
 ) -> None:
-    """SPEC §6.3 (R2 fix): exercises pipeline.py's OWN guard through a real
-    run_analysis replay instead of a copy of its logic inlined into the
-    test — the prior version's defect: it never called or intercepted
-    production code, so removing the real guard would not have failed it.
+    """Exercises pipeline.py's OWN aspirational guard through a real
+    run_analysis replay, so removing the production guard fails the test.
     Below REFERENCE_MIN_N orderable ledger members, the aspirational
     comparison is unavailable (`compare_damage(player, ())`); at or above
     it, `select_benchmark_reference` actually runs and every member it
@@ -1238,7 +1209,7 @@ def test_comparability_provenance_round_trips_through_store_write_and_read(tmp_p
 
 
 def test_legacy_runs_row_decodes_with_unknown_comparability_version(tmp_path: Path) -> None:
-    """SPEC §7.3: a database created before M2.3 must still be readable, and
+    """A database created before M2.3 must still be readable, and
     its historical row must read the new columns as NULL/unknown — never a
     fabricated current-version value. Same additive-migration pattern as
     test_m1_persistence_contract.py's A19.
@@ -1277,15 +1248,11 @@ def test_run_analysis_ledger_insufficient_via_graphql_partition_fix_still_render
     rendering complete without exception and without a fabricated
     dependent-comparison number.
 
-    R2 fix: the prior version of this fixture omitted the "report_rankings"
-    response `_happy_path_responses` documents needing (the target's own
-    `fight.partition` — a separate WCL call from `get_current_partition` —
-    stayed None, so M2.1's PARTITION axis marked EVERY reference
-    PARTITION_UNKNOWN/INDETERMINATE regardless of the intended duration
-    mismatch, collapsing every metric population to n=0 too — independently
-    confirmed by the review). Adding it restores the intended scenario:
-    duration alone (30% off, outside ±20%) excludes every reference from
-    the LEDGER via match_covariates, while eligibility itself succeeds.
+    The fixture includes the "report_rankings" response: without it the
+    target's own `fight.partition` stays None and M2.1 would mark every
+    reference PARTITION_UNKNOWN. With it, duration alone (30% off, outside
+    ±20%) excludes every reference from the LEDGER via match_covariates,
+    while eligibility itself succeeds.
     """
     meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
     events = [
@@ -1337,7 +1304,7 @@ def test_run_analysis_ledger_insufficient_via_graphql_partition_fix_still_render
             }
         ],
         "partition": _zone_partitions_response(),
-        # R2 fix: matches _zone_partitions_response()'s default (3) — see
+        # Matches _zone_partitions_response()'s default (3) — see
         # _happy_path_responses's own comment for why this is required.
         "report_rankings": _report_rankings_response(partition=3),
     }
@@ -1354,8 +1321,8 @@ def test_run_analysis_ledger_insufficient_via_graphql_partition_fix_still_render
     assert result.comparability.ledger.state == "INSUFFICIENT_REFERENCES"
     assert result.setup_analysis is not None  # RP.2: independent of execution cohort
 
-    # R2 residual finding 1 (§9.3/§9.7), same as the direct-replay sibling
-    # test below: the SPEC §6.2 "not computed" fields, asserted directly.
+    # Same as the direct-replay sibling test below: the "not computed"
+    # fields of the insufficiency contract, asserted directly.
     assert result.performance is None
     assert result.comparisons == ()
     assert result.core_abilities == ()
@@ -1377,7 +1344,7 @@ def test_run_analysis_ledger_insufficient_via_graphql_partition_fix_still_render
     assert "TIMELINE OFENSIVA" not in cli_text
     assert "CONTEXTO DE DPS EXTERNO" not in cli_text
 
-    # R2.1: semantic Discord check — no comparison number, and the renderer's
+    # Semantic Discord check — no comparison number, and the renderer's
     # own "no sustained priority" answer, not merely "no Traceback".
     assert "Traceback" not in discord_text
     _assert_no_uncomputed_comparison_numbers(discord_text)
@@ -1385,18 +1352,16 @@ def test_run_analysis_ledger_insufficient_via_graphql_partition_fix_still_render
 
 
 def test_run_analysis_ledger_insufficient_with_sufficient_metric(tmp_path: Path) -> None:
-    """SPEC §6.2/§9.3 (R2 fix): the test above shows the ledger going
+    """The test above shows the ledger going
     INSUFFICIENT through the real GraphQL path but with equally-empty
     metric data (this fixture never populates damage/uptime data); this
-    one demonstrates §6.2's actual contracted scenario — ledger
+    one demonstrates the contracted insufficiency scenario — ledger
     INSUFFICIENT_REFERENCES (every reference exceeds the ledger's maximum
     duration relaxation band, cohort_match.DURATION_BANDS_PCT's ±20%
     ceiling) while a metric whose own M2.2 duration handling doesn't
     exclude the same references (gross_ability_dps) stays
     SUFFICIENT_FOR_GRADING and keeps a real comparison — through a real
-    run_analysis replay, independently reproduced by the review's own
-    probes (docs/submilestones/M2.3/independent-probes.py.txt, case
-    "ledger-empty-metric-sufficient").
+    run_analysis replay.
     """
 
     def make(name: str, **kwargs: Any) -> PlayerLog:
@@ -1423,8 +1388,8 @@ def test_run_analysis_ledger_insufficient_with_sufficient_metric(tmp_path: Path)
         assert comparison.reference_ids == sufficient_metric.descriptive.member_ids
         assert comparison.reference_ids  # non-empty despite the empty ledger
 
-        # R2 residual finding 1 (§9.3/§9.7): the SPEC §6.2 "not computed"
-        # column, field by field — every one of these depends on R_log and
+        # The "not computed" fields of the insufficiency contract
+        # (docs/methodology.md §5.4), field by field — every one of these depends on R_log and
         # must stay absent, never a fabricated value, when the ledger is
         # empty. Asserted directly on AnalysisResult, not inferred from
         # rendering succeeding.
@@ -1447,7 +1412,7 @@ def test_run_analysis_ledger_insufficient_with_sufficient_metric(tmp_path: Path)
 
         cli_text, discord_text = _render_all(result, contract)
         assert "Traceback" not in cli_text
-        # R2 residual finding 1: verify ABSENCE of the comparison numbers
+        # Verify ABSENCE of the comparison numbers
         # these fields would have produced, not just that rendering didn't
         # crash — each header below only appears when its field is
         # non-empty (report/text.py's render_report), so a regression that
@@ -1461,7 +1426,7 @@ def test_run_analysis_ledger_insufficient_with_sufficient_metric(tmp_path: Path)
         assert "Comparação indisponível" in cli_text
         assert "NO_REFERENCES" in cli_text
 
-        # R2.1: the sufficient metric legitimately keeps its comparison, but the
+        # The sufficient metric legitimately keeps its comparison, but the
         # ledger comparison it does NOT have (NO_REFERENCES) must not be
         # published by Discord: no median/gap/delta/reference numbers, and the
         # renderer's own "no sustained priority" answer.
@@ -1511,7 +1476,7 @@ def test_run_analysis_sufficient_ledger_populates_full_comparability_provenance(
 
 
 def test_run_analysis_comparability_is_deterministic_across_repeated_runs(tmp_path: Path) -> None:
-    """Same inputs, byte-identical AnalysisResult.comparability (SPEC §8.6) —
+    """Same inputs, byte-identical AnalysisResult.comparability (docs/methodology.md) —
     two independent Store instances against the same cassette-like fixture.
     """
     transport_a = _DispatchTransport(_happy_path_responses())
@@ -1536,11 +1501,10 @@ def test_run_analysis_comparability_is_deterministic_across_repeated_runs(tmp_pa
 def test_m2_1_and_m2_2_modules_remain_byte_identical_to_the_closed_delivery() -> None:
     """SHA-256 of the git-committed (LF-normalized) blobs at the M2.1/M2.2
     closure commits — reference_eligibility.py at affd8653/edba6e62 (M2.1
-    delivery/closure) and metric_population.py at the M2.2 final review
-    (docs/submilestones/M2.2/final-independent-review.md). The working-copy
-    hash is normalized to LF first: core.autocrlf materializes some checked-
-    out files as CRLF on Windows (M2.1's own delivery provenance.json notes
-    this), which is a line-ending artifact of checkout, never a content
+    delivery/closure) and metric_population.py at the M2.2 closure. The
+    working-copy hash is normalized to LF first: core.autocrlf materializes
+    some checked-out files as CRLF on Windows, which is a line-ending
+    artifact of checkout, never a content
     change — comparing raw working-copy bytes would make this test fail on
     a clean checkout that changed nothing.
     """
@@ -1582,7 +1546,7 @@ def test_replay_gate1_scope_end_to_end_comparability_matches_manual_expectation(
     here carries damage_by_ability/cast_timeline/uptimes (only ranking
     metadata was captured), so every population lands at n=0 — the honest,
     calculated-by-hand result of this specific fixture (see
-    docs/m2-2-review-evidence.md §4 for the identical M2.2-level census).
+    docs/methodology.md for the identical M2.2-level census).
     """
     fixture_dir = Path(__file__).resolve().parents[1] / "fixtures" / "gate1_scope"
     before = snapshot_directory(fixture_dir)

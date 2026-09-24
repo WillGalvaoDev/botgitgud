@@ -11,7 +11,7 @@ reagrega, nunca filtra `EncounterBenchmark.bands` pelo build do jogador.
 Fazer isso reintroduziria a circularidade que a Execution Cohort tinha
 (cohort_match.py's `talent_cluster`, onde uma build ruim valida a si mesma
 contra outros que fizeram a mesma escolha) — ver
-docs/production-readiness-cold-build.md. Por isso este módulo NUNCA importa
+docs/operations.md. Por isso este módulo NUNCA importa
 `analysis/cohort.py`/`cohort_match.py`/findings da Execution Cohort.
 
 SA.2 responde perguntas observacionais (o build do jogador aparece? com que

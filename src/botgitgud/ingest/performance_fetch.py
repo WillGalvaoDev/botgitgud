@@ -1,7 +1,7 @@
 """T3.1 — paginated fetches for the two event-heavy performance features
 (pet-aware damage-by-ability, resource waste). Split out of
 ingest/log_fetcher_aux.py to keep every file under the 300-line limit
-(docs/implementacao.md T1.6) — mirrors that module's own
+(T1.6) — mirrors that module's own
 `fetch_cast_timelines` pagination pattern (page via `nextPageTimestamp`
 until it stalls or reaches `end_time_ms`).
 """

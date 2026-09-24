@@ -1,5 +1,5 @@
 """EB.5 — Encounter Benchmark as a real, low-priority job of the SAME
-`JobQueue` `!analisar`/`build_cohort` already use (docs/desvios.md D-19: one
+`JobQueue` `!analisar`/`build_cohort` already use (docs/architecture.md D-19: one
 warehouse, one lock, one queue — never a second fila). This module owns two
 things `bot/jobs.py`/`bot/worker.py` don't know about: what a
 `benchmark_build` job's `payload_json` means, and how `analysis/

@@ -1,8 +1,8 @@
 """SAE.2 — request and result types for the experimental Stage C campaign
-(docs/fase4-statistical-architecture-experiment.md §6-§7).
+(docs/phase4.md-§7).
 
 Split from phase4/experiment_planner.py so both stay under the 300-line
-limit (docs/implementacao.md T1.6's rule, enforced repo-wide). Pure data:
+limit (T1.6's rule, enforced repo-wide). Pure data:
 the planner owns the selection algorithm, these types only describe what was
 asked for and what came out.
 """

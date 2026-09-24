@@ -1,4 +1,4 @@
-"""T-DG.2 (docs/fase4-data-acquisition-plan.md §9, §11) — persistence for
+"""T-DG.2 (docs/phase4.md) — persistence for
 the Data Acquisition Gate's three-stage discovery pipeline: Estágio A
 (reportData.reports) writes `discovery_reports`; Estágio B
 (report.rankings, ingest/fight_rankings.py) writes `discovery_fights` +

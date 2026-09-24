@@ -382,7 +382,7 @@ def test_reopen_known_incident_preserves_plan_attempt_and_accounting(tmp_path: P
 
 
 # -- rate-limit refresh failure: fault injection at the collector boundary ----
-# Reproduces the real incident (docs/fase4-experiment-collection.md): a
+# Reproduces the real incident (docs/phase4.md): a
 # transient network failure during WclClient's periodic budget refresh
 # crashed the collector process with an unhandled exception, leaving one
 # observation stuck `collecting` and the campaign's stopped_reason stale.

@@ -2,13 +2,13 @@
 subcommand: "Baixa rankings, ingere os logs (usando o cache da T1.4)."
 
 Duration buckets (analysis/cohort.py, 5% wide) are discovered from the
-live pool in a single unfiltered rankings fetch (docs/desvios.md D-15's
+live pool in a single unfiltered rankings fetch (docs/architecture.md D-15's
 `target_duration_s=None` mode), then built and persisted one at a time —
 "salva o progresso parcial" if RateLimitBudgetExceeded fires mid-batch,
 since each bucket is persisted immediately after it's built, not batched
 to the end.
 
-T2.1 (docs/desvios.md D-25): this no longer aggregates a CohortProfile —
+T2.1 (docs/architecture.md D-25): this no longer aggregates a CohortProfile —
 per-player covariate matching means there is no single "the" profile for
 a bucket, only a candidate pool that every player's own analysis matches
 against independently (analysis/pipeline.py). This job's value is
@@ -110,8 +110,7 @@ def build_cohorts(
     # it can distinguish the requested identity from historical pools.
     # Prewarm usa a politica de batch (piso da API, sem reserva interativa) e
     # avanca incrementalmente: exigir que ~100 logs caibam numa unica janela
-    # horaria excede o proprio teto da conta — ver docs/production-readiness-
-    # cold-build.md.
+    # horaria excede o proprio teto da conta — ver docs/operations.md §6.
     preflight_cold_build(
         deps.client,
         deps.settings,
@@ -179,8 +178,7 @@ def build_cohorts(
         # redundant per-report rankings query without changing analyzed logs.
         # O algoritmo incremental (cache-as-checkpoint, lote guardado pelo
         # orcamento real, parcial nunca READY) vive em cohort_increment.py e e
-        # o MESMO usado pelo caminho interativo — ver docs/production-
-        # readiness-cold-build.md.
+        # o MESMO usado pelo caminho interativo — ver docs/operations.md §6.
         increment = advance_cohort_build(
             client=deps.client,
             fetcher=deps.fetcher,

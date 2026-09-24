@@ -5,7 +5,7 @@ persistente no `Store`), seguindo o mesmo padrão de extensão que
 `bot/jobs.py`'s `JobQueue` já usa: uma classe própria que recebe um `Store`
 e escreve na sua tabela via os métodos SQL genéricos de `Store`
 (`execute`/`execute_returning`), então toda escrita do processo continua
-serializada por `Store`'s único lock (docs/desvios.md D-19).
+serializada por `Store`'s único lock (docs/architecture.md D-19).
 
 Nenhuma construção automática de benchmark aqui — `write_benchmark` recebe
 um `EncounterBenchmark` já pronto (de `analysis/benchmark_aggregate.py`).

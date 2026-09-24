@@ -1,6 +1,6 @@
 """Minimal, robust Blizzard API client — spell-name lookup only.
 
-See docs/desvios.md D-8: no task in the 27-task plan explicitly builds this
+See docs/architecture.md D-8: no task in the 27-task plan explicitly builds this
 module, even though T0.4's SpellCatalog signature requires a BlizzardClient.
 Built here, scoped to exactly what SpellCatalog needs (one lookup method),
 following the same robustness pattern as wcl/client.py (T0.3): timeouts,

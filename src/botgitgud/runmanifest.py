@@ -1,4 +1,4 @@
-"""T1.5 — deterministic run identity (docs/implementacao.md T1.5): every
+"""T1.5 — deterministic run identity (T1.5): every
 rendered report and every persisted cohort carries a RunManifest so a
 result can be traced back to the exact cohort, code, and settings that
 produced it.

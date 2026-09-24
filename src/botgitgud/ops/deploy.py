@@ -2,7 +2,7 @@
 validação de `.env` e backup/restore do estado durável.
 
 **Por que a lógica está aqui e não no shell**: é a mesma decisão já tomada
-em B6/CL.6 (`docs/v1-process-supervision.md`) — a política mora em Python,
+em B6/CL.6 (`docs/operations.md`) — a política mora em Python,
 testável com pytest, e o shell é só a casca que resolve interpretador e
 privilégio. Regras de inclusão/exclusão de backup duplicadas entre um
 `tar --exclude` e um teste divergem silenciosamente na primeira edição;

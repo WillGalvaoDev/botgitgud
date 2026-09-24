@@ -2,7 +2,7 @@
 #
 # systemd supervises the Python supervisor (src/botgitgud/ops/supervisor.py)
 # ONLY. The supervisor keeps deciding restart/backoff/storm-breaker/clean-stop
-# for the bot CHILD process itself -- see docs/v1-process-supervision.md and
+# for the bot CHILD process itself -- see docs/operations.md and
 # docs/linux-deployment.md. This unit is a thin launcher, the same role
 # scripts/bot-supervisor.ps1 plays on Windows: it never talks to WCL/Discord,
 # never touches DuckDB, never decides anything about the bot child.

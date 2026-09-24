@@ -59,7 +59,7 @@ class MetricPopulationSummary:
 
 @dataclass(frozen=True, slots=True)
 class HygieneSummary:
-    # M2.3 v002 §4.0/§7.1 (D-M23-07): n_input is the fetched list BEFORE the
+    # M2.3 (docs/methodology.md §5.5): n_input is the fetched list BEFORE the
     # quarantine stage; excluded_conflicting_duplicates/conflicting_duplicate_ids
     # come from DuplicateConflictReport, the rest from HygieneReport (the
     # stage AFTER quarantine). n_input == n_output + excluded_conflicting_
@@ -114,7 +114,7 @@ class ComparabilityProvenance:
 
 
 def summarize_hygiene(report: HygieneReport, quarantine: DuplicateConflictReport) -> HygieneSummary:
-    """M2.3 v002 §7.1: `quarantine` is the §4.0 stage that ran on the
+    """`quarantine` is the stage that ran on the
     fetched list BEFORE `report` (the hygiene stage) ever saw it —
     `report.n_input == quarantine.n_output` (the pipeline threads
     quarantine's output straight into `hygienic_candidates`).

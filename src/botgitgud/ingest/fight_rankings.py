@@ -1,4 +1,4 @@
-"""T-DG.1 (docs/fase4-data-acquisition-plan.md §11) — query + parser for
+"""T-DG.1 (docs/phase4.md) — query + parser for
 reportData.report.rankings, the bulk per-fight source of rankPercent and
 partition discovered during the Fase 4 data-gate investigation
 (docs/schema_confirmado.md §13.3). One query costs 2.0 points regardless
