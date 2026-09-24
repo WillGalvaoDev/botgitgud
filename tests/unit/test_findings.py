@@ -49,22 +49,16 @@ def _scalar(
 def _ability_gap(**overrides: object) -> AbilityGap:
     defaults: dict[str, object] = {
         "spell": SpellInfo(spell_id=1, name="Chaos Strike", source="wcl"),
-        "n_u": 8.0,
-        "d_u": 800.0,
-        "p_u": 100.0,
-        "n_r": 10.0,
-        "d_r": 1000.0,
-        "p_r": 100.0,
-        "delta_d": -200.0,
-        "volume": -200.0,
-        "efficiency": 0.0,
-        "interaction": 0.0,
+        "volume_dps": -200.0 / 300,
         "delta_dps_pct": -6.3,
         "volume_dps_pct": -6.3,
         "efficiency_dps_pct": 0.0,
         "diagnosis": "usos_perdidos_excedentes",
         "confidence": "alta",
-        "unit_kind": "CAST",
+        "unit_kind": "DAMAGE_EVENT",
+        "review_eligible": True,
+        "player_ability_dps": 800.0 / 300,
+        "reference_mean_ability_dps": 1000.0 / 300,
     }
     defaults.update(overrides)
     return AbilityGap(**defaults)  # type: ignore[arg-type]
@@ -75,7 +69,7 @@ def _finding(**overrides: object) -> Finding:
         "kind": "ABILITY_GAP",
         "title": "x",
         "detail": "y",
-        "estimated_gain_pct": 5.0,
+        "observed_deficit_player_pp": 5.0,
         "confidence": "alta",
     }
     defaults.update(overrides)
@@ -153,7 +147,7 @@ def test_build_findings_skips_ability_gaps_already_ahead_of_cohort() -> None:
     dps_gap = DpsGapReport(
         player_dps=1000.0,
         cohort_median_dps=1200.0,
-        gap_pct=-1 / 6,
+        gap_vs_reference_pct=-100 / 6,
         duration_s=300.0,
         abilities=(_ability_gap(delta_dps_pct=2.0),),  # ahead of cohort — nothing to gain
         other_pct=0.0,
@@ -170,7 +164,7 @@ def test_build_findings_ability_gap_gain_is_the_negated_delta() -> None:
     dps_gap = DpsGapReport(
         player_dps=1000.0,
         cohort_median_dps=1200.0,
-        gap_pct=-1 / 6,
+        gap_vs_reference_pct=-100 / 6,
         duration_s=300.0,
         abilities=(_ability_gap(delta_dps_pct=-6.3),),
         other_pct=0.0,
@@ -181,15 +175,19 @@ def test_build_findings_ability_gap_gain_is_the_negated_delta() -> None:
         dps_gap=dps_gap, n=30, relaxed_covariates=(), performance=None, player_damage_share={}
     )
     ability_finding = next(f for f in findings if f.kind == "ABILITY_GAP")
-    assert ability_finding.estimated_gain_pct == 6.3
-    assert ability_finding.detail == "Gap de -6.3pp do seu dano medido nesta habilidade."
+    assert not hasattr(ability_finding, "estimated_gain_pct")
+    assert ability_finding.observed_deficit_player_pp == 6.3
+    assert ability_finding.detail == (
+        "O DPS observado de Chaos Strike ficou abaixo da referência: "
+        "2.667 DPS contra 3.333 DPS (média)."
+    )
 
 
 def test_build_findings_ability_gap_low_confidence_propagates() -> None:
     dps_gap = DpsGapReport(
         player_dps=1000.0,
         cohort_median_dps=1200.0,
-        gap_pct=-1 / 6,
+        gap_vs_reference_pct=-100 / 6,
         duration_s=300.0,
         abilities=(_ability_gap(delta_dps_pct=-6.3, confidence="baixa"),),
         other_pct=0.0,
@@ -207,28 +205,28 @@ def test_build_findings_ability_gap_low_confidence_propagates() -> None:
 
 
 def test_low_confidence_larger_gain_ranks_below_high_confidence_smaller_gain() -> None:
-    low = _finding(title="low", estimated_gain_pct=5.0, confidence="baixa")
-    high = _finding(title="high", estimated_gain_pct=3.0, confidence="alta")
+    low = _finding(title="low", observed_deficit_player_pp=5.0, confidence="baixa")
+    high = _finding(title="high", observed_deficit_player_pp=3.0, confidence="alta")
     top = select_top_actions([low, high])
     assert [f.title for f in top] == ["high", "low"]
 
 
 def test_findings_without_gain_never_enter_top_actions() -> None:
-    no_gain = _finding(title="no-gain", estimated_gain_pct=None)
-    with_gain = _finding(title="with-gain", estimated_gain_pct=1.0)
+    no_gain = _finding(title="no-gain", observed_deficit_player_pp=None)
+    with_gain = _finding(title="with-gain", observed_deficit_player_pp=1.0)
     top = select_top_actions([no_gain, with_gain])
     assert [f.title for f in top] == ["with-gain"]
 
 
 def test_top_actions_never_exceeds_three() -> None:
-    findings = [_finding(title=str(i), estimated_gain_pct=float(i)) for i in range(10)]
+    findings = [_finding(title=str(i), observed_deficit_player_pp=float(i)) for i in range(10)]
     top = select_top_actions(findings)
     assert len(top) == 3
     assert [f.title for f in top] == ["9", "8", "7"]
 
 
 def test_top_actions_empty_when_nothing_clears_the_gate() -> None:
-    findings = [_finding(estimated_gain_pct=None) for _ in range(5)]
+    findings = [_finding(observed_deficit_player_pp=None) for _ in range(5)]
     assert select_top_actions(findings) == []
 
 
@@ -240,7 +238,9 @@ def test_relevance_finding_has_no_estimated_gain_field() -> None:
 
 
 def test_relevance_uses_measured_share_and_applies_floor_and_bh() -> None:
-    report = DpsGapReport(1000, 1200, None, 300, (), 0, 0)
+    report = DpsGapReport(
+        1000, 1200, None, 300, (), 0, 0, entity_review_eligible=frozenset({1, 2, 3})
+    )
     _, relevance, _ = build_findings(
         dps_gap=report,
         n=30,
@@ -254,7 +254,9 @@ def test_relevance_uses_measured_share_and_applies_floor_and_bh() -> None:
 
 
 def test_relevance_discards_missing_quantile_and_missing_damage_share() -> None:
-    report = DpsGapReport(1000, 1200, None, 300, (), 0, 0)
+    report = DpsGapReport(
+        1000, 1200, None, 300, (), 0, 0, entity_review_eligible=frozenset({1, 2, 3})
+    )
     _, relevance, _ = build_findings(
         dps_gap=report,
         n=30,
@@ -266,7 +268,7 @@ def test_relevance_discards_missing_quantile_and_missing_damage_share() -> None:
 
 
 def test_two_levels_respect_order_limit_and_do_not_pad() -> None:
-    level1 = [_finding(title="measured", estimated_gain_pct=2.0)]
+    level1 = [_finding(title="measured", observed_deficit_player_pp=2.0)]
     level2 = [RelevanceFinding("UPTIME", "relevant", "d", 0.3, 0.9, "alta")]
     top = select_top_priorities(level1, level2)
     assert isinstance(top, TopPriorities)
@@ -275,7 +277,7 @@ def test_two_levels_respect_order_limit_and_do_not_pad() -> None:
     assert len(top.level1) + len(top.level2) == 2
 
 
-def test_quantitative_damage_unavailable_still_allows_measured_relevance() -> None:
+def test_quantitative_damage_unavailable_without_entity_proof_blocks_relevance() -> None:
     report = DpsGapReport(
         1000,
         1200,
@@ -295,11 +297,13 @@ def test_quantitative_damage_unavailable_still_allows_measured_relevance() -> No
         player_damage_share={1: 1.0},
     )
     assert level1 == []
-    assert len(level2) == 1
+    assert level2 == []
 
 
 def test_zero_damage_share_is_not_established_relevance() -> None:
-    report = DpsGapReport(1000, 1200, None, 300, (), 0, 0)
+    report = DpsGapReport(
+        1000, 1200, None, 300, (), 0, 0, entity_review_eligible=frozenset({1, 2, 3})
+    )
     _, relevance, _ = build_findings(
         dps_gap=report,
         n=30,
@@ -335,7 +339,9 @@ def test_empty_damage_share_fails_closed_for_both_levels_when_quantitative_unava
 # -- M27: execution findings (DEATH/ACTIVE_TIME/WASTE) connected from  ---------
 # -- performance_features.py's already-graded ScalarFindings — RB-1/1a/2/3 ----
 
-_NEUTRAL_REPORT = DpsGapReport(1000, 1200, None, 300, (), 0, 0)
+_NEUTRAL_REPORT = DpsGapReport(
+    1000, 1200, None, 300, (), 0, 0, entity_review_eligible=frozenset({1, 2, 3})
+)
 
 
 def test_execution_findings_nonvacuous_over_zarad_death() -> None:
@@ -498,7 +504,7 @@ def test_active_time_emits_at_most_one_candidate_and_death_stays_separate() -> N
     assert {f.category for f in execution} == {"ACTIVE_TIME", "DEATH"}
 
 
-def test_active_time_falls_back_to_downtime_when_active_time_pct_unavailable() -> None:
+def test_downtime_is_not_relabelled_as_active_time_when_percentage_unavailable() -> None:
     """RB-1a, the other branch: when this log never computed
     active_time_pct (`performance.active_time is None`), downtime backs
     the single ACTIVE_TIME candidate instead — still exactly one, never
@@ -521,8 +527,7 @@ def test_active_time_falls_back_to_downtime_when_active_time_pct_unavailable() -
         player_damage_share={},
     )
 
-    assert [f.category for f in execution] == ["ACTIVE_TIME"]
-    assert execution[0].finding is downtime
+    assert [f.category for f in execution] == []
 
 
 def test_execution_findings_empty_when_performance_is_none() -> None:

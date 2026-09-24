@@ -114,7 +114,13 @@ def test_usage_count_line_shows_user_and_cohort_median() -> None:
 
 
 def test_header_shows_dps_and_percentile_when_available() -> None:
-    header = _header(player_dps=108342.5, player_percentile=71.0, cohort_median_dps=117576.0)
+    header = _header(
+        player_dps=108342.5,
+        player_percentile=71.0,
+        cohort_median_dps=117576.0,
+        reference_n=15,
+        damage_comparison_status="AVAILABLE",
+    )
     text = render_report(header, [])
     assert "108,342" in text or "108,343" in text  # formatted with thousands separator
     assert "71" in text
@@ -269,7 +275,7 @@ def test_matched_covariates_rendered_with_checkmarks() -> None:
         relaxed_covariates=(),
     )
     text = render_report(header, [])
-    assert "**Coorte:**" in text
+    assert "**Coorte pareada:**" in text
     assert "ilvl ±5 ✅" in text
     assert "Augmentation ✅" in text
     assert "duração ±7% ✅" in text
@@ -297,7 +303,7 @@ def test_relaxed_has_augmentation_shows_the_support_buff_warning() -> None:
     header = _header(matched_covariates=("duration±7%",), relaxed_covariates=("has_augmentation",))
     text = render_report(header, [])
     assert (
-        "⚠️ Buffs de suporte não pareados — parte do gap de dano por cast "
+        "⚠️ Buffs de suporte não pareados — parte da diferença observada "
         "pode não ser controlável por você." in text
     )
     assert "Augmentation não pareado" not in text

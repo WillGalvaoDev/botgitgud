@@ -37,42 +37,23 @@ from botgitgud.knowledge.spec_slugs import Branch
 def _ability(diagnosis: str) -> AbilityGap:
     return AbilityGap(
         spell=SpellInfo(123, "Measured ability", "curated"),
-        n_u=5,
-        d_u=500,
-        p_u=100,
-        n_r=10,
-        p_r=110,
-        d_r=1100,
-        delta_d=-600,
-        volume=-550,
-        efficiency=-100,
-        interaction=50,
         delta_dps_pct=-6,
         volume_dps_pct=-5.5,
         efficiency_dps_pct=-1,
         diagnosis=cast(Diagnosis, diagnosis),
         confidence="baixa",
-        unit_kind="CAST",
+        unit_kind="DAMAGE_EVENT",
+        review_eligible=True,
     )
 
 
 @pytest.mark.parametrize(
     ("diagnosis", "kind", "basis", "condition"),
     [
-        ("usos_perdidos_excedentes", Kind.DIRECT_ACTION, Basis.USE_COUNT, None),
-        ("poucos_alvos", Kind.DIRECT_ACTION, Basis.AVERAGE_TARGET_DEFICIT, None),
-        (
-            "janela_ou_buffs_proprios",
-            Kind.CONDITIONAL_ACTION,
-            Basis.DAMAGE_PER_USE,
-            Condition.WINDOW_OR_OWN_BUFFS_UNDISTINGUISHED,
-        ),
-        (
-            "volume_e_eficiencia_combinados",
-            Kind.CONDITIONAL_ACTION,
-            Basis.VOLUME_AND_EFFICIENCY,
-            Condition.MULTIPLE_COMPONENTS_NO_SINGLE_CAUSE,
-        ),
+        ("usos_perdidos_excedentes", Kind.NO_SPECIFIC_ACTION, Basis.UNMAPPED_EVIDENCE, None),
+        ("poucos_alvos", Kind.NO_SPECIFIC_ACTION, Basis.UNMAPPED_EVIDENCE, None),
+        ("janela_ou_buffs_proprios", Kind.NO_SPECIFIC_ACTION, Basis.UNMAPPED_EVIDENCE, None),
+        ("volume_e_eficiencia_combinados", Kind.NO_SPECIFIC_ACTION, Basis.UNMAPPED_EVIDENCE, None),
         ("buffs_nao_pareados", Kind.NO_SPECIFIC_ACTION, Basis.UNPAIRED_BUFFS, None),
     ],
 )
@@ -100,13 +81,27 @@ def test_diagnoses_preserve_evidence_limits(
     assert associated.finding is findings[0]
     assert isinstance(associated.finding, Finding)
     assert associated.finding.confidence == "baixa"
-    assert associated.remediation == Remediation(kind, basis, 123, condition)
+    subject = None if basis is Basis.UNMAPPED_EVIDENCE else 123
+    assert associated.remediation == Remediation(kind, basis, subject, condition)
     assert associated.coaching_eligible is (kind is not Kind.NO_SPECIFIC_ACTION)
     assert associated.remediation.provenance is None
 
 
+def test_observed_output_deficit_is_only_coachable_when_review_eligible() -> None:
+    ability = replace(_ability("observed_output_deficit"), review_eligible=True)
+    finding = Finding("ABILITY_GAP", "Measured ability", "", "baixa")
+    result = derive_remediation(finding, ability=ability)
+    assert result.remediation == Remediation(
+        Kind.CONDITIONAL_ACTION,
+        Basis.OBSERVED_OUTPUT_DEFICIT,
+        123,
+        Condition.CAUSE_NOT_IDENTIFIED,
+    )
+    assert result.coaching_eligible
+
+
 def test_unknown_diagnosis_fails_closed_despite_title_and_gain() -> None:
-    finding = Finding("ABILITY_GAP", "usos_perdidos_excedentes", "use on cooldown", 99, "alta")
+    finding = Finding("ABILITY_GAP", "usos_perdidos_excedentes", "use on cooldown", "alta")
     result = derive_remediation(finding, ability=_ability("future_diagnosis"))
     assert result.finding is finding
     assert result.remediation == Remediation()
@@ -143,9 +138,10 @@ def test_active_time_and_downtime_keep_one_abstraction() -> None:
 
 def test_uptime_quantile_does_not_establish_cause() -> None:
     finding = Finding(
-        "UPTIME", "arbitrary", "arbitrary", None, "baixa", {"quantile": 0.01, "spell_id": 123}
+        "UPTIME", "arbitrary", "arbitrary", "baixa", {"quantile": 0.01, "spell_id": 123}
     )
-    result = derive_remediation(finding)
+    assert not derive_remediation(finding).coaching_eligible
+    result = derive_remediation(finding, entity_eligible=True)
     assert result.remediation == Remediation(
         Kind.CONDITIONAL_ACTION,
         Basis.UPTIME_QUANTILE,
@@ -191,7 +187,7 @@ def test_guide_guard_requires_source_observability_and_applicability(
         observable and origin is Origin.SOURCE_FACT and branch is Branch.ALL
     )
     # A passing guard still supplies no comparison and cannot become provenance.
-    finding = Finding("ABILITY_GAP", "Measured ability", "", 6, "alta")
+    finding = Finding("ABILITY_GAP", "Measured ability", "", "alta")
     assert (
         derive_remediation(finding, ability=_ability("poucos_alvos")).remediation.provenance is None
     )
@@ -214,8 +210,8 @@ def test_association_preserves_report_order_and_omits_non_findings() -> None:
         relevance_findings=relevance,
         execution_findings=execution,
     )
-    assert [item.remediation.subject for item in results] == [123, 456]
-    assert [item.coaching_eligible for item in results] == [False, True]
+    assert [item.remediation.subject for item in results] == [123, None]
+    assert [item.coaching_eligible for item in results] == [False, False]
     assert all(item.finding is finding for item, finding in zip(results, findings, strict=True))
     assert (
         build_remediations(

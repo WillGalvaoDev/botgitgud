@@ -1,0 +1,31 @@
+{
+  "command": [
+    "C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe",
+    "-m",
+    "pytest",
+    "-o",
+    "addopts=",
+    "-m",
+    "not network",
+    "-q",
+    "--tb=short",
+    "tests/unit/test_m0_methodology_contract.py",
+    "tests/unit/test_damage_scope.py",
+    "tests/unit/test_dps_gap.py",
+    "tests/unit/test_m1_acceptance.py",
+    "tests/unit/test_m1_algebra_properties.py",
+    "tests/unit/test_m1_astra_regressions.py",
+    "tests/unit/test_m1_feature_contract.py",
+    "tests/unit/test_m1_persistence_contract.py",
+    "tests/unit/test_m1_required_changes.py",
+    "tests/unit/test_m1_review_round2.py",
+    "--junitxml=docs/m1-validation/acceptance.xml"
+  ],
+  "cwd": "C:\\Users\\wsgon\\AppData\\Local\\Temp\\m1-final-verified-qsc3qd6c",
+  "source_fingerprint": "a770ff55629ad5cb159adc7a5b77bd19e07ad32b196fee6c92c182e392151857",
+  "source_file_count": 978,
+  "started_utc": "2026-09-13T23:27:02.131373+00:00",
+  "finished_utc": "2026-09-13T23:29:15.217912+00:00",
+  "elapsed_s": 133.086541699995,
+  "exit_code": 0
+}

@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from itertools import count
+
 import pytest
 
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
 from botgitgud.domain.cooldowns import BASE_COOLDOWNS_S
-from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog, SpellProfile
+from botgitgud.domain.models import (
+    CollectionProvenance,
+    CollectionStatus,
+    FightRef,
+    MeasurementProvenance,
+    PlayerBuild,
+    PlayerLog,
+    SpellProfile,
+)
+
+_IDENTITIES = count(1)
 
 
 def _log(
@@ -16,7 +28,7 @@ def _log(
 ) -> PlayerLog:
     fight = FightRef(
         report_code="ABCDEFGHIJKLMNOP",
-        fight_id=1,
+        fight_id=next(_IDENTITIES),
         encounter_id=3179,
         boss_name="Fallen-King Salhadaar",
         difficulty=5,
@@ -40,6 +52,11 @@ def _log(
         percentile=50.0,
         cast_timeline=cast_timeline,
         phase_cast_timeline=phase_cast_timeline or {},
+        measurement_provenance=MeasurementProvenance(
+            casts_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, duration_s * 1000
+            )
+        ),
     )
 
 
@@ -83,7 +100,8 @@ def test_n_usages_median_pads_zero_for_positional_logs_that_never_cast_it() -> N
     ]
     profile, n_positional = build_cd_reference_profile(logs, target_duration_s=300.0)
     assert n_positional == 3
-    assert profile[1].n_usages_median == pytest.approx(2.0)  # median(0, 2, 4) == 2
+    assert profile[1].n_usages_median == pytest.approx(3.0)  # median(2, 4); absence excluded
+    assert profile[1].n_positional_with_spell == 2
 
 
 def test_ref_times_are_per_slot_medians_from_positional_band_only() -> None:

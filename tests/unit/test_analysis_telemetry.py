@@ -422,3 +422,28 @@ def test_snapshot_summary_is_small_and_references_the_run() -> None:
     assert summary["last_analysis_queries"] == 4
     assert summary["last_analysis_delivery"] == "delivered"
     assert len(summary) <= 6  # resumo, nao payload
+
+
+def test_record_analysis_result_persists_m1_measurement_identity() -> None:
+    run = AnalysisRun(analysis_id="m1", started_at="2026-01-01T00:00:00Z")
+    manifest = SimpleNamespace(
+        cohort_id="cohort",
+        wcl_partition=1,
+        measurement_input_version="measurement-input-v1",
+        damage_comparison_version="damage-comparison-v2",
+        reference_n_quantitative=17,
+    )
+    result = SimpleNamespace(
+        header=SimpleNamespace(
+            class_name="Warlock", spec="Demonology", duration_max_s=300, reference_n=20
+        ),
+        reference_pool_members=25,
+        matched_cohort_members=20,
+        encounter_id=1,
+        difficulty=5,
+        manifest=manifest,
+    )
+    record_analysis_result(run, result)
+    assert run.measurement_input_version == "measurement-input-v1"
+    assert run.damage_comparison_version == "damage-comparison-v2"
+    assert run.reference_n_quantitative == 17

@@ -1,0 +1,31 @@
+import datetime, hashlib, json, os, pathlib, subprocess, sys, time
+root=pathlib.Path(__file__).resolve().parent
+os.chdir(root)
+python=r"C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/python.exe"
+ruff=r"C:/Users/wsgon/OneDrive/Desktop/BotGITGUD/.venv/Scripts/ruff.exe"
+out=root/'docs/m1-validation';out.mkdir(exist_ok=True)
+mode=sys.argv[1]
+commands={
+ 'regressions':[python,'-m','pytest','-o','addopts=','-m','not network','-q','--tb=short','tests/unit/test_m1_required_changes.py','--junitxml=docs/m1-validation/regressions.xml'],
+ 'acceptance':[python,'-m','pytest','-o','addopts=','-m','not network','-q','--tb=short','tests/unit/test_m0_methodology_contract.py','tests/unit/test_damage_scope.py','tests/unit/test_dps_gap.py',*[p.as_posix() for p in sorted(pathlib.Path('tests/unit').glob('test_m1_*.py'))],'--junitxml=docs/m1-validation/acceptance.xml'],
+ 'suite':[python,'-m','pytest','-o','addopts=','-m','not network','-q','--tb=short','--junitxml=docs/m1-suite-final.xml'],
+ 'ruff':[ruff,'check','src','tests','scripts'],
+ 'pyright':[python,'-m','pyright'],
+ 'evidence':[python,'scripts/m1_review_evidence.py','--output','docs/m1-evidence-current.json.gz'],
+}
+paths=[p for folder in ('src','tests','scripts') for p in (root/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix!='.pyc' and not any(part.startswith('_record_scratch') for part in p.parts)] + [root/'pyproject.toml',root/'spells.json']
+hash=hashlib.sha256()
+for path in sorted(paths,key=lambda p:p.relative_to(root).as_posix()):
+ hash.update(path.relative_to(root).as_posix().encode());hash.update(hashlib.sha256(path.read_bytes()).digest())
+started=datetime.datetime.now(datetime.UTC).isoformat();start=time.monotonic()
+env={**os.environ,'PYTHONPATH':str(root/'src'),'PYTHONIOENCODING':'utf8'}
+cwd=pathlib.Path(r'C:/Users/wsgon/OneDrive/Desktop/BotGITGUD') if mode=='pyright' else root
+if mode=='pyright':
+ for path in paths:
+  assert path.read_bytes()==(cwd/path.relative_to(root)).read_bytes()
+ env['PYTHONPATH']=str(cwd/'src')
+with (out/(mode+'.log.txt')).open('w',encoding='utf8') as log:
+ result=subprocess.run(commands[mode],stdout=log,stderr=subprocess.STDOUT,env=env,cwd=cwd)
+record=dict(command=commands[mode],cwd=str(cwd),source_fingerprint=hash.hexdigest(),source_file_count=len(paths),started_utc=started,finished_utc=datetime.datetime.now(datetime.UTC).isoformat(),elapsed_s=time.monotonic()-start,exit_code=result.returncode)
+(out/(mode+'.json')).write_text(json.dumps(record,indent=2),encoding='utf8')
+print(json.dumps(record));sys.exit(result.returncode)

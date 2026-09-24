@@ -24,8 +24,19 @@ from botgitgud.analysis.remediation import (
 
 
 def _ability(name: str, grade: Grade, gain: float) -> MaterialCandidate:
-    finding = Finding("ABILITY_GAP", name, "detail", gain, "alta")
-    remediation = Remediation(RemediationKind.DIRECT_ACTION, RemediationBasis.USE_COUNT, name)
+    finding = Finding(
+        "ABILITY_GAP",
+        name,
+        "detail",
+        "alta",
+        observed_deficit_player_pp=gain,
+    )
+    remediation = Remediation(
+        RemediationKind.CONDITIONAL_ACTION,
+        RemediationBasis.OBSERVED_OUTPUT_DEFICIT,
+        name,
+        RemediationCondition.CAUSE_NOT_IDENTIFIED,
+    )
     return MaterialCandidate(finding, remediation, grade)
 
 

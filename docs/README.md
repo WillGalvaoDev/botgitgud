@@ -21,6 +21,48 @@ Estes são os documentos operacionais vigentes.
 
 ## Arquitetura e contratos técnicos (REFERENCE)
 
+Preparação para ML: [`m0-methodology-contract.md`](m0-methodology-contract.md) registra
+a M0 de 2026-09-10: inventário do comportamento atual, contratos para as próximas
+implementações, reproduções de defeitos e decisões abertas. Não descreve correções
+já aplicadas ao runtime.
+
+[`m1-specification.md`](m1-specification.md) define os contratos e critérios da M1.
+A M1 está **MILESTONE_CLOSED**, conforme o
+[`registro de fechamento`](m1-closure.md). Os resultados reproduzíveis e etapas
+anteriores estão em [`m1-review-evidence.md`](m1-review-evidence.md).
+
+[`m2-1-specification.md`](m2-1-specification.md) define os contratos e critérios da
+M2.1 (elegibilidade básica das referências): identidade, versão/partição, hotfix e
+estado da tentativa como condição necessária, não suficiente, de comparação. Não
+relaxa covariáveis (M2.2) nem altera `pipeline`/`cohort_match` (M2.3). Evidências,
+replay e o status corrente estão em [`m2-1-review-evidence.md`](m2-1-review-evidence.md).
+
+[`m2-2-specification.md`](m2-2-specification.md) define os contratos e critérios da
+M2.2 (seleção da população por métrica): matriz métrica × covariável, ladder de
+relaxamento e distinção entre população descritiva e aspiracional, a partir da
+elegibilidade básica de M2.1. Não faz wiring em `pipeline`/`cohort_match`/relatório
+(M2.3) nem antecipa interpretação estatística (M3/B06). Evidências, replay e o
+status corrente estão em [`m2-2-review-evidence.md`](m2-2-review-evidence.md).
+
+[`m2-3-specification.md`](m2-3-specification.md) define os contratos e critérios da
+M2.3 (integração e closure da comparabilidade): conecta M2.1 e M2.2 ao
+`run_analysis`, ao contrato de relatório e à proveniência persistida
+(`comparability-provenance-v1`); remove o aborto por insuficiência de ledger,
+mantendo apenas a comparação dependente bloqueada. `reference_eligibility.py`
+e `metric_population.py` permanecem byte-idênticos. **MILESTONE_CLOSED** junto com o
+macro M2 ([`registro de fechamento`](m2-3-closure.md)). Evidências,
+replay e o status corrente estão em [`m2-3-review-evidence.md`](m2-3-review-evidence.md).
+
+O [`roadmap aprovado M2–M6`](methodology-roadmap-m2-m6.md) contém 16 submilestones,
+com dependências, escopo, aceite e evidências. Todas permanecem não iniciadas.
+O [`workflow operacional`](milestone-workflow.md) define Opus como analista/arquiteto,
+Sonnet como executor e Astra como revisor independente. Governança: **WORKFLOW_READY**.
+Essa aprovação não constitui SPEC de M2.1 nem início de M2.
+
+O [`orquestrador de agentes`](agent-orchestrator.md) implementa o modo autônomo
+Opus → Sonnet → Astra, com START explícito, estado durável, gates e auditoria.
+Sua construção e seus testes não iniciam M2.
+
 Contratos vigentes, citados diretamente pelos docstrings do código. Descrevem *por que* o
 sistema é como é.
 
@@ -79,3 +121,15 @@ Registros de estados passados, preservados como evidência. **Não são procedim
 - **Experimentos Phase 4:** seção [Experimentos](#experimentos--fase-4-experimental).
 - **Registros históricos:** [`archive/`](archive/).
 - **Implementação legada congelada:** [`../legacy/README.md`](../legacy/README.md).
+
+## M2.1 manual closure - 2026-09-22
+
+[M2.1 MILESTONE_CLOSED](m2-1-closure.md) after independent Astra review. M2.2 NOT_STARTED; orchestrator suspended.
+
+## M2.2 manual closure - 2026-09-22
+
+[M2.2 MILESTONE_CLOSED](m2-2-closure.md) after independent Astra review (review, re-review, final review). Macro M2 open; orchestrator suspended.
+
+## M2.3 and macro M2 manual closure - 2026-09-24
+
+[M2.3 MILESTONE_CLOSED; macro M2 MILESTONE_CLOSED](m2-3-closure.md) after independent Astra review (review, re-review, v003 review, final review). M3 not started; orchestrator suspended.

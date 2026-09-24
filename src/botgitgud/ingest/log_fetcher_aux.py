@@ -8,15 +8,23 @@ issues a GraphQL query and counts it.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from typing import Any
 
 import structlog
 
 from botgitgud.domain.external_buffs import AUGMENTATION_BUFF_IDS, EXTERNAL_BUFF_IDS
-from botgitgud.domain.models import AuraDetail, PhaseInterval, PhaseKey
+from botgitgud.domain.models import (
+    AuraDetail,
+    CollectionProvenance,
+    CollectionStatus,
+    PhaseInterval,
+    PhaseKey,
+)
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError
+from botgitgud.ingest.event_validation import valid_event
 from botgitgud.ingest.performance_parsing import parse_aura_uptimes
 from botgitgud.ingest.wcl_parsing import (
     find_matching_rank_percent,
@@ -150,7 +158,8 @@ def fetch_cast_timelines(
     start_time_ms: float,
     end_time_ms: float,
     intervals: Sequence[PhaseInterval],
-) -> tuple[dict[int, tuple[float, ...]], dict[int, dict[PhaseKey, tuple[float, ...]]]]:
+    include_provenance: bool = False,
+) -> tuple:
     """T1.4/T2.4: pages through GetPlayerEvents once, building BOTH the
     flat (relative-to-fight-start) and phase-keyed (relative-to-interval-
     start) timelines from the same events — never fetched twice.
@@ -158,6 +167,27 @@ def fetch_cast_timelines(
     flat_by_id: dict[int, list[float]] = {}
     phase_by_id: dict[int, dict[PhaseKey, list[float]]] = {}
     current_start = start_time_ms
+    status = CollectionStatus.COMPLETE
+    reasons: list[str] = []
+    if not (
+        not isinstance(start_time_ms, bool)
+        and not isinstance(end_time_ms, bool)
+        and math.isfinite(start_time_ms)
+        and math.isfinite(end_time_ms)
+        and 0 <= start_time_ms < end_time_ms
+    ):
+        if include_provenance:
+            return (
+                {},
+                {},
+                CollectionProvenance(
+                    CollectionStatus.UNKNOWN,
+                    ("INVALID_INTERVAL",),
+                    start_time_ms,
+                    end_time_ms,
+                ),
+            )
+        return {}, {}
     while current_start < end_time_ms:
         try:
             ev_res_json = query_fn(
@@ -171,12 +201,38 @@ def fetch_cast_timelines(
                 op_name="fetch_player_events",
             )
         except ApiError:
+            status = CollectionStatus.PARTIAL
+            reasons.append("API_ERROR")
             break
 
-        ev_data = (
-            ev_res_json.get("data", {}).get("reportData", {}).get("report", {}).get("events", {})
-        )
-        raw_events = ev_data.get("data", [])
+        if not isinstance(ev_res_json, dict) or not isinstance(ev_res_json.get("data"), dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        report_data = ev_res_json["data"].get("reportData")
+        if not isinstance(report_data, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        report = report_data.get("report")
+        if not isinstance(report, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        ev_data = report.get("events")
+        if not isinstance(ev_data, dict) or (
+            "data" not in ev_data or "nextPageTimestamp" not in ev_data
+        ):
+            status = CollectionStatus.PARTIAL
+            reasons.append("INVALID_RESPONSE")
+            break
+        raw_events = ev_data.get("data")
+        if not isinstance(raw_events, list):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        if any(
+            not valid_event(event, start_time_ms=current_start, end_time_ms=end_time_ms)
+            for event in raw_events
+        ):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_EVENT"]
+            break
 
         page_flat = parse_cast_events(raw_events, player_id, start_time_ms)
         for spell_id, times in page_flat.items():
@@ -189,7 +245,19 @@ def fetch_cast_timelines(
                 dest.setdefault(key, []).extend(times)
 
         next_page = ev_data.get("nextPageTimestamp")
-        if not next_page or next_page <= current_start or next_page >= end_time_ms:
+        if next_page is not None and (
+            isinstance(next_page, bool)
+            or not isinstance(next_page, (int, float))
+            or not math.isfinite(float(next_page))
+        ):
+            status = CollectionStatus.PARTIAL
+            reasons.append("INVALID_CURSOR")
+            break
+        if next_page is not None and next_page <= current_start:
+            status = CollectionStatus.PARTIAL
+            reasons.append("CURSOR_NO_PROGRESS")
+            break
+        if next_page is None or next_page >= end_time_ms:
             break
         current_start = next_page
 
@@ -198,4 +266,9 @@ def fetch_cast_timelines(
         sid: {key: tuple(times) for key, times in by_key.items()}
         for sid, by_key in phase_by_id.items()
     }
-    return flat, phased
+    result = (flat, phased)
+    return (
+        (*result, CollectionProvenance(status, tuple(reasons), start_time_ms, end_time_ms))
+        if include_provenance
+        else result
+    )

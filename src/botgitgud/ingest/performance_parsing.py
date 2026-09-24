@@ -38,7 +38,9 @@ def parse_aura_uptimes(buffs_data: dict[str, Any]) -> list[AuraUptime]:
         if not isinstance(a, dict) or "guid" not in a:
             continue
         guid = int(a["guid"])
-        uptime_ms = a.get("totalUptime") or 0.0
+        uptime_ms = a.get("totalUptime")
+        if uptime_ms is None:
+            continue
         result.append(
             AuraUptime(
                 spell_id=guid,

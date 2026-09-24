@@ -1,0 +1,30 @@
+{
+  "head": "b6241df9b53f98226f975f8b227474b700ce0e08",
+  "python": "3.14.6 (tags/v3.14.6:c63aec6, Jun 10 2026, 10:26:10) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "sha256_raw": {
+    "docs/README.md": "57e98aa28cd3877b054d260e5673d6c33761aeb4b551dfeb98aebf531bc60cd5",
+    "docs/m2-3-review-evidence.md": "767b4c3a3fc762171c8c0e028135733b7ac71161b560e5e0ee0e811daeec4f59",
+    "docs/m2-3-specification.md": "1154a7dc1518aa3ec441d8b5476dbb7288c15fb1be12995f20a5472be474d03d",
+    "docs/submilestones/M2.3/spec-v002.md": "1154a7dc1518aa3ec441d8b5476dbb7288c15fb1be12995f20a5472be474d03d",
+    "src/botgitgud/analysis/cohort_match.py": "3efe0145ca5aaaee83708f62e909b7bb82f3d1547c4a4fbaa0838d281d2a8f48",
+    "src/botgitgud/analysis/comparability_provenance.py": "882a84d9f236452780ca2181be7b0881017e23f9be878fa13245b89615a44f9b",
+    "src/botgitgud/analysis/dps_gap.py": "4746ca76d0b934952446fb35a8827255c798af63f3f823755f01dc8addbeb472",
+    "src/botgitgud/analysis/measurement.py": "6edc069b58b2f20d543df8b6a03c1aa275e39b64f78128cb692547a85ea347be",
+    "src/botgitgud/analysis/metric_observations.py": "21a5592b752a75228bdc8f7a7bba2eca783079f2f7c4d74e2dad0480925c84ee",
+    "src/botgitgud/analysis/metric_population.py": "8aff6e01430c2e6fa7b0406ca42a0869f941f4b1186574bb40e80b3287aa5e2a",
+    "src/botgitgud/analysis/performance_features.py": "f50ef1fdf4504bd29f90ca227de8ab59578faa3b1c6fa321b9f88688dd81013b",
+    "src/botgitgud/analysis/pipeline.py": "d6d0a1a0aaae0423ee7deb5910e97b4720aba26fd5407b0bc96cbba63dabb610",
+    "src/botgitgud/analysis/reference_eligibility.py": "66642feb2a94757e6bc7256b62fc01e020925a83b9334d6da3007cc5423c9f08",
+    "src/botgitgud/domain/models.py": "799011715597a47c4945d3d5083e066c91570cb52df43e0f11685a1b145be5ab",
+    "src/botgitgud/ingest/store.py": "2a2a4ef495ee377414b485ae0274ce4acd50b914e36476714ade74c678c642ab",
+    "src/botgitgud/report/contract.py": "22aeb089dc2ed91479d846adb688090c27cc5c72f9d14791ed2aef19bab980ed",
+    "src/botgitgud/runmanifest.py": "0d2c477c51df99f6ee4f0e8781c4fde0710ef6693d31d0316df0e348c8f7fbd0",
+    "tests/golden/__snapshots__/test_new_pipeline_output.ambr": "85928a36d0e9f0052e9b3e88c89ef8b2d622528365b422dc88fe11395981c352",
+    "tests/golden/test_new_pipeline_output.py": "fd715003bbcebbc9096bcfccdb8c8c74521f95ab8e0607d343e4cb24a2173b99",
+    "tests/unit/test_m1_persistence_contract.py": "58e747728d764b23362df6c7b8506f5d0a1c56f2397aecdb5fc9e8b33aaa64d0",
+    "tests/unit/test_m1_required_changes.py": "276156abb97b258450cf56052aa2498d20693ae8641eaafecb540f8a85f74e40",
+    "tests/unit/test_m2_3_comparability_integration.py": "25926d7297d79bf5dbc298f0415a78e229ab28ab161c2677e614caa5856d5a6a",
+    "tests/unit/test_pipeline.py": "393648a682122abfba04058d18801ad01ffcfdc8cd0ebad5c0c7eeec72f571a1"
+  }
+}

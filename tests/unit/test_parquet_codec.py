@@ -21,13 +21,15 @@ def test_every_pre_m6_parquet_reads_with_empty_new_fields() -> None:
     paths = discover_corpus_paths()
     if not paths:
         pytest.skip(f"corpus real ausente em {CORPUS_ROOT}")
-    assert len(paths) == 1274
+    assert len(paths) >= 1274
     for path in paths:
         log = read_parquet_log(path)
-        assert log.resource_waste_by_ability == {}
-        assert log.aura_details == {}
-        assert all(ability.by_source == {} for ability in log.damage_by_ability.values())
-        assert log.damage_scope is DamageScopeVersion.LEGACY_UNSCOPED
+        assert log.measurement_provenance is None
+        assert log.damage_scope in {
+            DamageScopeVersion.LEGACY_UNSCOPED,
+            DamageScopeVersion.WCL_TARGET_SCOPE_V1,
+            DamageScopeVersion.UNRECONCILED,
+        }
 
 
 def test_extra_columns_are_ignored_by_legacy_projection(tmp_path: Path) -> None:

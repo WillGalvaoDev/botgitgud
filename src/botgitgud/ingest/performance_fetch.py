@@ -8,11 +8,13 @@ until it stalls or reaches `end_time_ms`).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping
 from typing import Any
 
 import structlog
 
+from botgitgud.domain.models import CollectionProvenance, CollectionStatus
 from botgitgud.domain.resource_types import resource_type_label
 from botgitgud.errors import ApiError
 from botgitgud.ingest.damage_aggregation import (
@@ -22,6 +24,7 @@ from botgitgud.ingest.damage_aggregation import (
     scope_total,
     support_subtracted_total,
 )
+from botgitgud.ingest.event_validation import valid_event
 from botgitgud.ingest.performance_parsing import parse_resource_waste
 from botgitgud.wcl.queries import QUERY_PLAYER_DAMAGE_EVENTS, QUERY_PLAYER_RESOURCE_EVENTS
 
@@ -39,9 +42,21 @@ def _paginate_events(
     start_time_ms: float,
     end_time_ms: float,
     op_name: str,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], CollectionProvenance]:
     all_events: list[dict[str, Any]] = []
     current_start = start_time_ms
+    status = CollectionStatus.COMPLETE
+    reasons: list[str] = []
+    if not (
+        not isinstance(start_time_ms, bool)
+        and not isinstance(end_time_ms, bool)
+        and math.isfinite(start_time_ms)
+        and math.isfinite(end_time_ms)
+        and 0 <= start_time_ms < end_time_ms
+    ):
+        return all_events, CollectionProvenance(
+            CollectionStatus.UNKNOWN, ("INVALID_INTERVAL",), start_time_ms, end_time_ms
+        )
     while current_start < end_time_ms:
         try:
             res_json = query_fn(
@@ -56,16 +71,61 @@ def _paginate_events(
             )
         except ApiError as e:
             log.warning("performance_fetch.page_failed", op_name=op_name, error=str(e))
+            status = CollectionStatus.PARTIAL
+            reasons.append("API_ERROR")
             break
 
-        ev_data = res_json.get("data", {}).get("reportData", {}).get("report", {}).get("events", {})
-        all_events.extend(ev_data.get("data", []))
+        if not isinstance(res_json, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        data = res_json.get("data")
+        if not isinstance(data, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        report_data = data.get("reportData")
+        if not isinstance(report_data, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        report = report_data.get("report")
+        if not isinstance(report, dict):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        ev_data = report.get("events")
+        if not isinstance(ev_data, dict) or (
+            "data" not in ev_data or "nextPageTimestamp" not in ev_data
+        ):
+            status = CollectionStatus.PARTIAL
+            reasons.append("INVALID_RESPONSE")
+            break
+        page_events = ev_data.get("data")
+        if not isinstance(page_events, list):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_RESPONSE"]
+            break
+        if any(
+            not valid_event(event, start_time_ms=current_start, end_time_ms=end_time_ms)
+            for event in page_events
+        ):
+            status, reasons = CollectionStatus.PARTIAL, ["INVALID_EVENT"]
+            break
+        all_events.extend(page_events)
 
         next_page = ev_data.get("nextPageTimestamp")
-        if not next_page or next_page <= current_start or next_page >= end_time_ms:
+        if next_page is not None and (
+            isinstance(next_page, bool)
+            or not isinstance(next_page, (int, float))
+            or not math.isfinite(float(next_page))
+        ):
+            status = CollectionStatus.PARTIAL
+            reasons.append("INVALID_CURSOR")
+            break
+        if next_page is not None and next_page <= current_start:
+            status = CollectionStatus.PARTIAL
+            reasons.append("CURSOR_NO_PROGRESS")
+            break
+        if next_page is None or next_page >= end_time_ms:
             break
         current_start = next_page
-    return all_events
+    return all_events, CollectionProvenance(status, tuple(reasons), start_time_ms, end_time_ms)
 
 
 def fetch_damage_and_targets(
@@ -83,7 +143,7 @@ def fetch_damage_and_targets(
     several, alongside every pet's, docs/schema_confirmado.md §5), then
     aggregates client-side.
     """
-    raw_events_json = _paginate_events(
+    raw_events_json, _ = _paginate_events(
         query_fn,
         QUERY_PLAYER_DAMAGE_EVENTS,
         report_code=report_code,
@@ -108,9 +168,10 @@ def fetch_scoped_damage_and_targets(
     target_ids: frozenset[int],
     pet_owner_by_actor: Mapping[int, int],
     cast_counts: Mapping[int, int],
-) -> tuple[dict, dict[int, float], float, float, float, frozenset[int]]:
+    include_provenance: bool = False,
+) -> tuple:
     """Fetch raw events once and return V1 decomposition and total terms."""
-    events = _paginate_events(
+    events, provenance = _paginate_events(
         query_fn,
         QUERY_PLAYER_DAMAGE_EVENTS,
         report_code=report_code,
@@ -129,7 +190,7 @@ def fetch_scoped_damage_and_targets(
         for event in events
         if event.get("type") == "damage" and isinstance(event.get("targetID"), int)
     )
-    return (
+    result = (
         damage_by_ability,
         avg_targets,
         support_subtracted,
@@ -137,6 +198,15 @@ def fetch_scoped_damage_and_targets(
         unscoped_own,
         damaged_target_ids,
     )
+    if include_provenance:
+        from botgitgud.ingest.damage_aggregation import build_event_mix
+
+        return (
+            *result,
+            provenance,
+            build_event_mix(scoped_events, player_id, frozenset(pet_owner_by_actor)),
+        )
+    return result
 
 
 def fetch_resource_waste(
@@ -153,7 +223,7 @@ def fetch_resource_waste(
     fetch_cast_timelines' own pattern), and labels each
     `resourceChangeType` via domain/resource_types.py.
     """
-    events = _paginate_events(
+    events, _ = _paginate_events(
         query_fn,
         QUERY_PLAYER_RESOURCE_EVENTS,
         report_code=report_code,

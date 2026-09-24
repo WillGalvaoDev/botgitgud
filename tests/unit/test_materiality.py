@@ -46,32 +46,26 @@ def _ability_gap(
 ) -> AbilityGap:
     return AbilityGap(
         spell=SpellInfo(spell_id, f"Ability {spell_id}", "curated"),
-        n_u=5,
-        d_u=500,
-        p_u=100,
-        n_r=10,
-        p_r=110,
-        d_r=1100,
-        delta_d=-600,
-        volume=-550,
-        efficiency=-100,
-        interaction=50,
         delta_dps_pct=delta_dps_pct,
+        delta_ability_dps=delta_dps_pct,
         volume_dps_pct=-5.5,
         efficiency_dps_pct=-1,
         diagnosis=cast(Diagnosis, "usos_perdidos_excedentes"),
         confidence="alta",
-        unit_kind="CAST",
-        cohort_share=cohort_share,
+        unit_kind="DAMAGE_EVENT",
+        gross_dps_finding=cohort_share,
+        review_eligible=True,
     )
 
 
-def _ability_finding(*, estimated_gain_pct: float = 9.0) -> Finding:
-    return Finding("ABILITY_GAP", "t", "d", estimated_gain_pct, "alta")
+def _ability_finding(*, estimated_gain_pct: float = 9.0, spell_id: int = 123) -> Finding:
+    return Finding("ABILITY_GAP", "t", "d", "alta", evidence={"spell_id": spell_id})
 
 
 def _dps_gap_report(abilities: tuple[AbilityGap, ...] = ()) -> DpsGapReport:
-    return DpsGapReport(1000, 950, 0.0526, 300, abilities, 0, 0)
+    return DpsGapReport(
+        1000, 950, 0.0526, 300, abilities, 0, 0, entity_review_eligible=frozenset({42})
+    )
 
 
 # -- item 1: bottom-of-distribution share -> red -> material -----------------
@@ -224,8 +218,8 @@ def test_execution_finding_material_iff_red_or_yellow() -> None:
 def test_material_candidates_apply_eligibility_before_materiality() -> None:
     red = grade_scalar(1.0, [10.0] * 20, "higher_better")
     green = grade_scalar(10.0, [1.0] * 20, "higher_better")
-    ineligible_finding = _ability_finding(estimated_gain_pct=50.0)
-    green_finding = _ability_finding(estimated_gain_pct=10.0)
+    ineligible_finding = _ability_finding(estimated_gain_pct=50.0, spell_id=1)
+    green_finding = _ability_finding(estimated_gain_pct=10.0, spell_id=2)
     death = ExecutionFinding("DEATH", grade_scalar(1.0, [0.0] * 20, "lower_better"))
     direct = Remediation(RemediationKind.DIRECT_ACTION, RemediationBasis.OBSERVED_DEATH)
     no_action = Remediation()
@@ -270,6 +264,7 @@ def test_empty_material_set_still_produces_a_conclusion() -> None:
         material_count=count,
     )
     assert conclusion.material_count == 0
+    assert conclusion.standing is not None
     assert conclusion.standing.grade in {"green", "yellow", "red", "insufficient"}
     assert conclusion.percentile == 99.58
 
@@ -287,6 +282,7 @@ def test_standing_and_percentile_are_independent_facts() -> None:
         material_count=0,
     )
     assert conclusion.percentile == 12.3
+    assert conclusion.standing is not None
     assert conclusion.standing.grade == "green"
     assert conclusion.standing.user_value == 1000.0
     assert conclusion.sample.matched_n == 20

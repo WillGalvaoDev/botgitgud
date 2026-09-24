@@ -14,9 +14,10 @@ more active time/uptime is good, more deaths/downtime/waste is bad. Being
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from botgitgud.analysis.grading import (
     MIN_N_FOR_GRADING,
@@ -26,8 +27,15 @@ from botgitgud.analysis.grading import (
     compute_quantile_stats,
     empirical_quantile,
 )
+from botgitgud.analysis.measurement import MetricComparison
 from botgitgud.domain.models import PlayerLog
 from botgitgud.domain.spells import SpellCatalog, SpellInfo
+
+if TYPE_CHECKING:
+    # metric_observations.py (transitively) imports grade_scalar/scalar_is_finite
+    # from this module, so a runtime import of metric_population here would
+    # cycle. TYPE_CHECKING keeps this to static analysis only.
+    from botgitgud.analysis.metric_population import MetricPopulationSet
 
 Direction = Literal["higher_better", "lower_better"]
 
@@ -44,6 +52,20 @@ class ScalarFinding:
     stats: QuantileStats
     ci90: tuple[float, float] | None
     direction: Direction
+
+
+def scalar_is_finite(scalar: ScalarFinding) -> bool:
+    values = (
+        scalar.user_value,
+        scalar.quantile,
+        scalar.stats.p10,
+        scalar.stats.p25,
+        scalar.stats.p50,
+        scalar.stats.p75,
+        scalar.stats.p90,
+        *(scalar.ci90 or ()),
+    )
+    return all(value is None or math.isfinite(value) for value in values)
 
 
 def _grade_one_tailed(q: float, direction: Direction) -> Grade:
@@ -79,6 +101,7 @@ def grade_scalar(
 class UptimeFinding:
     spell: SpellInfo
     finding: ScalarFinding
+    comparison: MetricComparison | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,8 +120,33 @@ class PerformanceFindings:
 
 
 def _build_uptime_findings(
-    player_log: PlayerLog, matched_logs: Sequence[PlayerLog], catalog: SpellCatalog
+    player_log: PlayerLog,
+    matched_logs: Sequence[PlayerLog],
+    catalog: SpellCatalog,
+    *,
+    metric_populations: Mapping[str, MetricPopulationSet] | None = None,
+    metric_population_pool: Sequence[PlayerLog] = (),
 ) -> tuple[UptimeFinding, ...]:
+    """M2.3 §5: the grade itself uses the DESCRIPTIVE population of
+    ``aura_uptime_fraction:<sid>`` from M2.2 (``metric_populations``, when
+    given) — but the ``presence`` relevance gate below stays on the ledger
+    (``matched_logs``, T3.1's original rule), unchanged.
+    """
+    from botgitgud.analysis.metric_observations import compare_metrics
+
+    if metric_populations is not None:
+        uptime_populations = {
+            metric_id: population_set
+            for metric_id, population_set in metric_populations.items()
+            if metric_id.startswith("aura_uptime_fraction:")
+        }
+        comparisons = compare_metrics(
+            player_log, metric_population_pool, catalog, populations=uptime_populations
+        )
+    else:
+        comparisons = compare_metrics(
+            player_log, matched_logs, catalog, metric_names=("aura_uptime_fraction",)
+        )
     n = len(matched_logs)
     if n == 0:
         return ()
@@ -124,12 +172,18 @@ def _build_uptime_findings(
         # de quem o mantém de verdade. `presence` (acima, cohort inteiro)
         # continua controlando só SE o achado é relevante o bastante para
         # reportar (T3.1); a distribuição de comparação é outra decisão.
-        ref_values = [rl.uptimes[spell_id] for rl in matched_logs if spell_id in rl.uptimes]
-        user_value = player_log.uptimes.get(spell_id, 0.0)
+        # `.get`, not `[...]`: in population mode `comparisons`' key set is
+        # whatever metric_populations enumerated over the hygienic pool,
+        # which is always a superset of matched_logs' own uptime ids
+        # (matched_logs ⊆ hygienic) — but never assume that from here.
+        comparison = comparisons.get(f"aura_uptime_fraction:{spell_id}")
+        if comparison is None or comparison.finding is None:
+            continue
         findings.append(
             UptimeFinding(
                 spell=catalog.get(spell_id),
-                finding=grade_scalar(user_value, ref_values, "higher_better"),
+                finding=comparison.finding,
+                comparison=comparison,
             )
         )
     return tuple(findings)
@@ -152,8 +206,18 @@ def _build_waste_findings(
 
 
 def analyze_performance_features(
-    player_log: PlayerLog, matched_logs: Sequence[PlayerLog], catalog: SpellCatalog
+    player_log: PlayerLog,
+    matched_logs: Sequence[PlayerLog],
+    catalog: SpellCatalog,
+    *,
+    metric_populations: Mapping[str, MetricPopulationSet] | None = None,
+    metric_population_pool: Sequence[PlayerLog] = (),
 ) -> PerformanceFindings:
+    """``metric_populations``/``metric_population_pool`` (M2.3 §5) route only
+    the uptime grade through M2.2's DESCRIPTIVE population; every other
+    grade here (active time, deaths, downtime, resource waste) stays on the
+    ledger (``matched_logs``), unchanged.
+    """
     active_time = None
     if player_log.active_time_pct is not None:
         ref_active = [rl.active_time_pct for rl in matched_logs if rl.active_time_pct is not None]
@@ -169,6 +233,12 @@ def analyze_performance_features(
         active_time=active_time,
         deaths=deaths,
         downtime=downtime,
-        uptimes=_build_uptime_findings(player_log, matched_logs, catalog),
+        uptimes=_build_uptime_findings(
+            player_log,
+            matched_logs,
+            catalog,
+            metric_populations=metric_populations,
+            metric_population_pool=metric_population_pool,
+        ),
         resource_waste=_build_waste_findings(player_log, matched_logs),
     )

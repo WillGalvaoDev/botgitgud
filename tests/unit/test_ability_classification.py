@@ -233,6 +233,9 @@ def test_only_authorized_source_modules_consume_m5_modules() -> None:
         source_root / "botgitgud" / "analysis" / "core_ability_set.py",
         source_root / "botgitgud" / "analysis" / "feature_availability.py",
         source_root / "botgitgud" / "analysis" / "pipeline.py",
+        # M1 consumes the established role classifier to apply its stricter
+        # four-part coaching eligibility contract without redefining roles.
+        source_root / "botgitgud" / "analysis" / "dps_gap.py",
     }
     needles = ("ability_role", "ability_overrides", "ability_classification")
     consumers = {

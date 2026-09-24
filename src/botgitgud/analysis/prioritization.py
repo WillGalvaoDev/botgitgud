@@ -71,8 +71,8 @@ def _compare(left: MaterialCandidate, right: MaterialCandidate) -> int:
         right_finding = right.finding
         assert isinstance(left_finding, Finding)
         assert isinstance(right_finding, Finding)
-        left_gain = left_finding.estimated_gain_pct
-        right_gain = right_finding.estimated_gain_pct
+        left_gain = left_finding.observed_deficit_player_pp
+        right_gain = right_finding.observed_deficit_player_pp
         if left_gain is not None and right_gain is not None and left_gain != right_gain:
             return -1 if left_gain > right_gain else 1
 
@@ -97,7 +97,7 @@ def _same_evidence_precedence(left: MaterialCandidate, right: MaterialCandidate)
     right_finding = right.finding
     assert isinstance(left_finding, Finding)
     assert isinstance(right_finding, Finding)
-    return left_finding.estimated_gain_pct == right_finding.estimated_gain_pct
+    return left_finding.observed_deficit_player_pp == right_finding.observed_deficit_player_pp
 
 
 def select_material_priorities(

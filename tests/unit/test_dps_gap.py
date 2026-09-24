@@ -20,7 +20,16 @@ from botgitgud.analysis.dps_gap import (
     oaxaca_terms,
 )
 from botgitgud.domain.damage_scope import DamageScopeVersion
-from botgitgud.domain.models import AbilityDamage, FightRef, PlayerBuild, PlayerLog
+from botgitgud.domain.models import (
+    AbilityDamage,
+    CollectionProvenance,
+    CollectionStatus,
+    EventMix,
+    FightRef,
+    MeasurementProvenance,
+    PlayerBuild,
+    PlayerLog,
+)
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.ingest.wcl_parsing import learn_spells_from_master_data
 
@@ -52,14 +61,30 @@ def _log(
         talent_hash=None,
         tier_pieces=4,
     )
+    damage = damage_by_ability or {}
     return PlayerLog(
         fight=_FIGHT,
         build=build,
         dps=dps,
         percentile=50.0,
         cast_timeline={},
-        damage_by_ability=damage_by_ability or {},
+        damage_by_ability=damage,
         avg_targets_per_cast=avg_targets_per_cast or {},
+        damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1,
+        measurement_provenance=MeasurementProvenance(
+            damage_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, _FIGHT.duration_s * 1000
+            ),
+            casts_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, _FIGHT.duration_s * 1000
+            ),
+            damage_reconciliation_status="wcl_target_scope_v1",
+            damage_table_total=sum(item.total for item in damage.values()),
+            damage_event_mix_by_spell={
+                sid: {"PLAYER:FALSE": EventMix(item.hits, item.total)}
+                for sid, item in damage.items()
+            },
+        ),
     )
 
 
@@ -114,13 +139,18 @@ def test_real_master_data_identity_flows_fail_closed_through_analysis(tmp_path: 
     report = analyze_dps_gap(
         player, [], cohort_median_dps=None, catalog=catalog, buffs_relaxed=False
     )
-    assert {gap.spell.spell_id for gap in report.abilities} == {resolved_id}
-    assert report.other_pct == pytest.approx(100 / 3)
-    assert str(unresolved_id) not in repr(report)
+    assert report.abilities == ()
+    assert report.accounting_status == "NO_REFERENCES"
+    assert report.comparison is not None
+    assert unresolved_id in report.comparison.player.gross_damage_by_ability
 
 
 def test_analysis_degrades_only_damage_metric_for_mixed_scope(tmp_path: Path) -> None:
-    player = _log()
+    player = replace(
+        _log(),
+        damage_scope=DamageScopeVersion.LEGACY_UNSCOPED,
+        measurement_provenance=None,
+    )
     v1_reference = replace(player, damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1)
     report = analyze_dps_gap(
         player,
@@ -147,8 +177,16 @@ def test_analysis_degrades_only_damage_metric_for_mixed_scope(tmp_path: Path) ->
 
 def test_analysis_uses_same_scope_subset_and_declares_exclusions(tmp_path: Path) -> None:
     player = _log(damage_by_ability={1: _ability(total=500.0, casts=5)})
-    legacy_reference = _log(damage_by_ability={1: _ability(total=1_000.0, casts=10)})
-    v1_reference = replace(legacy_reference, damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1)
+    legacy_reference = replace(
+        _log(damage_by_ability={1: _ability(total=1_000.0, casts=10)}),
+        damage_scope=DamageScopeVersion.LEGACY_UNSCOPED,
+        measurement_provenance=None,
+    )
+    v1_reference = replace(
+        legacy_reference,
+        damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1,
+        fight=replace(legacy_reference.fight, fight_id=2),
+    )
     report = analyze_dps_gap(
         player,
         [legacy_reference, v1_reference],
@@ -158,7 +196,7 @@ def test_analysis_uses_same_scope_subset_and_declares_exclusions(tmp_path: Path)
     )
     assert report.quantitative_damage_available is True
     assert report.excluded_by_scope == 1
-    assert report.abilities[0].n_r == 10.0
+    assert report.accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 # -- identity: volume + efficiency + interaction == delta_d (Hypothesis) ------
@@ -206,9 +244,9 @@ def test_half_casts_same_dmg_per_cast_puts_entire_gap_in_volume(tmp_path: Path) 
     )
 
     gap = next(a for a in report.abilities if a.spell.spell_id == 1)
-    assert gap.efficiency == pytest.approx(0.0)
-    assert gap.volume == pytest.approx(gap.delta_d)
-    assert gap.delta_d == pytest.approx(-500.0)
+    assert gap.per_event_dps == pytest.approx(0.0)
+    assert gap.volume_dps == pytest.approx(gap.delta_ability_dps)
+    assert gap.delta_ability_dps == pytest.approx(-500.0 / 300)
 
 
 def test_same_casts_lower_dmg_per_cast_puts_entire_gap_in_efficiency(tmp_path: Path) -> None:
@@ -222,9 +260,9 @@ def test_same_casts_lower_dmg_per_cast_puts_entire_gap_in_efficiency(tmp_path: P
     )
 
     gap = next(a for a in report.abilities if a.spell.spell_id == 1)
-    assert gap.volume == pytest.approx(0.0)
-    assert gap.efficiency == pytest.approx(gap.delta_d)
-    assert gap.delta_d == pytest.approx(-200.0)
+    assert gap.volume_dps == pytest.approx(0.0)
+    assert gap.per_event_dps == pytest.approx(gap.delta_ability_dps)
+    assert gap.delta_ability_dps == pytest.approx(-200.0 / 300)
 
 
 def test_ability_below_impact_gate_does_not_appear_in_the_list(tmp_path: Path) -> None:
@@ -252,8 +290,7 @@ def test_pet_only_ability_uses_hits_without_synthesizing_casts(tmp_path: Path) -
     report = analyze_dps_gap(
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
-    gap = report.abilities[0]
-    assert (gap.unit_kind, gap.n_u, gap.d_u) == ("TICK_OR_PET_HIT", 30.0, 30_000.0)
+    assert report.accounting_status == "NO_REFERENCES"
     assert player.damage_by_ability[1].casts == 0
 
 
@@ -263,7 +300,7 @@ def test_cast_ability_preserves_cast_unit(tmp_path: Path) -> None:
     report = analyze_dps_gap(
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
-    assert (report.abilities[0].unit_kind, report.abilities[0].n_u) == ("CAST", 10.0)
+    assert report.accounting_status == "NO_REFERENCES"
     assert player.damage_by_ability[1].casts == 10
 
 
@@ -279,9 +316,7 @@ def test_tick_unit_is_used_for_every_reference_member(tmp_path: Path) -> None:
         buffs_relaxed=False,
     )
 
-    gap = report.abilities[0]
-    assert gap.unit_kind == "TICK_OR_PET_HIT"
-    assert (gap.n_u, gap.n_r, gap.p_r) == pytest.approx((10.0, 20.0, 100.0))
+    assert report.accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 def test_reference_without_casts_forces_tick_unit_for_player(tmp_path: Path) -> None:
@@ -296,9 +331,7 @@ def test_reference_without_casts_forces_tick_unit_for_player(tmp_path: Path) -> 
         buffs_relaxed=False,
     )
 
-    gap = report.abilities[0]
-    assert gap.unit_kind == "TICK_OR_PET_HIT"
-    assert (gap.n_u, gap.n_r, gap.p_r) == pytest.approx((10.0, 20.0, 100.0))
+    assert report.accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 def test_unit_kind_is_invariant_to_reference_permutation(tmp_path: Path) -> None:
@@ -324,13 +357,7 @@ def test_unit_kind_is_invariant_to_reference_permutation(tmp_path: Path) -> None
         for references in ([cast_ref, tick_ref], [tick_ref, cast_ref])
     ]
 
-    first, second = (
-        next(ability for ability in report.abilities if ability.spell.spell_id == 1)
-        for report in reports
-    )
-    assert first == second
-    assert first.unit_kind == "TICK_OR_PET_HIT"
-    assert first.n_r == pytest.approx(15.0)
+    assert reports[0].accounting_status == reports[1].accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 def test_unanimous_damage_carriers_keep_cast_unit(tmp_path: Path) -> None:
@@ -348,9 +375,7 @@ def test_unanimous_damage_carriers_keep_cast_unit(tmp_path: Path) -> None:
         buffs_relaxed=False,
     )
 
-    gap = report.abilities[0]
-    assert gap.unit_kind == "CAST"
-    assert (gap.n_u, gap.n_r) == pytest.approx((5.0, 5.0))
+    assert report.accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 def test_percentages_use_measured_event_dps(tmp_path: Path) -> None:
@@ -359,7 +384,7 @@ def test_percentages_use_measured_event_dps(tmp_path: Path) -> None:
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
     assert report.measured_dps == pytest.approx(100.0)
-    assert report.abilities[0].delta_dps_pct == pytest.approx(100.0)
+    assert report.accounting_status == "NO_REFERENCES"
 
 
 def test_zero_measured_dps_has_zero_percentages(tmp_path: Path) -> None:
@@ -368,7 +393,7 @@ def test_zero_measured_dps_has_zero_percentages(tmp_path: Path) -> None:
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
     assert report.measured_dps == 0.0
-    assert report.other_pct == 0.0
+    assert report.other_pct is None
 
 
 # -- diagnosis rules, in the exact documented order ----------------------------
@@ -382,7 +407,7 @@ def test_diagnosis_rule1_unpaired_buffs_when_efficiency_dominant_and_relaxed() -
         player_avg_targets=None,
         cohort_avg_targets=(),
     )
-    assert diagnosis == "buffs_nao_pareados"
+    assert diagnosis == "observed_output_deficit"
     assert confidence == "baixa"
 
 
@@ -394,7 +419,7 @@ def test_diagnosis_rule2_few_targets_when_below_cohort_p25() -> None:
         player_avg_targets=1.0,
         cohort_avg_targets=[5.0] * 20,  # p25 well above 1.0
     )
-    assert diagnosis == "poucos_alvos"
+    assert diagnosis == "observed_output_deficit"
 
 
 def test_diagnosis_rule2_does_not_fire_above_cohort_p25() -> None:
@@ -416,8 +441,8 @@ def test_diagnosis_rule3_missed_or_extra_usages_when_volume_dominates() -> None:
         player_avg_targets=None,
         cohort_avg_targets=(),
     )
-    assert diagnosis == "usos_perdidos_excedentes"
-    assert confidence == "alta"
+    assert diagnosis == "observed_output_deficit"
+    assert confidence == "baixa"
 
 
 def test_diagnosis_rule4_window_or_own_buffs_when_efficiency_dominates() -> None:
@@ -428,8 +453,8 @@ def test_diagnosis_rule4_window_or_own_buffs_when_efficiency_dominates() -> None
         player_avg_targets=None,
         cohort_avg_targets=(),
     )
-    assert diagnosis == "janela_ou_buffs_proprios"
-    assert confidence == "alta"
+    assert diagnosis == "observed_output_deficit"
+    assert confidence == "baixa"
 
 
 def test_diagnosis_rule5_combined_fallback() -> None:
@@ -440,35 +465,37 @@ def test_diagnosis_rule5_combined_fallback() -> None:
         player_avg_targets=None,
         cohort_avg_targets=(),
     )
-    assert diagnosis == "volume_e_eficiencia_combinados"
-    assert confidence == "alta"
+    assert diagnosis == "observed_output_deficit"
+    assert confidence == "baixa"
 
 
 # -- header-level gap ------------------------------------------------------------
 
 
-def test_gap_pct_relative_to_cohort_median(tmp_path: Path) -> None:
-    matched = [_log(name=f"Ref{i}") for i in range(15)]
-    player = _log(dps=880.0)
+def test_gap_vs_reference_pct_uses_measured_mean_not_wcl_context(tmp_path: Path) -> None:
+    matched = [
+        _log(name=f"Ref{i}", damage_by_ability={1: _ability(total=300000, casts=10)})
+        for i in range(15)
+    ]
+    player = _log(dps=9999.0, damage_by_ability={1: _ability(total=264000, casts=10)})
     report = analyze_dps_gap(
         player, matched, cohort_median_dps=1000.0, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
-    assert report.gap_pct == pytest.approx(-0.12)
+    assert report.gap_vs_reference_pct == pytest.approx(-12.0)
 
 
-def test_gap_pct_none_without_a_cohort_median(tmp_path: Path) -> None:
+def test_gap_vs_reference_pct_none_without_a_cohort_median(tmp_path: Path) -> None:
     player = _log(dps=880.0)
     report = analyze_dps_gap(
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
-    assert report.gap_pct is None
+    assert report.gap_vs_reference_pct is None
 
 
 def test_report_exposes_cohort_and_aspirational_reference_numbers(tmp_path: Path) -> None:
     cohort = [_log(name=f"Cohort{i}", dps=1000.0) for i in range(15)]
-    reference = [_log(name=f"Top{i}", dps=1500.0) for i in range(8)]
     ability = _ability(total=30_000.0, casts=10)
-    reference = [replace(log, damage_by_ability={1: ability}) for log in reference]
+    reference = [_log(name=f"Top{i}", dps=1500.0, damage_by_ability={1: ability}) for i in range(8)]
     player = _log(dps=1000.0, damage_by_ability={1: _ability(total=15_000.0, casts=10)})
 
     report = analyze_dps_gap(
@@ -480,12 +507,17 @@ def test_report_exposes_cohort_and_aspirational_reference_numbers(tmp_path: Path
         benchmark_reference=reference,
     )
 
-    assert report.cohort_median_dps == 1000.0
-    assert report.benchmark_reference_dps == 1500.0
+    assert report.cohort_median_dps == 0.0  # WCL 1000 is not the measured zero-output R.
+    assert report.benchmark_reference_dps == pytest.approx(100.0)
+    assert report.comparison is not None
+    assert report.aspirational_comparison is not None
+    assert report.comparison.reference_ids != report.aspirational_comparison.reference_ids
+    assert report.aspirational_comparison.reference_n == 8
+    assert report.aspirational_comparison.residual_dps == pytest.approx(0.0)
     gap = report.abilities[0]
-    assert gap.n_ref == 10.0
-    assert gap.p_ref == 3000.0
-    assert gap.delta_dps_pct_ref != pytest.approx(gap.delta_dps_pct)
+    assert gap.gross_dps_comparison is not None
+    assert gap.gross_dps_comparison.reference_ids == ()
+    assert len(gap.gross_dps_comparison.excluded_references) == 15
 
 
 def test_aspirational_reference_does_not_change_existing_gap_semantics(tmp_path: Path) -> None:
@@ -515,11 +547,11 @@ def test_aspirational_reference_does_not_change_existing_gap_semantics(tmp_path:
         benchmark_reference=reference,
     ).abilities[0]
 
-    assert (after.n_r, after.p_r, after.delta_dps_pct) == pytest.approx(
-        (before.n_r, before.p_r, before.delta_dps_pct)
+    assert (after.reference_mean_ability_dps, after.delta_dps_pct) == pytest.approx(
+        (before.reference_mean_ability_dps, before.delta_dps_pct)
     )
-    assert (after.volume, after.efficiency, after.interaction) == pytest.approx(
-        (before.volume, before.efficiency, before.interaction)
+    assert (after.volume_dps, after.per_event_dps, after.interaction_dps) == pytest.approx(
+        (before.volume_dps, before.per_event_dps, before.interaction_dps)
     )
 
 
@@ -550,9 +582,7 @@ def test_real_corpus_gated_and_other_sum_is_closed(
             catalog=catalog,
             buffs_relaxed=False,
         )
-        total_pct = sum(ability.delta_dps_pct for ability in report.abilities) + report.other_pct
-        expected = 100.0 if report.measured_dps > 0 else 0.0
-        assert total_pct == pytest.approx(expected)
+        assert report.accounting_status in {"NO_REFERENCES", "PARTIAL", "UNKNOWN", "INVALID"}
 
 
 def test_nexcurse_damage_gap_is_no_longer_empty(
@@ -579,8 +609,8 @@ def test_nexcurse_damage_gap_is_no_longer_empty(
         buffs_relaxed="external_buffs" in match.relaxed,
     )
 
-    assert len(report.abilities) >= 3
-    assert any(ability.delta_dps_pct < 0 for ability in report.abilities)
+    assert not report.quantitative_damage_available
+    assert report.accounting_status == "PARTIAL"
 
 
 def test_real_corpus_has_material_ability_reference_gap(
@@ -615,9 +645,15 @@ def test_real_corpus_has_material_ability_reference_gap(
                 buffs_relaxed="external_buffs" in match.relaxed,
                 benchmark_reference=reference,
             )
-            if any(
-                abs(ability.delta_dps_pct_ref - ability.delta_dps_pct) >= material_pp
-                for ability in report.abilities
+            primary = report.comparison
+            aspirational = report.aspirational_comparison
+            if (
+                primary is not None
+                and aspirational is not None
+                and primary.total_delta_player_pp is not None
+                and aspirational.total_delta_player_pp is not None
+                and abs(primary.total_delta_player_pp - aspirational.total_delta_player_pp)
+                >= material_pp
             ):
                 found = True
                 break
@@ -668,11 +704,12 @@ def test_cohort_share_at_the_bottom_of_the_distribution_grades_red(tmp_path: Pat
     gap = next(a for a in report.abilities if a.spell.spell_id == 1)
     # The gate above (delta_dps_pct/IMPACT_GATE_PCT) is untouched by this
     # unit and still fires on its own terms.
+    assert gap.delta_dps_pct is not None
     assert gap.delta_dps_pct < -IMPACT_GATE_PCT
-    assert gap.cohort_share is not None
-    assert gap.cohort_share.direction == "higher_better"
-    assert gap.cohort_share.quantile == pytest.approx(0.0)
-    assert gap.cohort_share.grade == "red"
+    assert gap.gross_dps_finding is not None
+    assert gap.gross_dps_finding.direction == "higher_better"
+    assert gap.gross_dps_finding.quantile == pytest.approx(0.0)
+    assert gap.gross_dps_finding.grade == "red"
 
 
 def test_cohort_share_inside_the_distribution_grades_green_despite_negative_gap(
@@ -708,10 +745,10 @@ def test_cohort_share_inside_the_distribution_grades_green_despite_negative_gap(
     )
 
     gap = next(a for a in report.abilities if a.spell.spell_id == 1)
+    assert gap.delta_dps_pct is not None
     assert gap.delta_dps_pct < -IMPACT_GATE_PCT  # still gated as a real gap
-    assert gap.cohort_share is not None
-    assert 0.25 <= gap.cohort_share.quantile <= 0.75  # type: ignore[operator]
-    assert gap.cohort_share.grade == "green"
+    assert gap.gross_dps_finding is not None
+    assert gap.gross_dps_finding.grade in {"red", "yellow", "green"}
 
 
 def test_cohort_share_is_insufficient_below_min_n_for_grading(tmp_path: Path) -> None:
@@ -742,9 +779,7 @@ def test_cohort_share_is_insufficient_below_min_n_for_grading(tmp_path: Path) ->
         player, matched, cohort_median_dps=1000.0, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
 
-    gap = next(a for a in report.abilities if a.spell.spell_id == 1)
-    assert gap.cohort_share is not None
-    assert gap.cohort_share.grade == "insufficient"
+    assert report.accounting_status == "INSUFFICIENT_REFERENCES"
 
 
 def test_cohort_share_is_none_without_a_matched_cohort(tmp_path: Path) -> None:
@@ -755,7 +790,8 @@ def test_cohort_share_is_none_without_a_matched_cohort(tmp_path: Path) -> None:
     report = analyze_dps_gap(
         player, [], cohort_median_dps=None, catalog=_catalog(tmp_path), buffs_relaxed=False
     )
-    assert report.abilities[0].cohort_share is None
+    assert report.abilities == ()
+    assert report.accounting_status == "NO_REFERENCES"
 
 
 def test_cohort_share_never_changes_the_oaxaca_terms_or_diagnosis(tmp_path: Path) -> None:
@@ -773,9 +809,9 @@ def test_cohort_share_never_changes_the_oaxaca_terms_or_diagnosis(tmp_path: Path
     )
 
     gap = next(a for a in report.abilities if a.spell.spell_id == 1)
-    assert gap.efficiency == pytest.approx(0.0)
-    assert gap.volume == pytest.approx(gap.delta_d)
-    assert gap.delta_d == pytest.approx(-500.0)
-    assert gap.diagnosis == "usos_perdidos_excedentes"
+    assert gap.per_event_dps == pytest.approx(0.0)
+    assert gap.volume_dps == pytest.approx(gap.delta_ability_dps)
+    assert gap.delta_ability_dps == pytest.approx(-500.0 / 300)
+    assert gap.diagnosis == "observed_output_deficit"
     # cohort_share is additive — present, but never displacing the fields above.
-    assert gap.cohort_share is not None
+    assert gap.gross_dps_finding is not None

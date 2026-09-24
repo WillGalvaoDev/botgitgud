@@ -202,7 +202,7 @@ def test_build_features_computes_rates_and_aggregates() -> None:
     assert features["c_n_tracked_auras"] == 2.0
     assert features["c_resource_waste_total"] == 15.0
     assert features["c_resource_waste_per_minute"] == pytest.approx(3.0)
-    assert features["c_mean_targets_per_cast"] == pytest.approx(3.0)
+    assert "c_mean_targets_per_cast" not in features
     assert features["nc_n_external_buffs"] == 2.0
     assert features["nc_has_augmentation"] == 1.0
     assert features["nc_raid_size"] == 20.0
@@ -234,7 +234,7 @@ def test_build_features_handles_an_empty_log() -> None:
     features = build_features(bare, raid_size=None)
     assert features["c_total_casts"] == 0.0
     assert features["c_mean_uptime"] == 0.0
-    assert features["c_mean_targets_per_cast"] == 0.0
+    assert "c_mean_targets_per_cast" not in features
 
 
 # -- dataset materialization -----------------------------------------------------

@@ -112,7 +112,9 @@ CREATE TABLE IF NOT EXISTS spells (
 _CREATE_RUNS_TABLE = """
 CREATE TABLE IF NOT EXISTS runs (
     cohort_id VARCHAR, code_version VARCHAR, generated_at TIMESTAMP,
-    n_members INTEGER, wcl_partition INTEGER, settings_hash VARCHAR
+    n_members INTEGER, wcl_partition INTEGER, settings_hash VARCHAR,
+    measurement_input_version VARCHAR, damage_comparison_version VARCHAR,
+    reference_n_quantitative INTEGER
 )
 """
 # T1.5: insert-only audit log of every report generated — no PK, same
@@ -133,6 +135,20 @@ class Store:
         self._conn.execute(_CREATE_COHORT_REGISTRY_TABLE)
         self._conn.execute(_CREATE_SPELLS_TABLE)
         self._conn.execute(_CREATE_RUNS_TABLE)
+        # Additive, idempotent migration for databases created before M1.
+        for column, dtype in (
+            ("measurement_input_version", "VARCHAR"),
+            ("damage_comparison_version", "VARCHAR"),
+            ("reference_n_quantitative", "INTEGER"),
+            # M2.3 §7.3: aditivo. Linhas antigas ficam NULL nessas colunas e
+            # são lidas como versão desconhecida/legada, nunca a corrente.
+            ("reference_eligibility_policy_version", "VARCHAR"),
+            ("metric_population_policy_version", "VARCHAR"),
+            ("ledger_matching_policy_version", "VARCHAR"),
+            ("comparability_provenance_version", "VARCHAR"),
+            ("comparability_provenance_json", "VARCHAR"),
+        ):
+            self._conn.execute(f"ALTER TABLE runs ADD COLUMN IF NOT EXISTS {column} {dtype}")
 
     def close(self) -> None:
         self._conn.close()
@@ -320,8 +336,12 @@ class Store:
             self._conn.execute(
                 """
                 INSERT INTO runs (
-                    cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash,
+                    measurement_input_version, damage_comparison_version, reference_n_quantitative,
+                    reference_eligibility_policy_version, metric_population_policy_version,
+                    ledger_matching_policy_version, comparability_provenance_version,
+                    comparability_provenance_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     manifest.cohort_id,
@@ -330,6 +350,14 @@ class Store:
                     manifest.n_members,
                     manifest.wcl_partition,
                     manifest.settings_hash,
+                    manifest.measurement_input_version,
+                    manifest.damage_comparison_version,
+                    manifest.reference_n_quantitative,
+                    manifest.reference_eligibility_policy_version,
+                    manifest.metric_population_policy_version,
+                    manifest.ledger_matching_policy_version,
+                    manifest.comparability_provenance_version,
+                    manifest.comparability_provenance_json,
                 ],
             )
 

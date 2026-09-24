@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from botgitgud.analysis.dps_gap import AbilityGap, DpsGapReport
-from botgitgud.analysis.findings import ExecutionFinding, Finding, RelevanceFinding
+from botgitgud.analysis.findings import (
+    ExecutionFinding,
+    Finding,
+    RelevanceFinding,
+    pair_ability_findings,
+)
 from botgitgud.knowledge.rotation_knowledge import Observability, Origin, RotationRule
 from botgitgud.knowledge.spec_slugs import Branch
 
@@ -21,6 +26,7 @@ class RemediationKind(StrEnum):
 
 
 class RemediationBasis(StrEnum):
+    OBSERVED_OUTPUT_DEFICIT = "OBSERVED_OUTPUT_DEFICIT"
     USE_COUNT = "USE_COUNT"
     AVERAGE_TARGET_DEFICIT = "AVERAGE_TARGET_DEFICIT"
     DAMAGE_PER_USE = "DAMAGE_PER_USE"
@@ -34,6 +40,7 @@ class RemediationBasis(StrEnum):
 
 
 class RemediationCondition(StrEnum):
+    CAUSE_NOT_IDENTIFIED = "CAUSE_NOT_IDENTIFIED"
     WINDOW_OR_OWN_BUFFS_UNDISTINGUISHED = "WINDOW_OR_OWN_BUFFS_UNDISTINGUISHED"
     MULTIPLE_COMPONENTS_NO_SINGLE_CAUSE = "MULTIPLE_COMPONENTS_NO_SINGLE_CAUSE"
     UPTIME_CAUSE_UNKNOWN = "UPTIME_CAUSE_UNKNOWN"
@@ -76,6 +83,7 @@ def derive_remediation(
     finding: Finding | RelevanceFinding | ExecutionFinding,
     *,
     ability: AbilityGap | None = None,
+    entity_eligible: bool = False,
 ) -> FindingRemediation:
     """Consume authoritative diagnoses/scalars without inferring their causes."""
     kind = RemediationKind
@@ -92,17 +100,10 @@ def derive_remediation(
             result = Remediation(kind.DIRECT_ACTION, execution_basis, finding.subject)
     elif finding.kind == "ABILITY_GAP" and ability is not None:
         mapping = {
-            "usos_perdidos_excedentes": (kind.DIRECT_ACTION, basis.USE_COUNT, None),
-            "poucos_alvos": (kind.DIRECT_ACTION, basis.AVERAGE_TARGET_DEFICIT, None),
-            "janela_ou_buffs_proprios": (
+            "observed_output_deficit": (
                 kind.CONDITIONAL_ACTION,
-                basis.DAMAGE_PER_USE,
-                condition.WINDOW_OR_OWN_BUFFS_UNDISTINGUISHED,
-            ),
-            "volume_e_eficiencia_combinados": (
-                kind.CONDITIONAL_ACTION,
-                basis.VOLUME_AND_EFFICIENCY,
-                condition.MULTIPLE_COMPONENTS_NO_SINGLE_CAUSE,
+                basis.OBSERVED_OUTPUT_DEFICIT,
+                condition.CAUSE_NOT_IDENTIFIED,
             ),
             "buffs_nao_pareados": (kind.NO_SPECIFIC_ACTION, basis.UNPAIRED_BUFFS, None),
         }
@@ -119,7 +120,12 @@ def derive_remediation(
                 spell_id,
                 condition.UPTIME_CAUSE_UNKNOWN,
             )
-    return FindingRemediation(finding, result, result.kind is not kind.NO_SPECIFIC_ACTION)
+    coaching_eligible = result.kind is not kind.NO_SPECIFIC_ACTION
+    if isinstance(finding, Finding) and finding.kind == "ABILITY_GAP":
+        coaching_eligible = coaching_eligible and ability is not None and ability.review_eligible
+    if not isinstance(finding, ExecutionFinding) and finding.kind == "UPTIME":
+        coaching_eligible = coaching_eligible and entity_eligible
+    return FindingRemediation(finding, result, coaching_eligible)
 
 
 def build_remediations(
@@ -135,16 +141,17 @@ def build_remediations(
     Finding omits identity/diagnosis, so pair with that same authoritative
     sequence; never reconstruct identity from presentation text or scores.
     """
-    abilities = (
-        [item for item in dps_gap.abilities if item.delta_dps_pct < 0]
-        if dps_gap.quantitative_damage_available
-        else []
-    )
     return (
         tuple(
             derive_remediation(finding, ability=ability)
-            for finding, ability in zip(findings, abilities, strict=True)
+            for finding, ability in pair_ability_findings(dps_gap, findings)
         )
-        + tuple(derive_remediation(item) for item in relevance_findings)
+        + tuple(
+            derive_remediation(
+                item,
+                entity_eligible=item.evidence.get("spell_id") in dps_gap.entity_review_eligible,
+            )
+            for item in relevance_findings
+        )
         + tuple(derive_remediation(item) for item in execution_findings)
     )

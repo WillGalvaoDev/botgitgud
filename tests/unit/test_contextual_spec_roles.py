@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import cache
 from pathlib import Path
 from typing import NamedTuple
@@ -31,6 +32,7 @@ from botgitgud.domain.canonical_ability import (
 )
 from botgitgud.domain.canonical_role import CanonicalAbilityRole
 from botgitgud.domain.contextual_spec_roles import CONTEXTUAL_SPEC_ROLES
+from botgitgud.domain.damage_scope import DamageScopeVersion
 from botgitgud.domain.models import PlayerLog
 from botgitgud.domain.specs import SpecId, SpecSupport, classify_spec
 from botgitgud.domain.spells import SpellCatalog
@@ -139,7 +141,13 @@ def test_external_recipients_block_all_features_but_devastation_keeps_damage_fea
         assert {feature.kind for feature in features} == set(FeatureKind)
         if spec == DEVASTATION:
             damage = next(item for item in features if item.kind is FeatureKind.DAMAGE_SHARE)
-            assert damage.available
+            assert damage.available is (log.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1)
+            # Same contextual role with an explicitly reconciled synthetic copy.
+            synthetic = replace(log, damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1)
+            positive = evaluate_feature_availability(
+                ability, role, synthetic, identities=identities
+            )
+            assert next(f for f in positive if f.kind is FeatureKind.DAMAGE_SHARE).available
         else:
             assert all(not feature.available for feature in features)
             assert all(FeatureBlockReason.NON_SPEC_ROLE in feature.reasons for feature in features)

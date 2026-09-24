@@ -112,6 +112,10 @@ _ACTION_BY_BASIS: Final[Mapping[RemediationBasis, str]] = MappingProxyType(
             "Revise volume e eficiência em conjunto; os dados não isolam uma causa."
         ),
         RemediationBasis.UNPAIRED_BUFFS: ("Não há uma ação específica segura com esta comparação."),
+        RemediationBasis.OBSERVED_OUTPUT_DEFICIT: (
+            "Revise a contribuição observada desta habilidade; "
+            "a causa da diferença não foi identificada."
+        ),
         RemediationBasis.OBSERVED_DEATH: "Priorize completar a luta vivo.",
         RemediationBasis.ACTIVE_PARTICIPATION: (
             "Busque aumentar sua participação ativa ao longo da luta."
@@ -271,16 +275,16 @@ def _ability_gap(contract: ReportContract, spell_id: int | None) -> AbilityGap |
     return None
 
 
-def _cohort_position_clause(cohort_share: ScalarFinding | None) -> str | None:
+def _cohort_position_clause(gross_dps_finding: ScalarFinding | None) -> str | None:
     """RB-4: the measured position among comparable logs, stated from the
-    same graded scalar `AbilityGap.cohort_share` already carries -- the
+    same graded scalar `AbilityGap.gross_dps_finding` already carries -- the
     identical declared phrasing `_conclusion` uses for overall standing,
     never a new free-form phrase and never `estimated_gain_pct`.
     """
-    if cohort_share is None:
+    if gross_dps_finding is None:
         return None
-    n = cohort_share.stats.n
-    quantile = cohort_share.quantile
+    n = gross_dps_finding.stats.n
+    quantile = gross_dps_finding.quantile
     if quantile is None or not (0 < n <= 9999):
         return None
     if quantile <= 1 / n:
@@ -321,8 +325,12 @@ def _measured(candidate: MaterialCandidate, contract: ReportContract) -> str:
 
     basis = candidate.remediation.basis
     gap = _ability_gap(contract, spell_id)
-    position = _cohort_position_clause(gap.cohort_share) if gap is not None else None
+    position = _cohort_position_clause(gap.gross_dps_finding if gap is not None else None)
     happened = {
+        RemediationBasis.OBSERVED_OUTPUT_DEFICIT: (
+            f"O DPS observado de {ability} ficou abaixo da referência; "
+            "a causa da diferença não foi identificada."
+        ),
         RemediationBasis.USE_COUNT: (
             f"O uso de {ability} foi {position}."
             if position is not None
@@ -374,12 +382,16 @@ def _priority(candidate: MaterialCandidate, contract: ReportContract, marker: st
 
 def _conclusion(contract: ReportContract, has_priorities: bool) -> str:
     conclusion = contract.conclusion
-    grade = conclusion.standing.grade if conclusion is not None else "missing"
+    grade = (
+        conclusion.standing.grade
+        if conclusion is not None and conclusion.standing is not None
+        else "missing"
+    )
     base = _CONCLUSIONS[(grade, has_priorities)]
     if conclusion is None or grade not in {"red", "yellow"}:
         return base
     n = conclusion.sample.matched_n
-    quantile = conclusion.standing.quantile
+    quantile = conclusion.standing.quantile if conclusion.standing is not None else None
     if 0 < n <= 9999 and quantile is not None and quantile <= 1 / n:
         return (
             f"Seu dano foi o mais baixo dos {n} comparáveis; "

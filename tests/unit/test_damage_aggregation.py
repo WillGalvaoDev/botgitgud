@@ -91,7 +91,7 @@ def test_aggregate_damage_by_ability_hits_and_casts() -> None:
     assert ability2.casts == 0
 
 
-def test_avg_targets_per_cast_uses_distinct_targets_over_own_casts() -> None:
+def test_avg_targets_per_cast_proxy_is_retired() -> None:
     events = [
         {"type": "damage", "sourceID": PLAYER_ID, "targetID": 1, "abilityGameID": 1, "amount": 10},
         {"type": "damage", "sourceID": PLAYER_ID, "targetID": 2, "abilityGameID": 1, "amount": 10},
@@ -99,8 +99,7 @@ def test_avg_targets_per_cast_uses_distinct_targets_over_own_casts() -> None:
     ]
     parsed = parse_damage_events(events, frozenset({PLAYER_ID}))
     _damage_by_ability, avg_targets = aggregate_damage_by_ability(parsed, cast_counts={1: 2})
-    # 2 distinct targets (1, 2) / 2 casts = 1.0
-    assert avg_targets[1] == 1.0
+    assert avg_targets == {}
 
 
 def test_avg_targets_per_cast_omitted_for_zero_cast_abilities() -> None:

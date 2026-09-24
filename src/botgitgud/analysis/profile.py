@@ -15,9 +15,11 @@ absolute counts, not rates).
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 from botgitgud.analysis.cadence import compute_cadence, is_eligible
 from botgitgud.analysis.cohort import (
@@ -25,9 +27,11 @@ from botgitgud.analysis.cohort import (
     usage_rate_per_minute,
     within_positional_band,
 )
+from botgitgud.analysis.measurement import damage_reference_id
 from botgitgud.domain.blacklist import MAJOR_CD_BLACKLIST
 from botgitgud.domain.cooldowns import get_base_cooldown
-from botgitgud.domain.models import PhaseKey, PlayerLog, SpellProfile
+from botgitgud.domain.measurement_validation import collection_interval_problem, valid_player_casts
+from botgitgud.domain.models import CollectionStatus, PhaseKey, PlayerLog, SpellProfile
 
 
 def _sorted_slot_distributions(
@@ -53,6 +57,41 @@ def build_cd_reference_profile(
     """Returns (profile, n_positional) — n_positional is reported to the
     user when small (< POSITIONAL_MIN_N, see cohort.py).
     """
+    by_identity: dict[str, PlayerLog] = {}
+    conflicts: set[str] = set()
+    for log in reference_logs:
+        identity = damage_reference_id(log)
+        if identity in by_identity and by_identity[identity] != log:
+            conflicts.add(identity)
+        by_identity[identity] = log
+    reference_logs = tuple(
+        log
+        for log in reference_logs
+        if log.measurement_provenance is not None
+        and log.measurement_provenance.casts_collection.status is CollectionStatus.COMPLETE
+        and collection_interval_problem(
+            log.measurement_provenance.casts_collection, log.fight.duration_s
+        )
+        is None
+        and math.isfinite(log.fight.duration_s)
+        and log.fight.duration_s > 0
+        and damage_reference_id(log) not in conflicts
+    )
+    cleaned = []
+    for log in reference_logs:
+        valid = {
+            sid: times for sid, times in log.cast_timeline.items() if valid_player_casts(log, sid)
+        }
+        cleaned.append(
+            replace(
+                log,
+                cast_timeline=valid,
+                phase_cast_timeline={
+                    sid: times for sid, times in log.phase_cast_timeline.items() if sid in valid
+                },
+            )
+        )
+    reference_logs = tuple(cleaned)
     num_logs = len(reference_logs)
     if num_logs == 0:
         return {}, 0
@@ -106,21 +145,9 @@ def build_cd_reference_profile(
             phase_slot_ref_times[key] = key_distributions
 
         if positional_logs:
-            # Spells the positional subset never cast still contribute an
-            # explicit rate of 0.0 — otherwise the median would silently
-            # skip them instead of reflecting "basically never used here".
-            # EC.1 audit (deliberately left as-is): this zero-padding is
-            # about SITUATIONAL usage within a cohort that already shares
-            # this spell (e.g. a defensive CD skipped on an easy pull) —
-            # WCL cast data cannot distinguish "chose not to cast" from
-            # "doesn't have this spell in their build" either way, so
-            # removing the padding wouldn't specifically fix build
-            # heterogeneity, only trade one honest interpretation for
-            # another. The actual "minority-build spell disappears" bug
-            # lives in eligibility (see `n_with_spell` below), not here.
-            rates = rates_by_spell.get(spell_id, []) + [0.0] * (
-                num_positional - len(rates_by_spell.get(spell_id, []))
-            )
+            rates = rates_by_spell.get(spell_id, [])
+            if not rates:
+                continue
             n_usages_median = usage_count_at_duration(statistics.median(rates), target_duration_s)
         else:
             n_usages_median = 0.0
@@ -137,6 +164,7 @@ def build_cd_reference_profile(
             # `presence_count[spell_id]` já É essa contagem (o numerador
             # de `presence`), só exposta separadamente para `is_eligible`.
             n_with_spell=presence_count[spell_id],
+            n_positional_with_spell=len(rates_by_spell.get(spell_id, [])),
         )
 
     return profile, num_positional

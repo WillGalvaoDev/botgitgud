@@ -101,22 +101,40 @@ def test_new_pipeline_report_matches_golden_snapshot(tmp_path: Path, snapshot: A
 
 
 def test_zarad_fixture_exercises_eight_fundamental_abilities(tmp_path: Path) -> None:
+    """M2.3: this cassette's report.rankings records the Zarad fight under
+    zone partition 2 (verified directly in the cassette JSON), while the
+    recorded GetZonePartitions response has partition 3 as the zone's
+    default — the two are captured in the same cassette session, so this
+    is real data showing a genuinely "old" log relative to what M2.1 §5.3
+    treats as the current/comparable partition. Every reference candidate
+    is fetched against the current partition (3), so all 24 get
+    PARTITION_MISMATCH against the player's own partition 2 — M2.1
+    correctly excludes every one of them (basic eligibility is a necessary,
+    not sufficient, condition of comparison; SPEC M2.1 §1). With zero
+    eligible references the ledger is INSUFFICIENT_REFERENCES and
+    `_report_ability_sections` is not computed (M2.3 §6.2) — `core_abilities`
+    is honestly empty, not the eight abilities a same-partition cohort would
+    have shown before M2.1 was wired into production.
+    """
     deps = _build_deps(tmp_path)
     req = AnalysisRequest(
         report_code=FIXTURE_REPORT_CODE, fight_id=FIXTURE_FIGHT_ID, character_name=FIXTURE_CHARACTER
     )
     result = run_analysis(req, deps)
 
-    assert {ability.name for ability in result.core_abilities} == {
-        "Call Dreadstalkers",
-        "Demonbolt",
-        "Grimoire: Imp Lord",
-        "Hand of Gul'dan",
-        "Implosion",
-        "Ruination",
-        "Summon Demonic Tyrant",
-        "Summon Felguard",
-    }
+    assert result.core_abilities == ()
+    assert result.comparability is not None
+    assert result.comparability.ledger.state == "INSUFFICIENT_REFERENCES"
+    # Composite M2.1 verdicts also carry HOTFIX_NOT_OBSERVABLE (every axis's
+    # reasons are concatenated, SPEC M2.1 §6) and, for some references,
+    # SCOPE_MISMATCH too — PARTITION_MISMATCH is what every one of the 24
+    # shares, proving the exclusion traces back to the old-partition cause
+    # established above, not to some unrelated axis.
+    assert all(
+        "PARTITION_MISMATCH" in reasons
+        for reasons in result.comparability.eligibility.excluded_reasons.values()
+    )
+    assert len(result.comparability.eligibility.excluded_reasons) == 24
 
 
 def test_new_pipeline_has_no_raw_ability_ids(tmp_path: Path) -> None:
@@ -129,9 +147,23 @@ def test_new_pipeline_has_no_raw_ability_ids(tmp_path: Path) -> None:
 
 
 def test_new_pipeline_differs_from_legacy_and_shows_missed_usage(tmp_path: Path) -> None:
-    """Critério de aceite da T0.7 (ainda válido pós-refatoração da T1.6):
-    'o novo snapshot difere do da T0.2 e a diferença contém a seção
-    USOS PERDIDOS'.
+    """Critério de aceite original da T0.7: 'o novo snapshot difere do da
+    T0.2 e a diferença contém a seção USOS PERDIDOS'.
+
+    M2.3: that second half is no longer demonstrable by THIS specific real
+    fixture. As established in
+    test_zarad_fixture_exercises_eight_fundamental_abilities, the Zarad
+    cassette is a genuinely old-partition log once M2.1 is wired into
+    production — every reference candidate is PARTITION_MISMATCH, the
+    ledger is empty, and `compare_all_spells` (the "USOS PERDIDOS" source)
+    is never computed (M2.3 §6.2): showing that section here would mean
+    fabricating a comparison M2.1 correctly says is unavailable, which the
+    SPEC forbids. Re-recording a fresher cassette is out of scope for M2.3
+    (no live network access, no new queries). What remains true, and is
+    still exactly what this test protects, is the T0.7 invariant that the
+    new pipeline never silently reproduces the legacy report — here it
+    honestly reports the population as unavailable instead, a state legacy
+    had no concept of at all.
     """
     legacy_snapshot_path = (
         Path(__file__).resolve().parent / "__snapshots__" / "test_legacy_output.ambr"
@@ -141,8 +173,8 @@ def test_new_pipeline_differs_from_legacy_and_shows_missed_usage(tmp_path: Path)
     report_text = _run_new_pipeline(tmp_path)
 
     assert report_text != legacy_text
-    assert "USOS PERDIDOS" in report_text
-    assert "USOS PERDIDOS" not in legacy_text
+    assert "NO_REFERENCES" in report_text
+    assert "NO_REFERENCES" not in legacy_text
 
 
 def test_new_pipeline_never_fabricates_parse_med(tmp_path: Path) -> None:

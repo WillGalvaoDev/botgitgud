@@ -9,8 +9,8 @@ def _finding(**overrides: object) -> Finding:
     defaults: dict[str, object] = {
         "kind": "ABILITY_GAP",
         "title": "Chaos Strike",
-        "detail": "dano por cast abaixo — janela ou buffs próprios",
-        "estimated_gain_pct": 6.3,
+        "detail": "O DPS observado ficou abaixo da referência; causa não identificada.",
+        "observed_deficit_player_pp": 6.3,
         "confidence": "alta",
     }
     defaults.update(overrides)
@@ -39,7 +39,9 @@ def test_empty_ranking_is_honest_about_unquantified_findings() -> None:
 
 
 def test_renders_between_one_and_three_numbered_actions() -> None:
-    findings = [_finding(title=f"Ability{i}", estimated_gain_pct=float(i)) for i in range(1, 3)]
+    findings = [
+        _finding(title=f"Ability{i}", observed_deficit_player_pp=float(i)) for i in range(1, 3)
+    ]
     lines = render_top_actions_section(TopPriorities(level1=tuple(findings)))
     text = "\n".join(lines)
     assert "1. **Ability1**" in text

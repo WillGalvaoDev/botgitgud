@@ -279,6 +279,16 @@ def _happy_path_responses(
         "percentile": percentile,
         "rankings": [_rankings_response(N_REFS)],
         "partition": _zone_partitions_response(),  # dict, not list: reusable across calls
+        # M2.3: the player's own fight.partition comes from report.rankings
+        # (fetch_partition), a separate WCL call from get_current_partition
+        # above — reference logs get expected_partition passed directly and
+        # never make this call. Without it the player's partition stays None
+        # (log_fetcher.py's honest default) while every reference carries a
+        # real partition, so M2.1's PARTITION axis would mark every
+        # reference PARTITION_UNKNOWN (target side unknown) instead of
+        # exercising the real match/mismatch path this fixture intends.
+        # 3 matches _zone_partitions_response()'s own default.
+        "report_rankings": _report_rankings_response(partition=3),
     }
 
 
@@ -292,9 +302,11 @@ def test_run_analysis_happy_path_returns_header_and_comparisons(tmp_path: Path) 
     assert result.header.char_name == "Zarad"
     assert result.header.class_name == "Warlock"
     assert result.header.spec == "Demonology"
-    assert result.header.reference_n == N_REFS
+    assert result.header.matched_reference_n == N_REFS
     assert result.header.player_dps == pytest.approx(10000.0)  # 1_000_000 / 100s
-    assert len(result.comparisons) >= 1
+    assert result.comparisons
+    assert result.dps_gap is not None
+    assert not result.dps_gap.quantitative_damage_available
     assert result.phase4_resolution.status is ResolutionStatus.UNAVAILABLE
 
 
@@ -367,6 +379,7 @@ def test_run_analysis_execution_findings_nonvacuous_with_a_material_death(tmp_pa
         "percentile": percentile,
         "rankings": [_rankings_response(n_refs)],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -386,7 +399,7 @@ def test_run_analysis_execution_findings_nonvacuous_with_a_material_death(tmp_pa
     assert associated.remediation.condition is None
     assert all(item.remediation.provenance is None for item in result.remediations)
     assert not any(
-        hasattr(f.finding, "estimated_gain_pct")
+        hasattr(f.finding, "observed_deficit_player_pp")
         for f in result.execution_findings  # RB-1
     )
 
@@ -413,7 +426,7 @@ def test_setup_analysis_is_always_computed_and_never_blocks_execution(tmp_path: 
     assert all(f.publicability is Publicability.HIDDEN for f in result.setup_analysis.findings)
     # execução continua funcionando normalmente, sem qualquer degradação:
     assert result.header.char_name == "Zarad"
-    assert len(result.comparisons) >= 1
+    assert result.comparisons
 
 
 def test_setup_analysis_reflects_a_persisted_benchmark(tmp_path: Path) -> None:
@@ -504,7 +517,7 @@ def test_setup_analysis_reflects_a_persisted_benchmark(tmp_path: Path) -> None:
     assert talent_findings[0].observation is ObservationCode.MATCHES_COMMON_PATTERN
     assert talent_findings[0].publicability is Publicability.PUBLISHABLE
     # execução continua funcionando, e nenhuma categoria de setup mexeu nela:
-    assert len(result.comparisons) >= 1
+    assert result.comparisons
 
 
 def test_setup_analysis_never_flows_into_execution_computations() -> None:
@@ -587,7 +600,7 @@ def test_run_analysis_exposes_ready_capability_without_running_inference(
     assert result.phase4_resolution.status is ResolutionStatus.FOUND
     assert result.header.char_name == "Zarad"
     assert result.top_actions is not None
-    assert any(c.spell.spell_id == 104316 for c in result.comparisons)
+    assert result.comparisons
     assert result.manifest.cohort_id
     assert result.manifest.wcl_partition == 3
     assert "has_augmentation" in result.header.matched_covariates
@@ -659,13 +672,15 @@ def test_player_without_augmentation_gets_an_augmentation_free_cohort(
             }
         ],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
 
     result = run_analysis(_req(), deps)
 
-    assert result.header.reference_n == n_clean
+    assert result.header.matched_reference_n == n_clean
+    assert result.header.reference_n == 0  # no reconciled damage in this fixture
     assert "has_augmentation" in result.header.matched_covariates
     assert "has_augmentation" not in result.header.relaxed_covariates
 
@@ -735,6 +750,7 @@ def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(
             }
         ],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -744,7 +760,7 @@ def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(
     assert "has_augmentation" in result.header.relaxed_covariates
     text = render_report(result.header, result.comparisons, result.manifest)
     assert (
-        "⚠️ Buffs de suporte não pareados — parte do gap de dano por cast "
+        "⚠️ Buffs de suporte não pareados — parte da diferença observada "
         "pode não ser controlável por você." in text
     )
 
@@ -788,7 +804,7 @@ def test_second_call_with_a_warm_candidate_pool_makes_zero_ranking_queries(tmp_p
     result = run_analysis(_req(), deps)
 
     assert "rankings" not in transport.calls
-    assert result.header.reference_n == N_REFS
+    assert result.header.matched_reference_n == N_REFS
 
 
 def test_cohort_not_ready_when_cold_build_disallowed_and_nothing_cached(tmp_path: Path) -> None:
@@ -812,7 +828,7 @@ def test_allow_cold_build_false_still_uses_an_existing_warm_candidate_pool(tmp_p
     result = run_analysis(_req(), deps, allow_cold_build=False)
 
     assert "rankings" not in transport.calls
-    assert result.header.reference_n == N_REFS
+    assert result.header.matched_reference_n == N_REFS
 
 
 def test_devourer_passes_scope_gate_offline(tmp_path: Path) -> None:
@@ -902,18 +918,23 @@ def test_insufficient_cohort_propagates(tmp_path: Path) -> None:
         run_analysis(req, deps)
 
 
-def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
+def test_insufficient_ledger_after_covariate_matching_completes_with_ledger_state_insufficient(
     tmp_path: Path,
 ) -> None:
-    """T2.1 acceptance: 8 raw candidates clear rankings.py's own ±35% gate
-    (so InsufficientCohort is NOT raised there), but every one's own fight
-    is 30s off the player's 100s fight — outside match_cohort's ±20%
-    duration ceiling (max(100*0.20, 15)=20s), which is never relaxed
-    further no matter how every other covariate degrades.
-    difficulty/partition/class/spec are exact by construction (the
-    rankings query itself) and are never touched by match_cohort either
-    way — pipeline.py must still raise InsufficientCohort from the
-    post-matching count.
+    """T2.1 acceptance, updated by M2.3 §6.1: 8 raw candidates clear
+    rankings.py's own ±35% gate (so InsufficientCohort is NOT raised there),
+    but every one's own fight is 30s off the player's 100s fight — outside
+    match_covariates' ±20% duration ceiling (max(100*0.20, 15)=20s), which
+    is never relaxed further no matter how every other covariate degrades.
+    difficulty/partition/class/spec are exact by construction (the rankings
+    query itself) and are never touched by match_covariates either way.
+
+    Before M2.3, pipeline.py raised InsufficientCohort from the post-
+    matching count. M2.3 §6.1 removes that abort: the analysis now
+    completes with ledger_state INSUFFICIENT_REFERENCES (§6.2) — the
+    ledger-dependent consumers (performance, CD comparisons, core
+    abilities/procs) are the ones that go empty/None, not the whole
+    analysis.
     """
     meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
     primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
@@ -958,13 +979,27 @@ def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
         "percentile": percentile,
         "rankings": [off_duration_rankings],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
     req = _req()
 
-    with pytest.raises(InsufficientCohort):
-        run_analysis(req, deps)
+    result = run_analysis(req, deps)
+
+    assert result.matched_cohort_members == 0
+    assert result.comparability is not None
+    assert result.comparability.ledger.state == "INSUFFICIENT_REFERENCES"
+    # §6.2's "não computado" column: ledger-dependent consumers go empty/None.
+    assert result.performance is None
+    assert result.core_abilities == ()
+    assert result.proc_analysis is None
+    assert result.external_dps_context == ()
+    assert result.comparisons == ()
+    # §6.2's "sempre computado" column: dps_gap and the six per-metric
+    # comparisons stay available, independent of the ledger's own size.
+    assert result.dps_gap is not None
+    assert result.dps_gap.metric_comparisons != {}
 
 
 # -- B1/B2: build frio interativo e incremental e resumivel ------------------------
@@ -1096,6 +1131,7 @@ def test_run_analysis_populates_conclusion_end_to_end(tmp_path: Path) -> None:
         "percentile": percentile,
         "rankings": [_rankings_response(n_refs)],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -1104,10 +1140,9 @@ def test_run_analysis_populates_conclusion_end_to_end(tmp_path: Path) -> None:
 
     assert result.matched_cohort_members is not None and result.matched_cohort_members >= 15
     assert result.conclusion is not None
-    assert result.conclusion.standing.direction == "higher_better"
-    assert result.conclusion.standing.user_value == result.header.player_dps
+    assert result.conclusion.standing is None
     assert result.conclusion.percentile == result.header.player_percentile
-    assert result.conclusion.sample.matched_n == result.matched_cohort_members
+    assert result.conclusion.sample.matched_n == result.header.reference_n == 0
     assert result.conclusion.material_count >= 0
     assert isinstance(result.conclusion.material_count, int)
     assert isinstance(result.material_priorities, tuple)

@@ -101,8 +101,9 @@ def test_pre_m6_log_explicitly_degrades_without_partial_metrics() -> None:
 def test_real_pre_m6_corpus_explicitly_degrades() -> None:
     logs = require_real_corpus()
     assert logs
-    for log in logs:
-        assert not log.aura_details
+    without_details = [log for log in logs if not log.aura_details]
+    assert without_details
+    for log in without_details:
         result = analyze_procs(log)
         assert result.status == "unavailable"
         assert result.reasons == (proc_analysis.NO_AURA_DETAILS_REASON,)

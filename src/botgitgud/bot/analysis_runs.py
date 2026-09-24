@@ -88,6 +88,9 @@ class AnalysisRun:
     cohort_members: int | None = None
     reference_pool_members: int | None = None
     matched_cohort_members: int | None = None
+    measurement_input_version: str | None = None
+    damage_comparison_version: str | None = None
+    reference_n_quantitative: int | None = None
 
     # caminho
     hot_path: bool | None = None
@@ -145,7 +148,8 @@ def record_analysis_result(run: AnalysisRun, result: Any) -> None:
     run.class_name = header.class_name
     run.spec_name = header.spec
     run.duration_s = header.duration_max_s
-    run.cohort_members = header.reference_n  # contrato legado: pos-matching
+    matched_n = getattr(header, "matched_reference_n", None)
+    run.cohort_members = matched_n if matched_n is not None else header.reference_n
     # Fakes/implementacoes antigas podem nao expor os campos novos. Ausencia
     # permanece None (desconhecido), jamais e preenchida por inferencia.
     run.reference_pool_members = getattr(result, "reference_pool_members", None)
@@ -155,6 +159,9 @@ def record_analysis_result(run: AnalysisRun, result: Any) -> None:
     if result.manifest is not None:
         run.cohort_id = result.manifest.cohort_id
         run.partition = result.manifest.wcl_partition
+        run.measurement_input_version = getattr(result.manifest, "measurement_input_version", None)
+        run.damage_comparison_version = getattr(result.manifest, "damage_comparison_version", None)
+        run.reference_n_quantitative = getattr(result.manifest, "reference_n_quantitative", None)
         run.cohort_state = "ready"
 
 

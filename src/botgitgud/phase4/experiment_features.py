@@ -82,9 +82,6 @@ FEATURE_REGISTRY: tuple[FeatureSpec, ...] = (
     FeatureSpec(
         "c_resource_waste_per_minute", FeatureRole.CONTROLLABLE, "duration-normalized waste"
     ),
-    FeatureSpec(
-        "c_mean_targets_per_cast", FeatureRole.CONTROLLABLE, "mean distinct targets per cast"
-    ),
     # -- target ---------------------------------------------------------------
     FeatureSpec("y_rank_percent", FeatureRole.TARGET, "WCL rankPercent, 0-100"),
 )
@@ -101,6 +98,16 @@ EXCLUDED_LEAKAGE_COLUMNS: tuple[FeatureSpec, ...] = (
     FeatureSpec("bracket_percent", FeatureRole.EXCLUDED_LEAKAGE, "a variant of the target"),
     FeatureSpec("total_parses", FeatureRole.EXCLUDED_LEAKAGE, "character history, proxy identity"),
     FeatureSpec("percentile", FeatureRole.EXCLUDED_LEAKAGE, "raw alias of the target column"),
+)
+
+# Retired in M1; retained as an explicit registry entry for audits and to
+# prevent accidental reintroduction into new feature spaces.
+RETIRED_FEATURES: tuple[FeatureSpec, ...] = (
+    FeatureSpec(
+        "c_mean_targets_per_cast",
+        FeatureRole.EXCLUDED_LEAKAGE,
+        "retired: cast-instance association is unavailable in M1",
+    ),
 )
 
 

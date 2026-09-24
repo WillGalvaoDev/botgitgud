@@ -225,7 +225,11 @@ def compare_all_spells(
                 ref_phase_times=sp.phase_ref_times,
                 intervals=player_log.fight.phase_intervals,
                 n_usages_median=sp.n_usages_median,
-                reference_n=reference_n,
+                reference_n=(
+                    sp.n_positional_with_spell
+                    if sp.n_positional_with_spell is not None
+                    else reference_n
+                ),
                 gap_penalty=gap_penalty,
                 phase_slot_ref_times=sp.phase_slot_ref_times,
                 flat_ref_times=sp.ref_times,

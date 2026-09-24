@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\wsgon\\OneDrive\\Desktop\\BotGITGUD\\.venv\\Scripts\\python.exe",
+    "-B",
+    "-m",
+    "pytest",
+    "tests/unit/test_m2_1_reference_eligibility.py",
+    "-rs"
+  ],
+  "exit_code": 0,
+  "seconds": 1.2873013019561768,
+  "stdout": ".....................................s..                                 [100%]\n=========================== short test summary info ===========================\nSKIPPED [1] tests\\unit\\test_m2_1_reference_eligibility.py:544: corpus real ausente em C:\\Users\\wsgon\\OneDrive\\Desktop\\BotGITGUD-M2.1-product\\data\\raw; a prova de cobertura real do M2.1 nesta su\u00edte \u00e9 test_replay_gate1_scope_rankings_census_matches_manual_expectation (replay de tests/fixtures/gate1_scope); ver docs/m2-1-review-evidence.md \u00a74\n39 passed, 1 skipped in 0.67s\n",
+  "stderr": ""
+}

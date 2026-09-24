@@ -8,6 +8,7 @@ JSON-string columns rather than native Arrow nested types.
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pyarrow as pa
@@ -19,14 +20,51 @@ from botgitgud.domain.models import (
     AbilitySourceDamage,
     AuraBand,
     AuraDetail,
+    CollectionProvenance,
+    CollectionStatus,
+    EventMix,
     FightRef,
     GearPiece,
+    MeasurementProvenance,
     PhaseInterval,
     PlayerBuild,
     PlayerLog,
     SetupProfile,
     TalentNode,
 )
+
+
+def _encode_provenance(value: MeasurementProvenance | None) -> str | None:
+    if value is None:
+        return None
+    payload = asdict(value)
+    payload["damage_collection"]["status"] = value.damage_collection.status.value
+    payload["casts_collection"]["status"] = value.casts_collection.status.value
+    payload["damage_event_mix_by_spell"] = {
+        str(spell): {key: asdict(mix) for key, mix in mixes.items()}
+        for spell, mixes in value.damage_event_mix_by_spell.items()
+    }
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def _decode_provenance(raw: str | None) -> MeasurementProvenance | None:
+    if not raw:
+        return None
+    payload = json.loads(raw)
+    for key in ("damage_collection", "casts_collection"):
+        item = payload[key]
+        item["status"] = CollectionStatus(item["status"])
+        item["reasons"] = tuple(item.get("reasons", ()))
+        payload[key] = CollectionProvenance(**item)
+    payload["damage_event_mix_by_spell"] = {
+        int(spell): {key: EventMix(**mix) for key, mix in mixes.items()}
+        for spell, mixes in payload.get("damage_event_mix_by_spell", {}).items()
+    }
+    payload["pet_actor_ids"] = tuple(payload.get("pet_actor_ids", ()))
+    payload["targets_per_cast_reasons"] = tuple(
+        payload.get("targets_per_cast_reasons", ("CAST_INSTANCE_LINK_UNAVAILABLE",))
+    )
+    return MeasurementProvenance(**payload)
 
 
 def _encode_setup(setup: SetupProfile | None) -> str | None:
@@ -162,6 +200,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
                 if log.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
                 else 0.0
             ],
+            "measurement_provenance_json": [_encode_provenance(log.measurement_provenance)],
         }
     )
     pq.write_table(table, path)
@@ -255,4 +294,5 @@ def read_parquet_log(path: Path) -> PlayerLog:
             if damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
             else 0.0
         ),
+        measurement_provenance=_decode_provenance(row.get("measurement_provenance_json")),
     )

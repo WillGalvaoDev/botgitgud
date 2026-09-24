@@ -55,7 +55,7 @@ def render_uptimes_section(findings: Sequence[UptimeFinding]) -> list[str]:
     lines = ["", "🔰 **UPTIMES**", "-" * 42]
     for uf in findings:
         line = f"**{uf.spell.name}**: {uf.finding.user_value * 100:.1f}%"
-        if uf.finding.stats.p50 is not None:
+        if uf.finding.stats.n >= 8 and uf.finding.stats.p50 is not None:
             line += f" (coorte mediana: {uf.finding.stats.p50 * 100:.1f}%)"
         lines.append(f"{line} {_status(uf.finding)}")
     return lines

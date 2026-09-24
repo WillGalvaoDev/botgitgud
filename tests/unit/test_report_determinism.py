@@ -19,7 +19,14 @@ import pytest
 
 from botgitgud.analysis.cohort import COHORT_MIN_HARD
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
-from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
+from botgitgud.domain.models import (
+    CollectionProvenance,
+    CollectionStatus,
+    FightRef,
+    MeasurementProvenance,
+    PlayerBuild,
+    PlayerLog,
+)
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
 
 FIREBALL = 133
@@ -60,6 +67,11 @@ def _log(
         dps=100000.0,
         percentile=50.0,
         cast_timeline=cast_timeline or {},
+        measurement_provenance=MeasurementProvenance(
+            casts_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, duration_s * 1000
+            )
+        ),
     )
 
 

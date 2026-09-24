@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from botgitgud.domain.models import AbilityDamage, AbilitySourceDamage
+from botgitgud.domain.models import AbilityDamage, AbilitySourceDamage, EventMix
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +22,31 @@ class RawDamageEvent:
     source_id: int
     target_id: int
     amount: float
+    origin: str = "UNKNOWN"
+    periodicity: str = "UNKNOWN"
+
+
+def build_event_mix(
+    events: Sequence[RawDamageEvent], player_id: int, pet_ids: frozenset[int]
+) -> dict[int, dict[str, EventMix]]:
+    """Build exclusive provenance buckets without inferring missing tick flags."""
+    totals: dict[int, dict[str, list[float | int]]] = {}
+    for event in events:
+        origin = (
+            "PLAYER"
+            if event.source_id == player_id
+            else "PET"
+            if event.source_id in pet_ids
+            else "UNKNOWN"
+        )
+        key = f"{origin}:{event.periodicity}"
+        bucket = totals.setdefault(event.spell_id, {}).setdefault(key, [0, 0.0])
+        bucket[0] += 1
+        bucket[1] += event.amount
+    return {
+        spell: {key: EventMix(int(values[0]), float(values[1])) for key, values in buckets.items()}
+        for spell, buckets in totals.items()
+    }
 
 
 def parse_damage_events(
@@ -44,12 +69,16 @@ def parse_damage_events(
         if target_ids is not None and target_id not in target_ids:
             continue
         amount = (ev.get("amount") or 0) + (ev.get("absorbed") or 0)
+        periodicity = (
+            "TRUE" if ev.get("tick") is True else "FALSE" if ev.get("tick") is False else "UNKNOWN"
+        )
         parsed.append(
             RawDamageEvent(
                 spell_id=int(spell_id),
                 source_id=int(ev["sourceID"]),
                 target_id=int(target_id),
                 amount=float(amount),
+                periodicity=periodicity,
             )
         )
     return parsed
@@ -100,12 +129,10 @@ def aggregate_damage_by_ability(
     """
     totals: dict[int, float] = {}
     hits: dict[int, int] = {}
-    targets: dict[int, set[int]] = {}
     by_source: dict[int, dict[int, AbilitySourceDamage]] = {}
     for ev in raw_events:
         totals[ev.spell_id] = totals.get(ev.spell_id, 0.0) + ev.amount
         hits[ev.spell_id] = hits.get(ev.spell_id, 0) + 1
-        targets.setdefault(ev.spell_id, set()).add(ev.target_id)
         current = by_source.setdefault(ev.spell_id, {}).get(ev.source_id)
         by_source[ev.spell_id][ev.source_id] = AbilitySourceDamage(
             source_id=ev.source_id,
@@ -123,9 +150,7 @@ def aggregate_damage_by_ability(
         )
         for spell_id in totals
     }
-    avg_targets_per_cast = {
-        spell_id: len(targets[spell_id]) / cast_counts[spell_id]
-        for spell_id in totals
-        if cast_counts.get(spell_id, 0) > 0
-    }
-    return damage_by_ability, avg_targets_per_cast
+    # M1: the aggregate stream cannot associate targets with cast instances.
+    # Keep the legacy return slot for call compatibility, but never calculate
+    # or populate the invalid proxy in newly aggregated data.
+    return damage_by_ability, {}

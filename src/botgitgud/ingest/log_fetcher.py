@@ -21,7 +21,7 @@ import structlog
 from botgitgud import telemetry
 from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.damage_scope import DamageScopeVersion
-from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
+from botgitgud.domain.models import FightRef, MeasurementProvenance, PlayerBuild, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.fight_rankings import fetch_partition
@@ -291,7 +291,7 @@ class LogFetcher:
             fight_start_ms=start_time_ms,
             fight_end_ms=end_time_ms,
         )
-        cast_timeline, phase_cast_timeline = fetch_cast_timelines(
+        cast_timeline, phase_cast_timeline, casts_provenance = fetch_cast_timelines(
             query_fn,
             report_code=report_code,
             fight_id=fight_id,
@@ -299,6 +299,7 @@ class LogFetcher:
             start_time_ms=start_time_ms,
             end_time_ms=end_time_ms,
             intervals=phase_intervals,
+            include_provenance=True,
         )
         dps = (damage_total / duration_s) if (damage_total and duration_s > 0) else None
 
@@ -339,11 +340,13 @@ class LogFetcher:
         scope_target_ids = extract_scope_target_ids(damage_entries, actors)
         (
             damage_by_ability,
-            avg_targets_per_cast,
+            _avg_targets_per_cast,
             support_subtracted,
             scoped_total,
             unscoped_own,
             damaged_target_ids,
+            damage_provenance,
+            event_mix,
         ) = fetch_scoped_damage_and_targets(
             query_fn,
             report_code=report_code,
@@ -355,6 +358,7 @@ class LogFetcher:
             target_ids=scope_target_ids,
             pet_owner_by_actor=pet_owner_map,
             cast_counts=cast_counts,
+            include_provenance=True,
         )
         authoritative_total = extract_damage_table_total(damage_entries, match.player_id)
         ambiguous_groups = extract_ambiguous_scope_target_groups(damage_entries, actors)
@@ -441,12 +445,21 @@ class LogFetcher:
             aura_details=aura_details,
             deaths=len(death_times_ms),
             downtime_s=downtime_s,
-            avg_targets_per_cast=avg_targets_per_cast,
+            avg_targets_per_cast={},
             phase_cast_timeline=phase_cast_timeline,
             damage_scope=damage_scope,
             support_subtracted_damage=(
                 support_subtracted
                 if damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
                 else 0.0
+            ),
+            measurement_provenance=MeasurementProvenance(
+                damage_collection=damage_provenance,
+                casts_collection=casts_provenance,
+                damage_table_total=authoritative_total,
+                player_actor_id=match.player_id,
+                pet_actor_ids=tuple(sorted(pet_ids)),
+                damage_event_mix_by_spell=event_mix,
+                damage_reconciliation_status=damage_scope.value,
             ),
         )

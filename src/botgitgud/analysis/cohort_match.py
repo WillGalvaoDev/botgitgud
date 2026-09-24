@@ -35,11 +35,12 @@ pools remain independently addressable.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 from botgitgud.analysis.benchmark_aggregate import dedup_priority, player_identity
 from botgitgud.analysis.cohort import COHORT_MIN_HARD, COHORT_STRETCH_N, COHORT_TARGET_N
+from botgitgud.analysis.measurement import damage_reference_id
 from botgitgud.analysis.talent_cluster import JACCARD_THRESHOLD, jaccard_similarity
 from botgitgud.domain.external_buffs import EXTERNAL_OFFENSIVE_IDS
 from botgitgud.domain.models import DEFAULT_MATCHING_POLICY_VERSION, PlayerLog
@@ -92,6 +93,92 @@ class MatchReport:
     cohort_level: Literal["HARD", "TARGET", "STRETCH"] = "HARD"
 
 
+@dataclass(frozen=True, slots=True)
+class HygieneReport:
+    """M2.3 §4.1: the identity/attempt-state hygiene step of the original
+    `match_cohort`, extracted as its own stage so it can run once, before
+    both M2.1 (which needs the hygienic set, never a covariate-filtered
+    one) and the covariate ladder (`match_covariates`).
+    """
+
+    n_input: int
+    n_output: int
+    excluded_self: int
+    excluded_non_kill: int
+    deduped_pull: int
+    deduped_player: int
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateConflictReport:
+    """M2.3 §4.0 (D-M23-07): report of `quarantine_conflicting_duplicates`."""
+
+    n_input: int
+    n_output: int
+    excluded_logs: int
+    conflicting_ids: tuple[str, ...]
+
+
+def quarantine_conflicting_duplicates(
+    target: PlayerLog, candidates: Sequence[PlayerLog]
+) -> tuple[list[PlayerLog], DuplicateConflictReport]:
+    """M2.3 v003 §4.0 (D-M23-07): puts in quarantine every OBSERVATION —
+    same player, same pull, `(report_code, fight_id, player_identity)`,
+    never `dedup_priority` — whose representations disagree by value
+    (`!=`), and closes the exclusion by `damage_reference_id`: every
+    domain log sharing an id with a conflicting observation is removed
+    too, not just the instances grouped together. `reference_id` already
+    encodes `report_code:fight_id`, so this only ever reaches across
+    `player_identity` within the SAME pull — e.g. the same character name
+    on two different servers, which `player_identity` tells apart but
+    `reference_id` does not (v002's re-review, R3: grouping by the hygiene
+    tie key instead of the observation let a third representation with a
+    different `dedup_priority` escape the group and win the pull, taking
+    its id past this quarantine while its own duplicates were removed).
+
+    Runs BEFORE `hygienic_candidates`, on the whole fetched list;
+    `match_cohort`/`hygienic_candidates` never call this and are therefore
+    untouched by it (SPEC §8 invariant 2). An observation whose
+    representations are all equal by `==` is not a conflict and passes
+    through untouched — the hygiene `min()` already collapses it to the
+    same value regardless of which element it picks.
+
+    Only self-referencing and non-kill logs are outside the domain; they
+    are excluded later by `hygienic_candidates`'s own counters, never
+    double-counted here. Conflict membership depends only on the multiset
+    of candidates, never on their order, so a fixed input always
+    quarantines the same ids under any permutation (SPEC §8 invariant 6).
+    """
+    target_identity = player_identity(target)
+
+    def in_domain(log: PlayerLog) -> bool:
+        return player_identity(log) != target_identity and log.fight.kill
+
+    def observation_key(log: PlayerLog) -> tuple[str, int, tuple[str, str]]:
+        return (log.fight.report_code, log.fight.fight_id, player_identity(log))
+
+    groups: dict[tuple[str, int, tuple[str, str]], list[PlayerLog]] = {}
+    for candidate in candidates:
+        if in_domain(candidate):
+            groups.setdefault(observation_key(candidate), []).append(candidate)
+
+    conflicting_ids: set[str] = set()
+    for group in groups.values():
+        first = group[0]
+        if any(log != first for log in group):
+            conflicting_ids.update(damage_reference_id(log) for log in group)
+
+    output = [
+        c for c in candidates if not (in_domain(c) and damage_reference_id(c) in conflicting_ids)
+    ]
+    return output, DuplicateConflictReport(
+        n_input=len(candidates),
+        n_output=len(output),
+        excluded_logs=len(candidates) - len(output),
+        conflicting_ids=tuple(sorted(conflicting_ids)),
+    )
+
+
 def _within_duration_band(candidate_s: float, target_s: float, pct: float) -> bool:
     tolerance = max(target_s * pct, DURATION_FLOOR_S)
     return abs(candidate_s - target_s) <= tolerance
@@ -117,30 +204,15 @@ def _same_talent_cluster(
     return jaccard_similarity(candidate, target) >= JACCARD_THRESHOLD
 
 
-def match_cohort(
-    target: PlayerLog,
-    candidates: Sequence[PlayerLog],
-    *,
-    min_n: int = COHORT_TARGET_N,
-    matching_policy_version: str = DEFAULT_MATCHING_POLICY_VERSION,
-) -> tuple[list[PlayerLog], MatchReport]:
-    """Filters `candidates` by every covariate at its strictest setting;
-    if fewer than `min_n` survive, relaxes covariates one at a time in
-    degradation order (duration widens through DURATION_BANDS_PCT instead
-    of being dropped outright) until `min_n` is reached or every relaxable
-    covariate is exhausted. Never touches encounter/difficulty/partition/
-    class/spec — those are exact by construction (pre-filtered upstream).
-
-    `matching_policy_version` (EC.3/M4): `"v1"` uses every
-    covariate in `_ALL_COVARIATES`/`DEGRADATION_ORDER`, `talent_cluster`
-    included, exactly as before this parameter existed. Any other value
-    (`"v2"`, the default) uses `_ALL_COVARIATES_V2`/`DEGRADATION_ORDER_V2`:
-    `talent_cluster` and `has_augmentation` are never added to `active` and
-    therefore never become filters or relaxable covariates.
-
-    May still return fewer than `min_n` members after every relaxation —
-    callers check that against COHORT_MIN_HARD themselves (analysis/
-    cohort.py's classify_cohort_size), same as the pre-T2.1 pipeline.
+def hygienic_candidates(
+    target: PlayerLog, candidates: Sequence[PlayerLog]
+) -> tuple[list[PlayerLog], HygieneReport]:
+    """M2.3 §4.1: identity/attempt-state hygiene, split out of the original
+    `match_cohort` so it can run exactly once and feed both M2.1 (the
+    hygienic set, never covariate-filtered) and `match_covariates` (the
+    ledger). Behaviour is byte-identical to what `match_cohort` always did
+    for this stage: exclude self by `player_identity`, exclude non-kills,
+    one reference per pull (`dedup_priority`), one per player.
     """
     target_identity = player_identity(target)
     without_self = [c for c in candidates if player_identity(c) != target_identity]
@@ -162,11 +234,51 @@ def match_cohort(
     by_player: dict[tuple[str, str], list[PlayerLog]] = {}
     for candidate in one_per_pull:
         by_player.setdefault(player_identity(candidate), []).append(candidate)
-    hygienic_candidates = [
-        min(by_player[identity], key=dedup_priority) for identity in sorted(by_player)
-    ]
-    deduped_player = len(one_per_pull) - len(hygienic_candidates)
+    hygienic = [min(by_player[identity], key=dedup_priority) for identity in sorted(by_player)]
+    deduped_player = len(one_per_pull) - len(hygienic)
 
+    return hygienic, HygieneReport(
+        n_input=len(candidates),
+        n_output=len(hygienic),
+        excluded_self=excluded_self,
+        excluded_non_kill=excluded_non_kill,
+        deduped_pull=deduped_pull,
+        deduped_player=deduped_player,
+    )
+
+
+def match_covariates(
+    target: PlayerLog,
+    hygienic: Sequence[PlayerLog],
+    *,
+    min_n: int = COHORT_TARGET_N,
+    matching_policy_version: str = DEFAULT_MATCHING_POLICY_VERSION,
+) -> tuple[list[PlayerLog], MatchReport]:
+    """M2.3 §4.1: the covariate-degradation half of the original
+    `match_cohort`, taking an already-hygienic candidate list (see
+    `hygienic_candidates`) instead of computing hygiene itself. Filters
+    `hygienic` by every covariate at its strictest setting; if fewer than
+    `min_n` survive, relaxes covariates one at a time in degradation order
+    (duration widens through DURATION_BANDS_PCT instead of being dropped
+    outright) until `min_n` is reached or every relaxable covariate is
+    exhausted. Never touches encounter/difficulty/partition/class/spec —
+    those are exact by construction (pre-filtered upstream).
+
+    `matching_policy_version` (EC.3/M4): `"v1"` uses every
+    covariate in `_ALL_COVARIATES`/`DEGRADATION_ORDER`, `talent_cluster`
+    included, exactly as before this parameter existed. Any other value
+    (`"v2"`, the default) uses `_ALL_COVARIATES_V2`/`DEGRADATION_ORDER_V2`:
+    `talent_cluster` and `has_augmentation` are never added to `active` and
+    therefore never become filters or relaxable covariates.
+
+    May still return fewer than `min_n` members after every relaxation —
+    callers check that against COHORT_MIN_HARD themselves (analysis/
+    cohort.py's classify_cohort_size), same as the pre-T2.1 pipeline. The
+    returned `MatchReport`'s hygiene counters (`excluded_self`,
+    `excluded_non_kill`, `deduped_pull`, `deduped_player`) are always zero
+    here — this function never sees the pre-hygiene candidates; `match_cohort`
+    below fills them in from the `HygieneReport` it computed separately.
+    """
     is_v1 = matching_policy_version == "v1"
     all_covariates = _ALL_COVARIATES if is_v1 else _ALL_COVARIATES_V2
     degradation_order = DEGRADATION_ORDER if is_v1 else DEGRADATION_ORDER_V2
@@ -178,7 +290,7 @@ def match_cohort(
     def _apply() -> list[PlayerLog]:
         pct = DURATION_BANDS_PCT[duration_band_idx]
         result = []
-        for c in hygienic_candidates:
+        for c in hygienic:
             if not _within_duration_band(c.fight.duration_s, target.fight.duration_s, pct):
                 continue
             if "tier_pieces" in active and not _within_tier_pieces_band(
@@ -254,10 +366,32 @@ def match_cohort(
         matched=matched,
         relaxed=tuple(relaxed),
         n_members=len(filtered),
-        excluded_self=excluded_self,
-        excluded_non_kill=excluded_non_kill,
-        deduped_pull=deduped_pull,
-        deduped_player=deduped_player,
         adjustment_covariates=() if is_v1 else ("has_augmentation",),
         cohort_level=cohort_level,
+    )
+
+
+def match_cohort(
+    target: PlayerLog,
+    candidates: Sequence[PlayerLog],
+    *,
+    min_n: int = COHORT_TARGET_N,
+    matching_policy_version: str = DEFAULT_MATCHING_POLICY_VERSION,
+) -> tuple[list[PlayerLog], MatchReport]:
+    """M2.3 §4.1: `hygienic_candidates(target, candidates)` composed with
+    `match_covariates` on its output, with the hygiene counters copied into
+    the returned `MatchReport` — byte-identical output to the pre-M2.3
+    single-function `match_cohort` for any input. See `hygienic_candidates`
+    and `match_covariates` for the two stages' own contracts.
+    """
+    hygienic, hygiene_report = hygienic_candidates(target, candidates)
+    filtered, match_report = match_covariates(
+        target, hygienic, min_n=min_n, matching_policy_version=matching_policy_version
+    )
+    return filtered, replace(
+        match_report,
+        excluded_self=hygiene_report.excluded_self,
+        excluded_non_kill=hygiene_report.excluded_non_kill,
+        deduped_pull=hygiene_report.deduped_pull,
+        deduped_player=hygiene_report.deduped_player,
     )

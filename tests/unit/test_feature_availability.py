@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
 from dataclasses import replace
 from functools import cache
@@ -29,9 +30,13 @@ from botgitgud.domain.canonical_ability import (
     index_families_for_spec,
     observe_specs,
 )
+from botgitgud.domain.damage_scope import DamageScopeVersion
 from botgitgud.domain.models import (
     AbilityDamage,
+    CollectionProvenance,
+    CollectionStatus,
     FightRef,
+    MeasurementProvenance,
     PlayerBuild,
     PlayerLog,
 )
@@ -78,6 +83,17 @@ def _log(
     return PlayerLog(
         fight=FightRef("report", 1, 1, "boss", 5, duration_s, True),
         build=PlayerBuild("player", None, "Shaman", "Enhancement", "dps", None, None, None),
+        damage_scope=DamageScopeVersion.WCL_TARGET_SCOPE_V1,
+        measurement_provenance=MeasurementProvenance(
+            damage_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, duration_s * 1000
+            ),
+            casts_collection=CollectionProvenance(
+                CollectionStatus.COMPLETE, (), 0, duration_s * 1000
+            ),
+            damage_reconciliation_status="wcl_target_scope_v1",
+            damage_table_total=damage or 0.0,
+        ),
         dps=None,
         percentile=None,
         cast_timeline={1: casts} if casts else {},
@@ -133,9 +149,9 @@ def test_each_feature_uses_only_its_observed_signal() -> None:
 
 def test_casts_per_minute_also_requires_positive_duration() -> None:
     results = _by_kind(_evaluate(_log(casts=(1.0,), duration_s=0)))
-    assert results[FeatureKind.CAST_COUNT].available
-    assert results[FeatureKind.CAST_TIMELINE].available
-    assert results[FeatureKind.CASTS_PER_MINUTE].reasons == (FeatureBlockReason.NO_DURATION,)
+    assert not results[FeatureKind.CAST_COUNT].available
+    assert not results[FeatureKind.CAST_TIMELINE].available
+    assert FeatureBlockReason.NO_DURATION in results[FeatureKind.CASTS_PER_MINUTE].reasons
 
 
 @pytest.mark.parametrize(
@@ -181,8 +197,11 @@ def test_all_applicable_reasons_are_sorted() -> None:
     results = evaluate_feature_availability(
         _ability(), AbilityRole.UNKNOWN, _log(duration_s=0), identities={}
     )
-    assert _by_kind(results)[FeatureKind.CASTS_PER_MINUTE].reasons == tuple(
-        sorted(FeatureBlockReason, key=lambda reason: reason.value)
+    assert _by_kind(results)[FeatureKind.CASTS_PER_MINUTE].reasons == (
+        FeatureBlockReason.NO_DURATION,
+        FeatureBlockReason.NO_SIGNAL,
+        FeatureBlockReason.NON_SPEC_ROLE,
+        FeatureBlockReason.UNRESOLVED_IDENTITY,
     )
 
 
@@ -260,11 +279,8 @@ def test_lightning_shield_real_logs_keep_role_but_only_expose_observed_features(
         assert decisions[FeatureKind.CAST_TIMELINE].available == observed[0]
         assert decisions[FeatureKind.CASTS_PER_MINUTE].available == observed[0]
 
-    assert combinations == {
-        (True, True, True): 1,
-        (False, True, False): 6,
-        (False, False, True): 4,
-    }
+    # Historical casts have no coverage proof; legacy-unscoped damage is partial.
+    assert combinations == {(False, False, True): 5}
 
 
 def test_no_feature_is_invented_across_all_measured_core_entity_log_pairs() -> None:
@@ -292,21 +308,36 @@ def test_no_feature_is_invented_across_all_measured_core_entity_log_pairs() -> N
                     for member in members
                 )
                 has_uptime = any(member in log.uptimes for member in members)
+                assert log.measurement_provenance is None  # immutable historical corpus
+                valid_uptime = has_uptime and all(
+                    math.isfinite(log.uptimes[sid]) and 0 <= log.uptimes[sid] <= 1
+                    for sid in members
+                    if sid in log.uptimes
+                )
                 expected = {
-                    FeatureKind.DAMAGE_SHARE: has_damage,
-                    FeatureKind.CAST_COUNT: has_cast,
-                    FeatureKind.CASTS_PER_MINUTE: has_cast and log.fight.duration_s > 0,
-                    FeatureKind.CAST_TIMELINE: has_cast,
-                    FeatureKind.UPTIME: has_uptime,
+                    FeatureKind.DAMAGE_SHARE: has_damage
+                    and log.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1,
+                    FeatureKind.CAST_COUNT: False,
+                    FeatureKind.CASTS_PER_MINUTE: False,
+                    FeatureKind.CAST_TIMELINE: False,
+                    FeatureKind.UPTIME: valid_uptime,
                 }
                 for kind, available in expected.items():
                     assert decisions[kind].available is available
-                    if not available and not (
-                        kind is FeatureKind.CASTS_PER_MINUTE and log.fight.duration_s <= 0
+                    if not available:
+                        assert decisions[kind].reasons
+                    if (
+                        kind
+                        in {
+                            FeatureKind.CAST_COUNT,
+                            FeatureKind.CAST_TIMELINE,
+                            FeatureKind.CASTS_PER_MINUTE,
+                        }
+                        and has_cast
                     ):
-                        assert FeatureBlockReason.NO_SIGNAL in decisions[kind].reasons
+                        assert FeatureBlockReason.UNKNOWN_COLLECTION in decisions[kind].reasons
 
-    assert pair_count == 11_878
+    assert pair_count == 12_748
 
 
 def test_all_unknown_entities_fail_closed_through_the_consumer_path() -> None:

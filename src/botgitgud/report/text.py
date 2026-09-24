@@ -31,6 +31,7 @@ from botgitgud.analysis.cohort_match import ITEM_LEVEL_BAND, TIER_PIECES_BAND
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
 from botgitgud.analysis.findings import TopPriorities
+from botgitgud.analysis.measurement import DamageComparison
 from botgitgud.analysis.performance_features import PerformanceFindings
 from botgitgud.analysis.proc_analysis import ProcAnalysis
 from botgitgud.analysis.setup_analysis import SetupAnalysis
@@ -57,7 +58,7 @@ _COVARIATE_LABELS: dict[str, str] = {
     "has_augmentation": "Augmentation",
 }
 _AUGMENTATION_RELAXED_WARNING = (
-    "Buffs de suporte não pareados — parte do gap de dano por cast "
+    "Buffs de suporte não pareados — parte da diferença observada "
     "pode não ser controlável por você."
 )
 
@@ -77,6 +78,10 @@ class ReportHeader:
     cohort_warnings: tuple[str, ...] = ()
     matched_covariates: tuple[str, ...] = ()  # T2.1: analysis.cohort_match.MatchReport.matched
     relaxed_covariates: tuple[str, ...] = ()  # T2.1: ...MatchReport.relaxed
+    damage_comparison: DamageComparison | None = None
+    matched_reference_n: int | None = None
+    positional_reference_n: int | None = None
+    damage_comparison_status: str = "UNKNOWN"
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -105,7 +110,8 @@ def _render_covariates_line(header: ReportHeader) -> str | None:
     """
     if not header.matched_covariates:
         return None
-    parts = [f"**Coorte:** {header.reference_n} logs"]
+    n = header.matched_reference_n if header.matched_reference_n is not None else header.reference_n
+    parts = [f"**Coorte pareada:** {n} logs"]
     for cov in header.matched_covariates:
         if cov.startswith("duration"):
             parts.append(f"duração {cov.removeprefix('duration')} ✅")
@@ -130,6 +136,11 @@ def _render_relaxed_covariate_warnings(header: ReportHeader) -> list[str]:
 
 
 def _render_header(header: ReportHeader) -> list[str]:
+    n = header.damage_comparison.reference_n if header.damage_comparison else header.reference_n
+    status = header.damage_comparison_status
+    if n < 8 and status == "AVAILABLE":
+        status = "INSUFFICIENT_REFERENCES" if n else "NO_REFERENCES"
+    median = header.cohort_median_dps if status == "AVAILABLE" and n >= 8 else None
     lines = [
         _SEPARATOR,
         "GITGUD MAJOR CD ANALYSIS",
@@ -138,16 +149,18 @@ def _render_header(header: ReportHeader) -> list[str]:
         f"**Boss:** {header.boss_name}",
         f"**Spec:** {header.spec} {header.class_name}",
         (
-            f"**DPS:** {_fmt_dps(header.player_dps)} "
+            f"**DPS WCL:** {_fmt_dps(header.player_dps)} "
             f"(percentil: {_fmt_percentile(header.player_percentile)})"
         ),
         (
-            f"**Referência:** {header.reference_n} logs "
-            f"| DPS mediano: {_fmt_dps(header.cohort_median_dps)} "
+            f"**Referência:** {n} logs "
+            f"| DPS medido mediano: {_fmt_dps(median)} "
             f"| Duração: {_fmt_duration(header.duration_min_s)} - "
             f"{_fmt_duration(header.duration_max_s)}"
         ),
     ]
+    if status != "AVAILABLE":
+        lines.append(f"Comparação medida: {status}")
     covariates_line = _render_covariates_line(header)
     if covariates_line is not None:
         lines.append(covariates_line)

@@ -13,14 +13,73 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from botgitgud.domain.damage_scope import DamageScopeVersion
 
 PhaseKey = tuple[int, int]  # (phase_id, occurrence) — see PhaseInterval
+
+
+class CollectionStatus(StrEnum):
+    COMPLETE = "COMPLETE"
+    PARTIAL = "PARTIAL"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionProvenance:
+    status: CollectionStatus
+    reasons: tuple[str, ...] = ()
+    requested_start_ms: float | None = None
+    requested_end_ms: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.status is CollectionStatus.COMPLETE and self.reasons:
+            raise ValueError("complete collection cannot have reasons")
+        if self.status is not CollectionStatus.COMPLETE and not self.reasons:
+            raise ValueError("incomplete collection requires a reason")
+
+
+@dataclass(frozen=True, slots=True)
+class EventMix:
+    count: int
+    damage: float
+
+    def __post_init__(self) -> None:
+        if self.count < 0 or not math.isfinite(self.damage) or self.damage < 0:
+            raise ValueError("invalid event mix")
+
+
+@dataclass(frozen=True, slots=True)
+class MeasurementProvenance:
+    schema_version: str = "measurement-input-v1"
+    damage_collection: CollectionProvenance = field(
+        default_factory=lambda: CollectionProvenance(CollectionStatus.UNKNOWN, ("missing",))
+    )
+    casts_collection: CollectionProvenance = field(
+        default_factory=lambda: CollectionProvenance(CollectionStatus.UNKNOWN, ("missing",))
+    )
+    damage_table_total: float | None = None
+    player_actor_id: int | None = None
+    pet_actor_ids: tuple[int, ...] = ()
+    damage_event_mix_by_spell: Mapping[int, Mapping[str, EventMix]] = field(default_factory=dict)
+    damage_reconciliation_status: str = "UNKNOWN"
+    damage_reconciliation_residual: float | None = None
+    targets_per_cast_status: str = "UNKNOWN"
+    targets_per_cast_reasons: tuple[str, ...] = ("CAST_INSTANCE_LINK_UNAVAILABLE",)
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "measurement-input-v1":
+            raise ValueError("unsupported measurement provenance schema")
+        if self.damage_table_total is not None and (
+            not math.isfinite(self.damage_table_total) or self.damage_table_total < 0
+        ):
+            raise ValueError("invalid damage table total")
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +275,7 @@ class PlayerLog:
     # term without the target scope would create an undeclared third
     # population semantics.
     support_subtracted_damage: float = 0.0
+    measurement_provenance: MeasurementProvenance | None = None
 
 
 # EC.2/M4: a política histórica v1 coexiste com a v2 sem invalidar caches;
@@ -328,6 +388,7 @@ class SpellProfile:
     # razão global. Default 0 preserva o comportamento de qualquer
     # `SpellProfile` construído sem este campo (testes existentes, etc.).
     n_with_spell: int = 0
+    n_positional_with_spell: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,3 +404,13 @@ class RunManifest:
     n_members: int
     wcl_partition: int | None
     settings_hash: str
+    measurement_input_version: str = "unknown"
+    damage_comparison_version: str = "unknown"
+    reference_n_quantitative: int = 0
+    # M2.3 §7.3: aditivo. Ausente ("unknown"/None) em manifestos anteriores a
+    # M2.3, lido como legado — nunca reinterpretado como a versão corrente.
+    reference_eligibility_policy_version: str = "unknown"
+    metric_population_policy_version: str = "unknown"
+    ledger_matching_policy_version: str = "unknown"
+    comparability_provenance_version: str = "unknown"
+    comparability_provenance_json: str | None = None

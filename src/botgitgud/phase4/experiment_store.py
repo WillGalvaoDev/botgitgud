@@ -12,7 +12,9 @@ from botgitgud.ingest.store import Store
 from botgitgud.phase4.experiment_campaign import ExperimentCampaign, PlannedExperimentObservation
 
 PLANNER_VERSION = "sae2-v1"
+# Campaign identity remains frozen for historical SAE.3 results.
 FEATURE_SCHEMA_VERSION = "sae3-v1"
+DATASET_FEATURE_SCHEMA_VERSION = "experimental-features-v2"
 
 
 class CollectionStatus(StrEnum):

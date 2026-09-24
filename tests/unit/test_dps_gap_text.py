@@ -12,22 +12,14 @@ _STATS = QuantileStats(n=20, p10=0, p25=0, p50=0, p75=0, p90=0)
 def _gap(**overrides: object) -> AbilityGap:
     defaults: dict[str, object] = {
         "spell": SpellInfo(spell_id=1, name="Chaos Strike", source="wcl"),
-        "n_u": 8.0,
-        "d_u": 800.0,
-        "p_u": 100.0,
-        "n_r": 10.0,
-        "d_r": 1000.0,
-        "p_r": 100.0,
-        "delta_d": -200.0,
-        "volume": -200.0,
-        "efficiency": 0.0,
-        "interaction": 0.0,
+        "volume_dps": -200.0 / 300,
         "delta_dps_pct": -6.3,
         "volume_dps_pct": -6.3,
         "efficiency_dps_pct": 0.0,
-        "diagnosis": "usos_perdidos_excedentes",
+        "diagnosis": "observed_output_deficit",
         "confidence": "alta",
-        "unit_kind": "CAST",
+        "unit_kind": "DAMAGE_EVENT",
+        "delta_ability_dps": -200.0 / 300,
     }
     defaults.update(overrides)
     return AbilityGap(**defaults)  # type: ignore[arg-type]
@@ -37,12 +29,16 @@ def _report(**overrides: object) -> DpsGapReport:
     defaults: dict[str, object] = {
         "player_dps": 1_090_000.0,
         "cohort_median_dps": 1_240_000.0,
-        "gap_pct": -0.121,
+        "gap_vs_reference_pct": -12.1,
         "duration_s": 300.0,
         "abilities": (_gap(),),
         "other_pct": -0.6,
+        "other_delta_dps": -6540.0,
         "n_other": 11,
         "measured_dps": 1_090_000.0,
+        "reference_mean_dps": 1_240_000.0,
+        "reference_n_quantitative": 20,
+        "total_delta_dps": -150_000.0,
     }
     defaults.update(overrides)
     return DpsGapReport(**defaults)  # type: ignore[arg-type]
@@ -70,11 +66,13 @@ def test_header_line_shows_player_cohort_and_gap() -> None:
     assert "-12.1%" in header_line
 
 
-def test_ability_row_shows_diagnosis_label() -> None:
+def test_ability_row_uses_observed_non_causal_language() -> None:
     lines = render_dps_gap_section(_report())
     row = next(line for line in lines if "Chaos Strike" in line)
-    assert "usos perdidos/excedentes" in row
-    assert "-6.3pp" in row
+    assert "déficit de saída observado" in row
+    assert "usos perdidos" not in row
+    assert "Delta: -0.667 DPS" in row
+    assert "pp" not in row
 
 
 def test_low_confidence_ability_is_flagged_in_the_row() -> None:
@@ -88,11 +86,18 @@ def test_other_abilities_aggregate_row() -> None:
     lines = render_dps_gap_section(_report())
     other_row = next(line for line in lines if line.startswith("(outras"))
     assert "(outras 11)" in other_row
-    assert "-0.6pp" in other_row
+    assert "-6.5k DPS" in other_row
+    assert "pp" not in other_row
 
 
-def test_missing_cohort_median_degrades_gracefully() -> None:
-    report = _report(cohort_median_dps=None, gap_pct=None)
+def test_missing_measured_reference_mean_degrades_gracefully() -> None:
+    report = _report(
+        cohort_median_dps=None,
+        gap_vs_reference_pct=None,
+        reference_mean_dps=None,
+        reference_n_quantitative=0,
+        total_delta_dps=None,
+    )
     lines = render_dps_gap_section(report)
     header_line = next(line for line in lines if line.startswith("Você:"))
     assert "n/d" in header_line

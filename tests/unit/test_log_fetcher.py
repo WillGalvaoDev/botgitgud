@@ -478,6 +478,7 @@ def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: P
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": 100,
                     "abilityGameID": 104316,
@@ -485,6 +486,7 @@ def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: P
                 },
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 16,  # pet of player 6
                     "targetID": 100,
                     "abilityGameID": 104318,
@@ -492,6 +494,7 @@ def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: P
                 },
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 7,  # unrelated player — must be excluded
                     "targetID": 100,
                     "abilityGameID": 999,
@@ -509,7 +512,8 @@ def test_fetch_populates_pet_aware_damage_by_ability_and_avg_targets(tmp_path: P
     assert result.damage_by_ability[104318].total == 200
     assert result.damage_by_ability[104318].casts == 0  # player never cast the pet's ability
     assert 999 not in result.damage_by_ability
-    assert result.avg_targets_per_cast[104316] == 1.0  # 1 distinct target / 1 cast
+    assert result.avg_targets_per_cast == {}  # retired proxy; provenance is authoritative
+    assert result.measurement_provenance is not None
     assert result.damage_scope is DamageScopeVersion.WCL_TARGET_SCOPE_V1
 
 
@@ -524,6 +528,7 @@ def test_incomplete_damage_stream_retains_legacy_scope(tmp_path: Path) -> None:
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": 100,
                     "abilityGameID": 1,
@@ -553,6 +558,7 @@ def test_missing_damage_table_retains_legacy_scope(tmp_path: Path) -> None:
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": 100,
                     "abilityGameID": 1,
@@ -579,6 +585,7 @@ def test_empty_damage_table_targets_retain_legacy_scope(tmp_path: Path) -> None:
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": 100,
                     "abilityGameID": 1,
@@ -610,6 +617,7 @@ def test_complete_stream_with_incomplete_scope_fails_closed(tmp_path: Path) -> N
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": target_id,
                     "abilityGameID": 1,
@@ -642,6 +650,7 @@ def test_damaging_ambiguous_scope_resolution_fails_closed(tmp_path: Path) -> Non
             [
                 {
                     "type": "damage",
+                    "timestamp": 1500,
                     "sourceID": 6,
                     "targetID": target_id,
                     "abilityGameID": 1,

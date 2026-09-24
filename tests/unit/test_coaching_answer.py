@@ -73,23 +73,13 @@ def _ability(
 ) -> AbilityGap:
     return AbilityGap(
         spell=SpellInfo(spell_id, name, "curated"),
-        n_u=1,
-        d_u=1,
-        p_u=1,
-        n_r=2,
-        p_r=2,
-        d_r=4,
-        delta_d=-3,
-        volume=-1,
-        efficiency=-1,
-        interaction=-1,
         delta_dps_pct=-1,
         volume_dps_pct=-0.5,
         efficiency_dps_pct=-0.5,
         diagnosis="usos_perdidos_excedentes",
         confidence="alta",
-        unit_kind="CAST",
-        cohort_share=_scalar(n=cohort_n, quantile=quantile),
+        unit_kind="DAMAGE_EVENT",
+        gross_dps_finding=_scalar(n=cohort_n, quantile=quantile),
     )
 
 
@@ -104,7 +94,6 @@ def _candidate(
         kind="ABILITY_GAP",
         title="TEXTO LIVRE PROIBIDO",
         detail="DETALHE LIVRE PROIBIDO",
-        estimated_gain_pct=9876.5,
         confidence="alta",
     )
     return MaterialCandidate(

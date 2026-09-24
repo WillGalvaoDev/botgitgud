@@ -28,12 +28,19 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from botgitgud.analysis.dps_gap import AbilityGap, DpsGapReport
-from botgitgud.analysis.findings import ExecutionFinding, Finding, RelevanceFinding
+from botgitgud.analysis.findings import (
+    ExecutionFinding,
+    Finding,
+    RelevanceFinding,
+    pair_ability_findings,
+)
 from botgitgud.analysis.grading import Grade
+from botgitgud.analysis.measurement import DamageComparison, MetricStatus
 from botgitgud.analysis.performance_features import (
     PerformanceFindings,
     ScalarFinding,
     grade_scalar,
+    scalar_is_finite,
 )
 from botgitgud.analysis.remediation import FindingRemediation, Remediation
 
@@ -71,6 +78,9 @@ class Sample:
 
     matched_n: int
     relaxed_covariates: tuple[str, ...] = ()
+    damage_comparison: DamageComparison | None = None
+    source_identity: str = "measured_net_dps"
+    unit: str = "DPS"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,10 +92,11 @@ class Conclusion:
     separate fields; collapsing them into one number would be exactly the
     proxy-presented-as-fact this project's contract (§11) forbids."""
 
-    standing: ScalarFinding
+    standing: ScalarFinding | None
     percentile: float | None
     sample: Sample
     material_count: int
+    standing_reasons: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,25 +120,19 @@ class MaterialCandidate:
 def _ability_finding_pairs(
     dps_gap: DpsGapReport, findings: Sequence[Finding]
 ) -> list[tuple[Finding, AbilityGap]]:
-    """The exact positional pairing `remediation.py`'s `build_remediations`
-    already established: `build_findings` emits ABILITY_GAP `Finding`s, in
-    order, from `dps_gap.abilities`' negative-delta subset — paired by
-    that shared, authoritative order, never reconstructed from
-    title/detail text.
-    """
-    abilities = (
-        [item for item in dps_gap.abilities if item.delta_dps_pct < 0]
-        if dps_gap.quantitative_damage_available
-        else []
-    )
-    return list(zip(findings, abilities, strict=True))
+    """Join emitted findings to the ledger by explicit spell identity."""
+    return pair_ability_findings(dps_gap, findings)
 
 
 def is_material_ability(ability: AbilityGap) -> bool:
-    """RB-2: material iff the ability's cohort-relative share grade (the
-    field `dps_gap.py` now attaches) is red/yellow. `None` (no cohort to
-    grade) and `insufficient` (cohort too small) are both non-material."""
-    return ability.cohort_share is not None and ability.cohort_share.grade in _MATERIAL_GRADES
+    """Observed negative DPS, own scalar and the defined player-pp gate."""
+    scalar = ability.gross_dps_finding
+    return (
+        ability.delta_ability_dps < 0
+        and (ability.delta_dps_pct is None or abs(ability.delta_dps_pct) >= 0.5)
+        and scalar is not None
+        and scalar.grade in _MATERIAL_GRADES
+    )
 
 
 def is_material_uptime(scalar: ScalarFinding | None) -> bool:
@@ -168,12 +173,7 @@ def collect_material_candidates(
     negative gaps exactly as in M28/M29.  Eligibility is consumed verbatim;
     it is never reconstructed here.
     """
-    abilities = (
-        [item for item in dps_gap.abilities if item.delta_dps_pct < 0]
-        if dps_gap.quantitative_damage_available
-        else []
-    )
-    ability_index = 0
+    abilities = {item.spell.spell_id: item for item in dps_gap.abilities}
     uptime_scalars = _uptime_scalars_by_spell(performance)
     candidates: list[MaterialCandidate] = []
 
@@ -182,14 +182,11 @@ def collect_material_candidates(
         scalar: ScalarFinding | None = None
 
         if isinstance(finding, Finding) and finding.kind == "ABILITY_GAP":
-            if ability_index >= len(abilities):
-                raise ValueError("ABILITY_GAP remediation has no matching ability")
-            ability = abilities[ability_index]
-            ability_index += 1
-            scalar = ability.cohort_share
+            ability = abilities[finding.evidence["spell_id"]]
+            scalar = ability.gross_dps_finding if ability.review_eligible else None
         elif isinstance(finding, RelevanceFinding) and finding.kind == "UPTIME":
             spell_id = finding.evidence.get("spell_id")
-            if isinstance(spell_id, int):
+            if isinstance(spell_id, int) and spell_id in dps_gap.entity_review_eligible:
                 scalar = uptime_scalars.get(spell_id)
         elif isinstance(finding, ExecutionFinding):
             scalar = finding.finding
@@ -197,8 +194,6 @@ def collect_material_candidates(
         if item.coaching_eligible and scalar is not None and scalar.grade in _MATERIAL_GRADES:
             candidates.append(MaterialCandidate(finding, item.remediation, scalar.grade))
 
-    if ability_index != len(abilities):
-        raise ValueError("ability findings and dps-gap abilities differ in length")
     return tuple(candidates)
 
 
@@ -215,7 +210,9 @@ def count_material(
     result (INVARIANT 4) — never special-cased."""
     ability_findings = [f for f in findings if f.kind == "ABILITY_GAP"]
     pairs = _ability_finding_pairs(dps_gap, ability_findings)
-    material = sum(1 for _, ability in pairs if is_material_ability(ability))
+    material = sum(
+        1 for _, ability in pairs if ability.review_eligible and is_material_ability(ability)
+    )
 
     uptime_scalars = _uptime_scalars_by_spell(performance)
     for f in relevance_findings:
@@ -223,7 +220,7 @@ def count_material(
             continue
         spell_id = f.evidence.get("spell_id")
         scalar = uptime_scalars.get(spell_id) if isinstance(spell_id, int) else None
-        if is_material_uptime(scalar):
+        if spell_id in dps_gap.entity_review_eligible and is_material_uptime(scalar):
             material += 1
 
     material += sum(1 for f in execution_findings if is_material_execution(f))
@@ -232,25 +229,41 @@ def count_material(
 
 def build_conclusion(
     *,
-    player_dps: float,
+    player_dps: float | None,
     cohort_dps_values: Sequence[float],
     percentile: float | None,
     matched_n: int,
     relaxed_covariates: Sequence[str],
     material_count: int,
+    damage_comparison: DamageComparison | None = None,
 ) -> Conclusion:
     """RB-4: `standing` is `grade_scalar` of the player's DPS against the
     PAIRED cohort's DPS values — the same population `analyze_dps_gap`
     actually compared, never the global WCL ranking `percentile` carries
     (already available on the report header; passed through verbatim,
     never recomputed here)."""
-    standing = grade_scalar(player_dps, cohort_dps_values, "higher_better")
-    sample = Sample(matched_n=matched_n, relaxed_covariates=tuple(relaxed_covariates))
+    standing = (
+        grade_scalar(player_dps, cohort_dps_values, "higher_better")
+        if player_dps is not None
+        and (damage_comparison is None or damage_comparison.status is MetricStatus.AVAILABLE)
+        else None
+    )
+    reasons = ()
+    if standing is not None and not scalar_is_finite(standing):
+        standing, reasons = None, ("NONFINITE_DERIVED_STATISTIC",)
+    elif standing is None and damage_comparison is not None:
+        reasons = damage_comparison.reasons
+    sample = Sample(
+        matched_n=matched_n,
+        relaxed_covariates=tuple(relaxed_covariates),
+        damage_comparison=damage_comparison,
+    )
     return Conclusion(
         standing=standing,
         percentile=percentile,
         sample=sample,
         material_count=material_count,
+        standing_reasons=reasons,
     )
 
 
@@ -268,7 +281,7 @@ def select_positive_observation(
     *,
     dps_gap: DpsGapReport,
     performance: PerformanceFindings | None,
-    standing: ScalarFinding,
+    standing: ScalarFinding | None,
 ) -> PositiveObservation | None:
     """RB-5: at most one, chosen deterministically by favourability
     (quantile-based), with a stable tie-break — independent of the order
@@ -278,7 +291,7 @@ def select_positive_observation(
 
     Candidates, all literally "already measured and favourable" (RB-5),
     never inferred:
-      - ABILITY_ABOVE_COHORT: a gated ability whose cohort_share grades
+      - ABILITY_ABOVE_COHORT: a gated ability whose gross_dps_finding grades
         green AND sits strictly above the cohort (quantile > 0.5) — RB-5
         names this one specifically as "above the cohort", a stricter bar
         than merely not-red/yellow.
@@ -292,7 +305,7 @@ def select_positive_observation(
     candidates: list[tuple[float, PositiveObservationBasis, int]] = []
 
     for ability in dps_gap.abilities:
-        scalar = ability.cohort_share
+        scalar = ability.gross_dps_finding
         if scalar is None or scalar.grade != "green":
             continue
         favorability = _favorability(scalar)
@@ -314,15 +327,13 @@ def select_positive_observation(
             favorability = _favorability(performance.deaths)
             if favorability is not None:
                 candidates.append((favorability, PositiveObservationBasis.NO_DEATH, 0))
-        active_time_candidate = (
-            performance.active_time if performance.active_time is not None else performance.downtime
-        )
-        if active_time_candidate.grade == "green":
+        active_time_candidate = performance.active_time
+        if active_time_candidate is not None and active_time_candidate.grade == "green":
             favorability = _favorability(active_time_candidate)
             if favorability is not None:
                 candidates.append((favorability, PositiveObservationBasis.ACTIVE_TIME, 0))
 
-    if standing.grade == "green":
+    if standing is not None and standing.grade == "green":
         favorability = _favorability(standing)
         if favorability is not None:
             candidates.append((favorability, PositiveObservationBasis.OVERALL_STANDING, 0))

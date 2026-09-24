@@ -161,18 +161,11 @@ def test_ec1_uptime_reference_distribution_excludes_refs_without_the_buff(tmp_pa
     assert finding.grade != "green"
 
 
-def test_uptime_finding_included_even_when_player_never_had_the_buff(tmp_path: Path) -> None:
-    """A buff the cohort commonly maintains but the player never had at
-    all (0% uptime, absent from player_log.uptimes) must still surface —
-    that's a more important finding than a partial uptime, not a smaller
-    one.
-    """
+def test_uptime_absence_is_not_imputed_as_zero(tmp_path: Path) -> None:
     matched = [_log(name=f"Ref{i}", uptimes={999: 0.90}) for i in range(20)]
     player = _log(uptimes={})  # never had the buff
     result = analyze_performance_features(player, matched, _catalog(tmp_path))
-    uptime_finding = next(uf for uf in result.uptimes if uf.spell.spell_id == 999)
-    assert uptime_finding.finding.user_value == 0.0
-    assert uptime_finding.finding.grade == "red"
+    assert all(uf.spell.spell_id != 999 for uf in result.uptimes)
 
 
 def test_uptime_findings_omit_unresolved_abilities(tmp_path: Path) -> None:

@@ -17,18 +17,20 @@ def render_top_actions_section(top_actions: TopPriorities) -> list[str]:
         "",
         "🎯 **TOP 3 PRIORIDADES**",
         _SEPARATOR_THIN,
-        "Primeiro vêm melhorias com impacto medido; depois, prioridades "
-        "relevantes sem ganho de DPS quantificado.",
+        "Habilidades ordenadas por déficit observado; "
+        "outras prioridades têm impacto não quantificado.",
     ]
     if not top_actions.level1 and not top_actions.level2:
         lines.append("Não há dados suficientes para definir prioridades confiáveis nesta luta.")
         return lines
 
     for i, finding in enumerate(top_actions.level1, start=1):
-        lines.append(
-            f"{i}. **{finding.title}** — ganho estimado: {finding.estimated_gain_pct:+.1f}pp "
-            f"(confiança: {finding.confidence})"
-        )
+        observed = finding.observed_deficit_player_pp
+        if observed is not None:
+            impact = f"déficit observado: {observed:+.1f}pp"
+        else:
+            impact = "déficit percentual indisponível"
+        lines.append(f"{i}. **{finding.title}** — {impact} (confiança: {finding.confidence})")
         lines.append(f"   {finding.detail}")
     offset = len(top_actions.level1)
     for i, finding in enumerate(top_actions.level2, start=offset + 1):

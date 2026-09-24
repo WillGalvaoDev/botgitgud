@@ -38,7 +38,17 @@ def get_code_version() -> str:
 
 
 def build_run_manifest(
-    *, cohort_id: str, n_members: int, wcl_partition: int | None, settings: Settings
+    *,
+    cohort_id: str,
+    n_members: int,
+    wcl_partition: int | None,
+    settings: Settings,
+    reference_n_quantitative: int = 0,
+    reference_eligibility_policy_version: str = "unknown",
+    metric_population_policy_version: str = "unknown",
+    ledger_matching_policy_version: str = "unknown",
+    comparability_provenance_version: str = "unknown",
+    comparability_provenance_json: str | None = None,
 ) -> RunManifest:
     return RunManifest(
         cohort_id=cohort_id,
@@ -47,4 +57,12 @@ def build_run_manifest(
         n_members=n_members,
         wcl_partition=wcl_partition,
         settings_hash=settings.settings_hash(),
+        measurement_input_version="measurement-input-v1",
+        damage_comparison_version="damage-comparison-v2",
+        reference_n_quantitative=reference_n_quantitative,
+        reference_eligibility_policy_version=reference_eligibility_policy_version,
+        metric_population_policy_version=metric_population_policy_version,
+        ledger_matching_policy_version=ledger_matching_policy_version,
+        comparability_provenance_version=comparability_provenance_version,
+        comparability_provenance_json=comparability_provenance_json,
     )

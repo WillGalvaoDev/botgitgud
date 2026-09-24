@@ -64,6 +64,7 @@ class ExperimentalObservation:
 class ExperimentalFeatureDataset:
     observations: tuple[ExperimentalObservation, ...]
     skipped_incomplete: int = 0
+    feature_schema_version: str = "experimental-features-v2"
 
     def __len__(self) -> int:
         return len(self.observations)
@@ -113,7 +114,6 @@ def build_features(player_log: PlayerLog, *, raid_size: int | None) -> dict[str,
 
     total_casts = sum(len(times) for times in player_log.cast_timeline.values())
     uptimes = list(player_log.uptimes.values())
-    targets_per_cast = [v for v in player_log.avg_targets_per_cast.values() if v > 0]
     waste_total = float(sum(player_log.resource_waste.values()))
 
     return {
@@ -136,7 +136,6 @@ def build_features(player_log: PlayerLog, *, raid_size: int | None) -> dict[str,
         "c_n_tracked_auras": float(len(uptimes)),
         "c_resource_waste_total": waste_total,
         "c_resource_waste_per_minute": _safe_div(waste_total, minutes),
-        "c_mean_targets_per_cast": _safe_div(sum(targets_per_cast), len(targets_per_cast)),
     }
 
 

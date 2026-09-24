@@ -18,6 +18,8 @@ sparse group, discovered by the loop rather than hand-coded.
 from __future__ import annotations
 
 import hashlib
+import json
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -47,7 +49,6 @@ from botgitgud.phase4.experiment_splits import (
     spec_and_encounter_seen_separately,
     temporal_within_target_split,
 )
-from botgitgud.phase4.experiment_store import FEATURE_SCHEMA_VERSION
 from botgitgud.phase4.experimental_dataset import (
     ExperimentalFeatureDataset,
     ExperimentalObservation,
@@ -321,10 +322,29 @@ def dataset_hash(dataset: ExperimentalFeatureDataset) -> str:
     tripping the repo-wide no-raw-console-output convention test.
     """
     ordered = sorted(dataset.observations, key=lambda o: o.observation_key)
-    payload = "\n".join(
-        f"{o.report_code}|{o.fight_id}|{o.player_name}|{o.y_rank_percent}|"
-        f"{o.observed_at_ms}|{o.target.target_id}"
-        for o in ordered
+    rows = []
+    for o in ordered:
+        features = {k: float(v) for k, v in sorted(o.features.items())}
+        if any(not math.isfinite(v) for v in features.values()):
+            raise ValueError("dataset contains non-finite feature")
+        rows.append(
+            {
+                "identity": [o.report_code, o.fight_id, o.player_name],
+                "observed_at_ms": o.observed_at_ms,
+                "target_id": o.target.target_id,
+                "label": float(o.y_rank_percent),
+                "features": features,
+            }
+        )
+    payload = json.dumps(
+        {
+            "algorithm": "dataset-hash-v2",
+            "feature_schema_version": dataset.feature_schema_version,
+            "rows": rows,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     )
     return "ds-" + hashlib.sha256(payload.encode()).hexdigest()[:20]
 
@@ -376,6 +396,10 @@ def run_matrix(
     families: Sequence[FeatureFamily] = ALL_FAMILIES,
     models: Sequence[ModelKind] = ALL_MODELS,
 ) -> MatrixResult:
+    from botgitgud.phase4.experiment_store import DATASET_FEATURE_SCHEMA_VERSION
+
+    if dataset.feature_schema_version != DATASET_FEATURE_SCHEMA_VERSION:
+        raise ValueError("new evaluation requires the current feature schema")
     for g in granularities:
         if g not in IMPLEMENTED_GRANULARITIES:
             raise NotImplementedError(f"{g} is not implemented for evaluation")
@@ -404,7 +428,7 @@ def run_matrix(
         config=config,
         dataset_fingerprint=dataset_hash(dataset),
         dataset_row_count=len(dataset),
-        feature_schema_version=FEATURE_SCHEMA_VERSION,
+        feature_schema_version=dataset.feature_schema_version,
         dependency_versions=_dependency_versions(),
         cells=tuple(cells),
         sensitivity=_sensitivity_analysis(dataset, config),

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
+from botgitgud.analysis.measurement import MetricStatus
+from botgitgud.analysis.metric_observations import observe
 from botgitgud.domain.ability_identity import AbilityIdentity
 from botgitgud.domain.ability_role import AbilityRole
 from botgitgud.domain.canonical_ability import CanonicalAbility
@@ -25,6 +28,9 @@ class FeatureBlockReason(StrEnum):
     UNRESOLVED_IDENTITY = "unresolved_identity"
     NON_SPEC_ROLE = "non_spec_role"
     NO_DURATION = "no_duration"
+    PARTIAL_COLLECTION = "partial_collection"
+    UNKNOWN_COLLECTION = "unknown_collection"
+    INVALID_VALUE = "invalid_value"
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +100,43 @@ def evaluate_feature_availability(
             reasons.append(FeatureBlockReason.NO_SIGNAL)
         if kind is FeatureKind.CASTS_PER_MINUTE and log.fight.duration_s <= 0:
             reasons.append(FeatureBlockReason.NO_DURATION)
-        ordered_reasons = tuple(sorted(reasons, key=lambda reason: reason.value))
+        metric = {
+            FeatureKind.DAMAGE_SHARE: "gross_damage_share_pct",
+            FeatureKind.CAST_COUNT: "player_casts_per_minute",
+            FeatureKind.CAST_TIMELINE: "player_casts_per_minute",
+            FeatureKind.CASTS_PER_MINUTE: "player_casts_per_minute",
+            FeatureKind.UPTIME: "aura_uptime_fraction",
+        }[kind]
+        observations = [
+            observe(log, sid, metric, None)
+            for sid in members
+            if (
+                sid in log.damage_by_ability
+                if kind is FeatureKind.DAMAGE_SHARE
+                else sid in log.uptimes
+                if kind is FeatureKind.UPTIME
+                else bool(log.cast_timeline.get(sid))
+            )
+        ]
+        for observation in observations:
+            if observation.status is MetricStatus.AVAILABLE:
+                continue
+            reasons.append(
+                FeatureBlockReason.PARTIAL_COLLECTION
+                if observation.status is MetricStatus.PARTIAL
+                else FeatureBlockReason.INVALID_VALUE
+                if observation.status is MetricStatus.INVALID
+                else FeatureBlockReason.UNKNOWN_COLLECTION
+            )
+        if not reasons and kind in {
+            FeatureKind.CAST_COUNT,
+            FeatureKind.CAST_TIMELINE,
+            FeatureKind.CASTS_PER_MINUTE,
+        }:
+            count = sum(len(log.cast_timeline.get(sid, ())) for sid in members)
+            if not math.isfinite(60 * count / log.fight.duration_s):
+                reasons.append(FeatureBlockReason.INVALID_VALUE)
+        ordered_reasons = tuple(sorted(set(reasons), key=lambda reason: reason.value))
         result.append(
             FeatureAvailability(kind=kind, available=not ordered_reasons, reasons=ordered_reasons)
         )

@@ -265,7 +265,7 @@ def test_scenario_a_report_contract_carries_all_five_sections(tmp_path: Path) ->
     assert contract.resultado.char_name == "Zarad"  # 1. RESULTADO
     assert contract.setup is not None  # 2. SETUP
     assert {f.category for f in contract.setup.findings} == ALL_CATEGORIES
-    assert contract.execucao.comparisons  # 3. EXECUÇÃO
+    assert contract.execucao.comparisons
     assert contract.execucao.performance is not None
     assert contract.execucao.dps_gap is not None
     assert contract.confianca.matched_cohort_members == N_REFS  # 5. CONFIANÇA/AMOSTRA
@@ -423,7 +423,7 @@ def test_scenario_c_build_then_ready_then_next_analysis_is_complete(tmp_path: Pa
     assert second.setup_analysis is not None
     assert second.setup_analysis.benchmark_available is True
     assert _categories(second) == ALL_CATEGORIES
-    assert second.comparisons  # Execution também roda
+    assert second.comparisons
     assert second.dps_gap is not None
 
     contract = contract_for(second)

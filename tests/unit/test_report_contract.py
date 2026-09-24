@@ -50,7 +50,6 @@ def _finding(**overrides: object) -> Finding:
         "kind": "ABILITY_GAP",
         "title": "x",
         "detail": "y",
-        "estimated_gain_pct": 5.0,
         "confidence": "alta",
     }
     defaults.update(overrides)
@@ -115,7 +114,7 @@ def test_execucao_section_groups_comparisons_performance_dps_gap() -> None:
     dps_gap = DpsGapReport(
         player_dps=1000.0,
         cohort_median_dps=1200.0,
-        gap_pct=-1 / 6,
+        gap_vs_reference_pct=-100 / 6,
         duration_s=300.0,
         abilities=(),
         other_pct=0.0,

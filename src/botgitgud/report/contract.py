@@ -1,38 +1,15 @@
-"""RP.0 — the report's data contract, split into 5 explicit sections:
+"""Typed report contract shared by CLI and Discord.
 
-    1. RESULTADO   — `resultado: ReportHeader` (unchanged, already exists)
-    2. SETUP       — `setup: SetupAnalysis | None` (SA.6, new here)
-    3. EXECUÇÃO    — `execucao: ExecutionSection` (comparisons/performance/dps_gap)
-    4. TOP 3 AÇÕES — `top_actions: TopPriorities`, EXECUTION-ONLY
-    5. CONFIANÇA/AMOSTRA — `confianca: ConfidenceSummary`
-
-This is purely additive: `build_report_contract` ADAPTS an existing
-`AnalysisResult` (analysis/pipeline.py) into this shape — nothing in
-`analysis/pipeline.py` or `report/text.py`
-changes, and no existing generation path calls this yet. "Sem quebrar a
-geração atual mais do que necessário" (ticket, verbatim) is satisfied
-maximally: zero behavior change anywhere, because nothing consumes this
-contract yet. RP.1 will render it; RP.2 will populate `setup` for real
-(today it's always `None` unless a caller passes one in — no
-`analyze_setup()` call exists in the live pipeline yet, deliberately, per
-RP.2's own scope).
-
-**Setup and execution findings are structurally separate types** —
-`SetupFinding` (analysis/setup_finding.py, SA.1) and `Finding`
-(analysis/findings.py) share no base class, no common fields
-(`estimated_gain_pct` exists only on `Finding`). `top_actions` is typed
-`TopPriorities`, whose levels are typed independently, so a `SetupFinding`
-cannot type-check its way in;
-`build_report_contract` also asserts this at runtime, defense in depth —
-"Top 3: execution-only. Nunca selecionar SetupFinding por
-estimated_gain_pct" (ticket, verbatim) is enforced by both the type
-system and a runtime check, not just documentation.
+Setup and execution findings remain separate types. The adapter preserves the
+measurement objects, populations, exclusions and availability from analysis;
+presentation does not recompute an alternative comparison or a causal gain.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from botgitgud.analysis.comparability_provenance import ComparabilityProvenance
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
 from botgitgud.analysis.findings import Finding, RelevanceFinding, TopPriorities
@@ -75,6 +52,9 @@ class ConfidenceSummary:
     cohort_warnings: tuple[str, ...]
     matched_covariates: tuple[str, ...]
     relaxed_covariates: tuple[str, ...]
+    # M2.3 §7.2: aditivo, copiado verbatim de AnalysisResult.comparability —
+    # nenhuma transformação de apresentação acontece aqui.
+    comparability: ComparabilityProvenance | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +114,7 @@ def build_report_contract(
             cohort_warnings=result.header.cohort_warnings,
             matched_covariates=result.header.matched_covariates,
             relaxed_covariates=result.header.relaxed_covariates,
+            comparability=result.comparability,
         ),
         manifest=result.manifest,
         core_abilities=result.core_abilities,
