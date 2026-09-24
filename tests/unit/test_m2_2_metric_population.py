@@ -7,8 +7,9 @@ zero-delta steps (AC2), invariance to M2.1 scarcity (AC3), descriptive vs.
 aspirational separation including the outcome-ordering guard (AC4),
 non-borrowing across metric_id (AC5), permutation invariance, absent-value
 abstention (C06), the read-only B04 sensitivity artifact, a read-only replay
-of real metadata (tests/fixtures/gate1_scope; data/raw has no Parquet files in
-this workspace, declared explicitly rather than fabricated), and two
+of real metadata (tests/fixtures/gate1_scope), a replay of the real
+data/raw corpus through the contracted quarantine -> hygiene -> M2.1 -> M2.2
+path (skipped explicitly, never fabricated, when the corpus is absent), and two
 structural checks anchoring AC6 (import allowlist via ast; Ruff/Pyright
 config via tomllib) to the real repository. See docs/methodology.md
 for the full critério -> teste -> resultado table.
@@ -28,7 +29,11 @@ import pytest
 from dir_snapshot import diff_snapshots, snapshot_directory
 from real_corpus import CORPUS_ROOT, discover_corpus_paths
 
-from botgitgud.analysis.cohort_match import DURATION_BANDS_PCT
+from botgitgud.analysis.cohort_match import (
+    DURATION_BANDS_PCT,
+    hygienic_candidates,
+    quarantine_conflicting_duplicates,
+)
 from botgitgud.analysis.grading import MIN_N_FOR_GRADING
 from botgitgud.analysis.measurement import damage_reference_id
 from botgitgud.analysis.metric_population import (
@@ -1156,11 +1161,16 @@ def test_covariate_sensitivity_over_real_gate1_scope_metadata() -> None:
 
 
 def test_replay_over_data_raw_corpus_if_present() -> None:
-    """SPEC §12.10: declare corpus absence explicitly rather than fabricate a
-    number or silently skip without a message. This skip can never itself
-    serve as passed acceptance proof for AC6 — the real M2.2 coverage proof
-    in this suite is
-    test_replay_gate1_scope_rankings_census_matches_manual_expectation.
+    """Replays the real corpus through the contracted M2 path — quarantine,
+    hygiene, M2.1, M2.2 (docs/methodology.md §5.1) — never handing the raw
+    fetched list to M2.1/M2.2, which by contract do not deduplicate.
+
+    The target is the first kill of the most populated coherent partition
+    (encounter, difficulty, partition, class, spec), so the replay produces
+    real ELIGIBLE references instead of a vacuous empty population. Absence
+    of the corpus is declared explicitly; this skip can never itself serve
+    as passed acceptance proof for AC6 — the real M2.2 coverage proof in this
+    suite is test_replay_gate1_scope_rankings_census_matches_manual_expectation.
     """
     paths = discover_corpus_paths()
     if not paths:
@@ -1173,17 +1183,75 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
     from botgitgud.ingest.parquet_codec import read_parquet_log
 
     logs = [read_parquet_log(p) for p in paths]
-    target, *references = logs
-    eligibility = evaluate_references(target, tuple(references))
+
+    def partition_key(log: PlayerLog) -> tuple[int, int, int | None, str, str]:
+        return (
+            log.fight.encounter_id,
+            log.fight.difficulty,
+            log.fight.partition,
+            log.build.class_name,
+            log.build.spec_name,
+        )
+
+    counts: dict[tuple[int, int, int | None, str, str], int] = {}
+    for log in logs:
+        if log.fight.kill:
+            counts[partition_key(log)] = counts.get(partition_key(log), 0) + 1
+    chosen = max(counts, key=lambda key: (counts[key], key))
+    target_index = next(
+        i for i, log in enumerate(logs) if log.fight.kill and partition_key(log) == chosen
+    )
+    target = logs[target_index]
+    fetched = tuple(log for i, log in enumerate(logs) if i != target_index)
+
+    quarantined, quarantine_report = quarantine_conflicting_duplicates(target, fetched)
+    hygienic, _ = hygienic_candidates(target, quarantined)
+    ids_after_hygiene = [damage_reference_id(log) for log in hygienic]
+    assert len(ids_after_hygiene) == len(set(ids_after_hygiene))
+    assert not set(ids_after_hygiene) & set(quarantine_report.conflicting_ids)
+
+    eligibility = evaluate_references(target, tuple(hygienic))
+    assert eligibility.eligible_ids, "coherent partition must yield real eligible references"
     population_set = select_metric_population(
         target,
-        tuple(references),
+        tuple(hygienic),
         metric="gross_ability_dps",
         spell_id=1,
         eligibility=eligibility,
         catalog=None,
     )
     assert population_set.policy_version == METRIC_POPULATION_POLICY_VERSION
+
+
+def test_percentile_only_duplicate_is_refused_by_m2_2_and_quarantined_by_the_m2_path() -> None:
+    """Real-corpus shape: the same physical log fetched twice, one before the
+    ranking existed (`percentile=None`) and one after, is identical in every
+    other field. M2.2 does not deduplicate and refuses to pick one; the M2
+    path quarantines the whole observation before M2.1/M2.2 ever see it."""
+    target = _target()
+    without_percentile = _make_log(character_name="Ally", fight_id=30)
+    with_percentile = dataclasses.replace(without_percentile, percentile=100.0)
+    clean = _refs(8)
+    fetched = (without_percentile, with_percentile, *clean)
+
+    raw_eligibility = evaluate_references(target, fetched)
+    with pytest.raises(ValueError, match="reference_id collision"):
+        select_metric_population(
+            target,
+            fetched,
+            metric="gross_ability_dps",
+            spell_id=_SPELL_ID,
+            eligibility=raw_eligibility,
+            catalog=None,
+        )
+
+    quarantined, report = quarantine_conflicting_duplicates(target, fetched)
+    assert report.conflicting_ids == (damage_reference_id(without_percentile),)
+    hygienic, _ = hygienic_candidates(target, quarantined)
+    assert damage_reference_id(without_percentile) not in {damage_reference_id(x) for x in hygienic}
+    population_set = _populate(target, tuple(hygienic))
+    assert population_set.policy_version == METRIC_POPULATION_POLICY_VERSION
+    assert damage_reference_id(without_percentile) not in population_set.descriptive.members
 
 
 # --- structural checks anchoring AC5 (imports) and AC6 (tooling config) --------
