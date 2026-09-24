@@ -44,6 +44,11 @@ def build_run_manifest(
     wcl_partition: int | None,
     settings: Settings,
     reference_n_quantitative: int = 0,
+    reference_eligibility_policy_version: str = "unknown",
+    metric_population_policy_version: str = "unknown",
+    ledger_matching_policy_version: str = "unknown",
+    comparability_provenance_version: str = "unknown",
+    comparability_provenance_json: str | None = None,
 ) -> RunManifest:
     return RunManifest(
         cohort_id=cohort_id,
@@ -55,4 +60,9 @@ def build_run_manifest(
         measurement_input_version="measurement-input-v1",
         damage_comparison_version="damage-comparison-v2",
         reference_n_quantitative=reference_n_quantitative,
+        reference_eligibility_policy_version=reference_eligibility_policy_version,
+        metric_population_policy_version=metric_population_policy_version,
+        ledger_matching_policy_version=ledger_matching_policy_version,
+        comparability_provenance_version=comparability_provenance_version,
+        comparability_provenance_json=comparability_provenance_json,
     )

@@ -279,6 +279,16 @@ def _happy_path_responses(
         "percentile": percentile,
         "rankings": [_rankings_response(N_REFS)],
         "partition": _zone_partitions_response(),  # dict, not list: reusable across calls
+        # M2.3: the player's own fight.partition comes from report.rankings
+        # (fetch_partition), a separate WCL call from get_current_partition
+        # above — reference logs get expected_partition passed directly and
+        # never make this call. Without it the player's partition stays None
+        # (log_fetcher.py's honest default) while every reference carries a
+        # real partition, so M2.1's PARTITION axis would mark every
+        # reference PARTITION_UNKNOWN (target side unknown) instead of
+        # exercising the real match/mismatch path this fixture intends.
+        # 3 matches _zone_partitions_response()'s own default.
+        "report_rankings": _report_rankings_response(partition=3),
     }
 
 
@@ -369,6 +379,7 @@ def test_run_analysis_execution_findings_nonvacuous_with_a_material_death(tmp_pa
         "percentile": percentile,
         "rankings": [_rankings_response(n_refs)],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -661,6 +672,7 @@ def test_player_without_augmentation_gets_an_augmentation_free_cohort(
             }
         ],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -738,6 +750,7 @@ def test_relaxed_has_augmentation_shows_support_buff_warning_end_to_end(
             }
         ],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
@@ -905,18 +918,23 @@ def test_insufficient_cohort_propagates(tmp_path: Path) -> None:
         run_analysis(req, deps)
 
 
-def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
+def test_insufficient_ledger_after_covariate_matching_completes_with_ledger_state_insufficient(
     tmp_path: Path,
 ) -> None:
-    """T2.1 acceptance: 8 raw candidates clear rankings.py's own ±35% gate
-    (so InsufficientCohort is NOT raised there), but every one's own fight
-    is 30s off the player's 100s fight — outside match_cohort's ±20%
-    duration ceiling (max(100*0.20, 15)=20s), which is never relaxed
-    further no matter how every other covariate degrades.
-    difficulty/partition/class/spec are exact by construction (the
-    rankings query itself) and are never touched by match_cohort either
-    way — pipeline.py must still raise InsufficientCohort from the
-    post-matching count.
+    """T2.1 acceptance, updated by M2.3 §6.1: 8 raw candidates clear
+    rankings.py's own ±35% gate (so InsufficientCohort is NOT raised there),
+    but every one's own fight is 30s off the player's 100s fight — outside
+    match_covariates' ±20% duration ceiling (max(100*0.20, 15)=20s), which
+    is never relaxed further no matter how every other covariate degrades.
+    difficulty/partition/class/spec are exact by construction (the rankings
+    query itself) and are never touched by match_covariates either way.
+
+    Before M2.3, pipeline.py raised InsufficientCohort from the post-
+    matching count. M2.3 §6.1 removes that abort: the analysis now
+    completes with ledger_state INSUFFICIENT_REFERENCES (§6.2) — the
+    ledger-dependent consumers (performance, CD comparisons, core
+    abilities/procs) are the ones that go empty/None, not the whole
+    analysis.
     """
     meta = [_meta_response(class_name="Warlock", spec_name="Demonology")]
     primary_cast = {"sourceID": 6, "type": "cast", "abilityGameID": 104316, "timestamp": 1300}
@@ -961,13 +979,27 @@ def test_insufficient_cohort_after_covariate_matching_never_relaxes_difficulty(
         "percentile": percentile,
         "rankings": [off_duration_rankings],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)
     req = _req()
 
-    with pytest.raises(InsufficientCohort):
-        run_analysis(req, deps)
+    result = run_analysis(req, deps)
+
+    assert result.matched_cohort_members == 0
+    assert result.comparability is not None
+    assert result.comparability.ledger.state == "INSUFFICIENT_REFERENCES"
+    # §6.2's "não computado" column: ledger-dependent consumers go empty/None.
+    assert result.performance is None
+    assert result.core_abilities == ()
+    assert result.proc_analysis is None
+    assert result.external_dps_context == ()
+    assert result.comparisons == ()
+    # §6.2's "sempre computado" column: dps_gap and the six per-metric
+    # comparisons stay available, independent of the ledger's own size.
+    assert result.dps_gap is not None
+    assert result.dps_gap.metric_comparisons != {}
 
 
 # -- B1/B2: build frio interativo e incremental e resumivel ------------------------
@@ -1099,6 +1131,7 @@ def test_run_analysis_populates_conclusion_end_to_end(tmp_path: Path) -> None:
         "percentile": percentile,
         "rankings": [_rankings_response(n_refs)],
         "partition": _zone_partitions_response(),
+        "report_rankings": _report_rankings_response(partition=3),
     }
     transport = _DispatchTransport(responses)
     deps = _build_deps(tmp_path, transport)

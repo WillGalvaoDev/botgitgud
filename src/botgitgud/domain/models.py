@@ -407,3 +407,10 @@ class RunManifest:
     measurement_input_version: str = "unknown"
     damage_comparison_version: str = "unknown"
     reference_n_quantitative: int = 0
+    # M2.3 §7.3: aditivo. Ausente ("unknown"/None) em manifestos anteriores a
+    # M2.3, lido como legado — nunca reinterpretado como a versão corrente.
+    reference_eligibility_policy_version: str = "unknown"
+    metric_population_policy_version: str = "unknown"
+    ledger_matching_policy_version: str = "unknown"
+    comparability_provenance_version: str = "unknown"
+    comparability_provenance_json: str | None = None

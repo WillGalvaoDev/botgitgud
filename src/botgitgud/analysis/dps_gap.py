@@ -24,6 +24,7 @@ from botgitgud.analysis.measurement import (
     measured_median,
 )
 from botgitgud.analysis.metric_observations import compare_metrics
+from botgitgud.analysis.metric_population import MetricPopulationSet
 from botgitgud.analysis.performance_features import ScalarFinding
 from botgitgud.domain.ability_role import AbilityRole
 from botgitgud.domain.damage_scope import DamageScopeVersion
@@ -243,13 +244,26 @@ def analyze_dps_gap(
     catalog: SpellCatalog,
     buffs_relaxed: bool,
     benchmark_reference: Sequence[PlayerLog] = (),
+    metric_populations: Mapping[str, MetricPopulationSet] | None = None,
+    metric_population_pool: Sequence[PlayerLog] = (),
 ) -> DpsGapReport:
+    """``metric_populations``/``metric_population_pool`` (M2.3 §5): when
+    given, the six contracted metrics (and every per-ability
+    ``gross_ability_dps`` grade derived from them below) use M2.2's own
+    DESCRIPTIVE population per ``metric_id`` — never ``matched_logs``
+    directly. The ledger comparison (``comparison``/``aspirational``,
+    ``AbilityGap``'s volume/efficiency/interaction split, support, residual)
+    always stays on ``matched_logs`` (the ledger, ``R_log`` in M2.3 terms),
+    unchanged.
+    """
     return _analyze_dps_gap_v2(
         player_log,
         matched_logs,
         cohort_median_dps=cohort_median_dps,
         catalog=catalog,
         benchmark_reference=benchmark_reference,
+        metric_populations=metric_populations,
+        metric_population_pool=metric_population_pool,
     )
 
 
@@ -260,10 +274,16 @@ def _analyze_dps_gap_v2(
     cohort_median_dps: float | None,
     catalog: SpellCatalog,
     benchmark_reference: Sequence[PlayerLog],
+    metric_populations: Mapping[str, MetricPopulationSet] | None = None,
+    metric_population_pool: Sequence[PlayerLog] = (),
 ) -> DpsGapReport:
     """M1 authoritative path: one accounting population and one DPS ledger."""
     accounting = account_damage(player)
-    metrics = compare_metrics(player, references, catalog)
+    metrics = (
+        compare_metrics(player, metric_population_pool, catalog, populations=metric_populations)
+        if metric_populations is not None
+        else compare_metrics(player, references, catalog)
+    )
     comparison = compare_damage(player, tuple(references))
     aspirational = compare_damage(player, tuple(benchmark_reference))
     duration = player.fight.duration_s

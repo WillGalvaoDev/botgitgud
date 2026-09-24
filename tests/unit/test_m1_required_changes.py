@@ -227,6 +227,15 @@ def test_u07_core_features_use_validated_availability(case: str, catalog: SpellC
     assert core[0].cast_timeline is None and core[0].uptime is None
 
 
+def _with_partition(entry: PlayerLog, partition: int) -> PlayerLog:
+    # M2.3: log()/_log() never set fight.partition (stays None), so without
+    # this every reference is M2.1 PARTITION_UNKNOWN (INDETERMINATE, never
+    # ELIGIBLE) against the mocked player — irrelevant to what this test
+    # actually checks (header/conclusion wiring of the damage population),
+    # so give both sides the same known partition instead.
+    return replace(entry, fight=replace(entry.fight, partition=partition))
+
+
 @pytest.mark.parametrize("case", ["legacy_casts", "small_damage_R"])
 def test_u08_header_uses_damage_population_and_public_floor(case: str, tmp_path: Path) -> None:
     refs = [log(200, fight_id=i + 2) for i in range(15)]
@@ -241,10 +250,13 @@ def test_u08_header_uses_damage_population_and_public_floor(case: str, tmp_path:
             )
             for i in range(15)
         ]
+    refs = [_with_partition(r, 4) for r in refs]
     deps = _build_deps(tmp_path, _DispatchTransport({}))
     try:
         with (
-            patch.object(deps.fetcher, "fetch", return_value=replace(log(), dps=999)),
+            patch.object(
+                deps.fetcher, "fetch", return_value=_with_partition(replace(log(), dps=999), 4)
+            ),
             patch.object(deps.store, "read_candidate_pool", return_value=[]),
             patch("botgitgud.analysis.pipeline.fetch_cohort_logs", return_value=refs),
             patch("botgitgud.analysis.pipeline.get_current_partition", return_value=1),

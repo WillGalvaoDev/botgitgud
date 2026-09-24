@@ -140,6 +140,13 @@ class Store:
             ("measurement_input_version", "VARCHAR"),
             ("damage_comparison_version", "VARCHAR"),
             ("reference_n_quantitative", "INTEGER"),
+            # M2.3 §7.3: aditivo. Linhas antigas ficam NULL nessas colunas e
+            # são lidas como versão desconhecida/legada, nunca a corrente.
+            ("reference_eligibility_policy_version", "VARCHAR"),
+            ("metric_population_policy_version", "VARCHAR"),
+            ("ledger_matching_policy_version", "VARCHAR"),
+            ("comparability_provenance_version", "VARCHAR"),
+            ("comparability_provenance_json", "VARCHAR"),
         ):
             self._conn.execute(f"ALTER TABLE runs ADD COLUMN IF NOT EXISTS {column} {dtype}")
 
@@ -330,8 +337,11 @@ class Store:
                 """
                 INSERT INTO runs (
                     cohort_id, code_version, generated_at, n_members, wcl_partition, settings_hash,
-                    measurement_input_version, damage_comparison_version, reference_n_quantitative
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    measurement_input_version, damage_comparison_version, reference_n_quantitative,
+                    reference_eligibility_policy_version, metric_population_policy_version,
+                    ledger_matching_policy_version, comparability_provenance_version,
+                    comparability_provenance_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     manifest.cohort_id,
@@ -343,6 +353,11 @@ class Store:
                     manifest.measurement_input_version,
                     manifest.damage_comparison_version,
                     manifest.reference_n_quantitative,
+                    manifest.reference_eligibility_policy_version,
+                    manifest.metric_population_policy_version,
+                    manifest.ledger_matching_policy_version,
+                    manifest.comparability_provenance_version,
+                    manifest.comparability_provenance_json,
                 ],
             )
 

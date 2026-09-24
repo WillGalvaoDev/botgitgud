@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from botgitgud.analysis.comparability_provenance import ComparabilityProvenance
 from botgitgud.analysis.comparison import SpellComparison
 from botgitgud.analysis.dps_gap import DpsGapReport
 from botgitgud.analysis.findings import Finding, RelevanceFinding, TopPriorities
@@ -51,6 +52,9 @@ class ConfidenceSummary:
     cohort_warnings: tuple[str, ...]
     matched_covariates: tuple[str, ...]
     relaxed_covariates: tuple[str, ...]
+    # M2.3 §7.2: aditivo, copiado verbatim de AnalysisResult.comparability —
+    # nenhuma transformação de apresentação acontece aqui.
+    comparability: ComparabilityProvenance | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +114,7 @@ def build_report_contract(
             cohort_warnings=result.header.cohort_warnings,
             matched_covariates=result.header.matched_covariates,
             relaxed_covariates=result.header.relaxed_covariates,
+            comparability=result.comparability,
         ),
         manifest=result.manifest,
         core_abilities=result.core_abilities,

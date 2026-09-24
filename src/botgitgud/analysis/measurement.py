@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from botgitgud.analysis.metric_population import MetricPopulationSet
     from botgitgud.analysis.performance_features import ScalarFinding
 
 from botgitgud.domain.damage_scope import DamageScopeVersion
@@ -99,6 +100,12 @@ class MetricComparison:
     excluded_references: Mapping[str, str]
     finding: ScalarFinding | None = None
     reasons: tuple[str, ...] = ()
+    # M2.3 §5.3: set only in compare_metrics' population mode. Carries the
+    # full M2.2 MetricPopulationSet (descriptive + aspirational) this
+    # comparison's reference_ids/reference_values/excluded_references were
+    # taken from verbatim, for provenance and for consumers that need more
+    # than the single dominant exclusion code excluded_references keeps.
+    population: MetricPopulationSet | None = None
 
     def __post_init__(self) -> None:
         if self.player.metric_id != self.metric_id:

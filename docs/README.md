@@ -44,6 +44,15 @@ elegibilidade básica de M2.1. Não faz wiring em `pipeline`/`cohort_match`/rela
 (M2.3) nem antecipa interpretação estatística (M3/B06). Evidências, replay e o
 status corrente estão em [`m2-2-review-evidence.md`](m2-2-review-evidence.md).
 
+[`m2-3-specification.md`](m2-3-specification.md) define os contratos e critérios da
+M2.3 (integração e closure da comparabilidade): conecta M2.1 e M2.2 ao
+`run_analysis`, ao contrato de relatório e à proveniência persistida
+(`comparability-provenance-v1`); remove o aborto por insuficiência de ledger,
+mantendo apenas a comparação dependente bloqueada. `reference_eligibility.py`
+e `metric_population.py` permanecem byte-idênticos. **MILESTONE_CLOSED** junto com o
+macro M2 ([`registro de fechamento`](m2-3-closure.md)). Evidências,
+replay e o status corrente estão em [`m2-3-review-evidence.md`](m2-3-review-evidence.md).
+
 O [`roadmap aprovado M2–M6`](methodology-roadmap-m2-m6.md) contém 16 submilestones,
 com dependências, escopo, aceite e evidências. Todas permanecem não iniciadas.
 O [`workflow operacional`](milestone-workflow.md) define Opus como analista/arquiteto,
@@ -120,3 +129,7 @@ Registros de estados passados, preservados como evidência. **Não são procedim
 ## M2.2 manual closure - 2026-09-22
 
 [M2.2 MILESTONE_CLOSED](m2-2-closure.md) after independent Astra review (review, re-review, final review). Macro M2 open; orchestrator suspended.
+
+## M2.3 and macro M2 manual closure - 2026-09-24
+
+[M2.3 MILESTONE_CLOSED; macro M2 MILESTONE_CLOSED](m2-3-closure.md) after independent Astra review (review, re-review, v003 review, final review). M3 not started; orchestrator suspended.

@@ -39,6 +39,9 @@ def test_a19_migrate_twice_preserves_historical_run_and_new_versions(tmp_path: P
     for iteration in range(2):
         with Store(tmp_path) as store:
             old = store.query("SELECT * FROM runs WHERE cohort_id='old'").row(0)
+            # M2.3 §7.3: additive migration adds five more columns; the
+            # historical row still reads back NULL in all of them, never a
+            # fabricated current-version value.
             assert old == (
                 "old",
                 "old-code",
@@ -46,6 +49,11 @@ def test_a19_migrate_twice_preserves_historical_run_and_new_versions(tmp_path: P
                 20,
                 1,
                 "old-settings",
+                None,
+                None,
+                None,
+                None,
+                None,
                 None,
                 None,
                 None,

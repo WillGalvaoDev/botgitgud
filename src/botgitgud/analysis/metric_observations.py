@@ -1,7 +1,10 @@
 """M1 per-metric observations: absence, eligibility and source identity."""
 
+from __future__ import annotations
+
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from botgitgud.analysis.measurement import (
     MetricComparison,
@@ -14,6 +17,13 @@ from botgitgud.analysis.performance_features import grade_scalar, scalar_is_fini
 from botgitgud.domain.measurement_validation import collection_interval_problem, valid_player_casts
 from botgitgud.domain.models import CollectionStatus, PlayerLog
 from botgitgud.domain.spells import SpellCatalog
+
+if TYPE_CHECKING:
+    # metric_population.py imports UNITS/observe from this module, so a
+    # runtime import back here would cycle — TYPE_CHECKING keeps this to
+    # static analysis only. compare_metrics' population mode below never
+    # needs the enum values at runtime, only string equality (StrEnum).
+    from botgitgud.analysis.metric_population import MetricPopulationSet
 
 UNITS = {
     "gross_ability_dps": ("DPS", "FIGHT_DURATION_SECONDS"),
@@ -104,8 +114,25 @@ def compare_metrics(
     catalog: SpellCatalog,
     *,
     metric_names: Sequence[str] = tuple(UNITS),
+    populations: Mapping[str, MetricPopulationSet] | None = None,
 ) -> dict[str, MetricComparison]:
-    """Each available scalar uses only its own observations; no cross-metric N."""
+    """Each available scalar uses only its own observations; no cross-metric N.
+
+    Population mode (M2.3 §5, ``populations`` given): the reference set for
+    each ``metric_id`` is exactly
+    ``populations[metric_id].descriptive.members`` — membership, exclusions
+    and grading sufficiency come from M2.2's own ladder (``metric_population.py``,
+    unmodified) and are never recomputed or filtered further here.
+    ``references`` still supplies the ``PlayerLog`` objects those member ids
+    resolve to (pass the same pool ``populations`` was computed over, e.g.
+    the hygienic candidate set — a superset of any single metric's members);
+    ``metric_names`` is ignored. The output key set is exactly
+    ``populations``'s. Legacy mode (``populations=None``, the default) is
+    the original behaviour, unchanged.
+    """
+    if populations is not None:
+        return _compare_metrics_by_population(player, references, catalog, populations)
+
     ids = set(player.damage_by_ability) | set(player.cast_timeline) | set(player.uptimes)
     by_identity: dict[str, PlayerLog] = {}
     conflicts = set()
@@ -161,4 +188,62 @@ def compare_metrics(
                 scalar,
                 reasons,
             )
+    return comparisons
+
+
+_GRADABLE_METRICS = frozenset(
+    {"gross_ability_dps", "player_casts_per_minute", "aura_uptime_fraction"}
+)
+
+
+def _compare_metrics_by_population(
+    player: PlayerLog,
+    references: Sequence[PlayerLog],
+    catalog: SpellCatalog,
+    populations: Mapping[str, MetricPopulationSet],
+) -> dict[str, MetricComparison]:
+    id_to_log = {damage_reference_id(ref): ref for ref in references}
+    comparisons: dict[str, MetricComparison] = {}
+    for metric_id, population_set in populations.items():
+        metric, sid_str = metric_id.split(":", 1)
+        sid = int(sid_str)
+        observation = observe(player, sid, metric, catalog)
+        descriptive = population_set.descriptive
+        used = descriptive.members
+        values: list[float] = []
+        for rid in used:
+            value = observe(id_to_log[rid], sid, metric, catalog)
+            # M2.2's own ladder already proved this id AVAILABLE for this
+            # metric (that is what admits it to `descriptive.members`);
+            # `observe` is pure, so re-observing the same log/metric/spell
+            # must reproduce the same AVAILABLE value.
+            assert value.status is MetricStatus.AVAILABLE and value.value is not None
+            values.append(value.value)
+        # M2.2 §10.1: excluded_reasons[rid][0] is already the dominant
+        # (stage-A-first) code; this mirrors legacy mode's single-string
+        # excluded_references, with the full tuple kept in `population`.
+        excluded = {rid: reasons[0] for rid, reasons in descriptive.excluded_reasons.items()}
+        scalar = (
+            grade_scalar(observation.value, values, "higher_better")
+            if observation.status is MetricStatus.AVAILABLE
+            and observation.value is not None
+            and values
+            # StrEnum: compares equal to its own value, no runtime import needed.
+            and descriptive.sufficiency == "SUFFICIENT_FOR_GRADING"
+            and metric in _GRADABLE_METRICS
+            else None
+        )
+        reasons: tuple[str, ...] = ()
+        if scalar is not None and not scalar_is_finite(scalar):
+            scalar, reasons = None, ("NONFINITE_DERIVED_STATISTIC",)
+        comparisons[metric_id] = MetricComparison(
+            metric_id,
+            observation,
+            used,
+            tuple(values),
+            excluded,
+            scalar,
+            reasons,
+            population=population_set,
+        )
     return comparisons

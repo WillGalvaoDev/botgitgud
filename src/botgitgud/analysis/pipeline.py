@@ -26,13 +26,14 @@ survive THIS player's own matching cascade.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import structlog
 
 from botgitgud import telemetry
 from botgitgud.analysis.benchmark import BenchmarkPolicy, EncounterBenchmarkTarget
-from botgitgud.analysis.benchmark_reference import select_benchmark_reference
+from botgitgud.analysis.benchmark_reference import REFERENCE_MIN_N, select_benchmark_reference
 from botgitgud.analysis.benchmark_store import BenchmarkStore
 from botgitgud.analysis.benchmark_store_models import EncounterBenchmarkCorruptPayloadError
 from botgitgud.analysis.canonical_role import derive_canonical_roles
@@ -45,7 +46,11 @@ from botgitgud.analysis.cohort import (
     duration_bucket_id,
 )
 from botgitgud.analysis.cohort_increment import CohortState, DeferReason, advance_cohort_build
-from botgitgud.analysis.cohort_match import match_cohort
+from botgitgud.analysis.cohort_match import (
+    hygienic_candidates,
+    match_covariates,
+    quarantine_conflicting_duplicates,
+)
 from botgitgud.analysis.cold_build import (
     ColdBuildExecution,
     ColdBuildMode,
@@ -53,6 +58,15 @@ from botgitgud.analysis.cold_build import (
     cohort_single_flight,
     estimate_cold_build,
     preflight_cold_build,
+)
+from botgitgud.analysis.comparability_provenance import (
+    ComparabilityProvenance,
+    build_comparability_provenance,
+    encode_comparability_provenance,
+    summarize_eligibility,
+    summarize_hygiene,
+    summarize_ledger,
+    summarize_metrics,
 )
 from botgitgud.analysis.comparison import SpellComparison, compare_all_spells
 from botgitgud.analysis.core_ability_set import build_core_ability_sets
@@ -74,6 +88,10 @@ from botgitgud.analysis.materiality import (
     select_positive_observation,
 )
 from botgitgud.analysis.measurement import account_damage, damage_reference_id, measured_median
+from botgitgud.analysis.metric_population import (
+    METRIC_POPULATION_POLICY_VERSION,
+    select_metric_populations,
+)
 from botgitgud.analysis.performance_features import (
     PerformanceFindings,
     analyze_performance_features,
@@ -81,6 +99,7 @@ from botgitgud.analysis.performance_features import (
 from botgitgud.analysis.prioritization import select_material_priorities
 from botgitgud.analysis.proc_analysis import ProcAnalysis, analyze_procs
 from botgitgud.analysis.profile import build_cd_reference_profile, discover_eligible_spell_ids
+from botgitgud.analysis.reference_eligibility import evaluate_references
 from botgitgud.analysis.remediation import FindingRemediation, build_remediations
 from botgitgud.analysis.setup_analysis import SetupAnalysis, analyze_setup
 from botgitgud.config import Settings
@@ -101,7 +120,6 @@ from botgitgud.errors import (
     COLD_COHORT_NO_PROGRESS,
     CohortDeferredBudget,
     CohortNotReady,
-    InsufficientCohort,
     ScopeRejected,
 )
 from botgitgud.ingest.log_fetcher import LogFetcher
@@ -212,6 +230,9 @@ class AnalysisResult:
     # M31: additive selection for M30. The legacy `top_actions` remains the
     # current report input until that consumer explicitly migrates.
     material_priorities: tuple[MaterialCandidate, ...] = ()
+    # M2.3 §7.2: aditivo. `None` só em construções legadas/diretas (fora de
+    # `run_analysis`); a proveniência de comparabilidade completa vive aqui.
+    comparability: ComparabilityProvenance | None = None
 
 
 def _report_ability_sections(
@@ -451,9 +472,10 @@ def run_analysis(
     """Raises PlayerNotFound/FightNotFound (LogFetcher.fetch), ScopeRejected
     (out-of-scope spec), CohortNotReady (no cached candidate pool and
     allow_cold_build=False), or InsufficientCohort (too few ranking
-    candidates overall — raised by ingest/rankings.py, cold path only — or
-    too few survive match_cohort's covariate degradation cascade, which can
-    happen on either path) on every expected failure path.
+    candidates overall — raised by ingest/rankings.py, cold path only) on
+    every expected failure path. M2.3 §6.1: too few references surviving
+    M2.1 eligibility and covariate matching no longer aborts the analysis —
+    see the ledger_state handling below instead.
     """
     # Papel explicito por fase: a mesma op_name serve jogador e referencia,
     # entao quem distingue e o momento do pipeline, nao a query.
@@ -566,43 +588,69 @@ def run_analysis(
             expected_partition=partition,
             expected_difficulty=criteria.difficulty,
         )
+    # M2.3 v002 §4.0 (D-M23-07): quarentena de representações divergentes
+    # ANTES da higiene, sobre a lista buscada inteira — resolve R1 (a
+    # invariância de permutação de §8.6 e a saída idêntica de match_cohort
+    # de §8.2 não podem valer juntas quando duas representações do mesmo
+    # jogador/pull empatam na chave de deduplicação e divergem por valor;
+    # a quarentena exclui o grupo inteiro em vez de escolher uma).
+    # match_cohort/hygienic_candidates diretamente NUNCA chamam isto — só
+    # este caminho de produção.
+    quarantined, quarantine_report = quarantine_conflicting_duplicates(player_log, reference_logs)
+    # M2.3 §4: higiene uma única vez, alimentando M2.1 (comparabilidade
+    # básica) e, a partir dele, dois ramos independentes — o ledger de M1
+    # (match_covariates sobre os elegíveis) e as populações M2.2 (sobre o
+    # conjunto higiênico inteiro, nunca sobre o ledger já filtrado por
+    # covariável: o próprio ladder de M2.2 é quem relaxa essas referências).
+    hygienic, hygiene_report = hygienic_candidates(player_log, quarantined)
+    eligibility = evaluate_references(player_log, hygienic)
+    eligible_logs = [
+        log for log in hygienic if damage_reference_id(log) in eligibility.eligible_ids
+    ]
     # EC.3: mesma matching_policy_version que já decidiu a identidade/cache
     # do candidate pool (EC.2) — nunca duas flags de versão que possam
     # divergir. `criteria` continua v1 por default (nenhum call site passa
     # outra coisa), então isto não muda comportamento nenhum hoje.
-    matched_logs, match_report = match_cohort(
+    matched_logs, match_report = match_covariates(
         player_log,
-        reference_logs,
+        eligible_logs,
         min_n=COHORT_TARGET_N,
         matching_policy_version=criteria.matching_policy_version,
     )
-    if len(matched_logs) < COHORT_MIN_HARD:
-        msg = (
-            f"apenas {len(matched_logs)} logs de referência após matching de "
-            f"covariáveis (mínimo: {COHORT_MIN_HARD}); redução pela higiene: "
-            f"excluded_self={match_report.excluded_self}, "
-            f"excluded_non_kill={match_report.excluded_non_kill}, "
-            f"deduped_pull={match_report.deduped_pull}, "
-            f"deduped_player={match_report.deduped_player}; "
-            f"difficulty exigida={criteria.difficulty} "
-            "(logs de outra difficulty foram descartados)"
-        )
-        raise InsufficientCohort(msg, n_members=len(matched_logs), minimum_required=COHORT_MIN_HARD)
-
-    # T3.1: same already-covariate-matched cohort, independent of CD timing.
-    performance = analyze_performance_features(player_log, matched_logs, deps.catalog)
-
-    profile, num_positional = build_cd_reference_profile(matched_logs, player_log.fight.duration_s)
-    durations = [rl.fight.duration_s for rl in matched_logs]
-    benchmark_reference = select_benchmark_reference(player_log, matched_logs)
-    duration_min_s = min(durations) if durations else player_log.fight.duration_s
-    duration_max_s = max(durations) if durations else player_log.fight.duration_s
-    cohort_size_status = classify_cohort_size(len(matched_logs))
+    metric_populations = select_metric_populations(
+        player_log, hygienic, eligibility=eligibility, catalog=deps.catalog
+    )
+    # M2.3 §6.2: estado da própria população do ledger — não substitui o
+    # accounting_status de M1 (dps_gap.accounting_status, abaixo), que
+    # continua com suas próprias regras (NO_REFERENCES/INSUFFICIENT_
+    # REFERENCES/AVAILABLE) inalteradas.
+    ledger_state = (
+        "SUFFICIENT" if len(matched_logs) >= COHORT_MIN_HARD else "INSUFFICIENT_REFERENCES"
+    )
 
     # T3.2: rules 1/2 of the diagnosis need to know whether a buff-related
-    # covariate was relaxed — the SAME match_cohort() output T2.1 already
-    # produced, not a new query.
+    # covariate was relaxed — the SAME match_covariates() output T2.1
+    # already produced, not a new query.
     buffs_relaxed = bool(set(match_report.relaxed) & {"has_augmentation", "external_buffs"})
+
+    # M2.3 §6.3: aspiracional do ledger nunca ordena dps não finito como
+    # 0.0, e fica indisponível abaixo do piso de ordenáveis — mesma guarda
+    # que M2.2 §7.2 já aplica às populações por métrica.
+    orderable_ledger = [
+        log for log in matched_logs if log.dps is not None and math.isfinite(log.dps)
+    ]
+    benchmark_reference: list[PlayerLog] = (
+        select_benchmark_reference(player_log, orderable_ledger)
+        if len(orderable_ledger) >= REFERENCE_MIN_N
+        else []
+    )
+    aspirational_limitations = () if benchmark_reference else ("ASPIRATIONAL_UNAVAILABLE",)
+
+    # M2.3 §6.2: dps_gap é "sempre computado" — as seis métricas usam a
+    # população DESCRIPTIVE de M2.2 (metric_populations), e a comparação do
+    # ledger (comparison/aspirational_comparison, AbilityGap) já degrada
+    # honestamente para R_log pequeno/vazio via M1 (accounting_status
+    # NO_REFERENCES/INSUFFICIENT_REFERENCES), sem exceção.
     dps_gap = analyze_dps_gap(
         player_log,
         matched_logs,
@@ -610,6 +658,8 @@ def run_analysis(
         catalog=deps.catalog,
         buffs_relaxed=buffs_relaxed,
         benchmark_reference=benchmark_reference,
+        metric_populations=metric_populations,
+        metric_population_pool=hygienic,
     )
     # One authoritative R, including quality and contradictory-identity exclusions.
     assert dps_gap.comparison is not None
@@ -621,6 +671,54 @@ def run_analysis(
     ]
     cohort_median_dps = measured_median(dps_values)
     player_damage_share = _player_damage_share(player_log)
+
+    # M2.3 §6.2: só computados quando o ledger é SUFFICIENT — nenhum destes
+    # jamais foi exercitado com R_log pequeno/vazio antes desta unidade, e
+    # a SPEC exige ausência declarada (None/vazio), não valor fabricado.
+    if ledger_state == "SUFFICIENT":
+        performance = analyze_performance_features(
+            player_log,
+            matched_logs,
+            deps.catalog,
+            metric_populations=metric_populations,
+            metric_population_pool=hygienic,
+        )
+        profile, num_positional = build_cd_reference_profile(
+            matched_logs, player_log.fight.duration_s
+        )
+        eligible_ids = [
+            sid for sid in discover_eligible_spell_ids(profile) if player_log.cast_timeline.get(sid)
+        ]
+        comparisons = compare_all_spells(
+            player_log,
+            profile,
+            eligible_ids,
+            catalog=deps.catalog,
+            reference_n=num_positional,
+            gap_penalty=deps.settings.gap_penalty_s,
+        )
+        core_abilities, proc_result, external_context, actionable_ids = _report_ability_sections(
+            player_log, matched_logs, deps.catalog
+        )
+        comparisons = [item for item in comparisons if item.spell.spell_id in actionable_ids]
+    else:
+        performance = None
+        num_positional = 0
+        comparisons = []
+        core_abilities = ()
+        proc_result = None
+        external_context = ()
+
+    # Cast frequency/timing has its own collection contract.  Damage
+    # availability and the size of R must not suppress an independently
+    # complete cast comparison (M1 section 4.2).
+    measurement_provenance = player_log.measurement_provenance
+    if (
+        measurement_provenance is None
+        or measurement_provenance.casts_collection.status is not CollectionStatus.COMPLETE
+    ):
+        comparisons = []
+
     findings, relevance_findings, execution_findings = build_findings(
         dps_gap=dps_gap,
         n=num_positional,
@@ -668,23 +766,10 @@ def run_analysis(
         standing=conclusion.standing,
     )
 
-    eligible_ids = [
-        sid for sid in discover_eligible_spell_ids(profile) if player_log.cast_timeline.get(sid)
-    ]
-    comparisons = compare_all_spells(
-        player_log,
-        profile,
-        eligible_ids,
-        catalog=deps.catalog,
-        reference_n=num_positional,
-        gap_penalty=deps.settings.gap_penalty_s,
-    )
-    # Cast frequency/timing has its own collection contract.  Damage
-    # availability and the size of R must not suppress an independently
-    # complete cast comparison (M1 section 4.2).
-    provenance = player_log.measurement_provenance
-    if provenance is None or provenance.casts_collection.status is not CollectionStatus.COMPLETE:
-        comparisons = []
+    durations = [rl.fight.duration_s for rl in matched_logs]
+    duration_min_s = min(durations) if durations else player_log.fight.duration_s
+    duration_max_s = max(durations) if durations else player_log.fight.duration_s
+    cohort_size_status = classify_cohort_size(len(matched_logs))
 
     warnings: list[str] = []
     if cohort_size_status == "warn":
@@ -721,18 +806,43 @@ def run_analysis(
         matched_covariates=match_report.matched,
         relaxed_covariates=match_report.relaxed,
     )
+
+    # M2.3 §7: proveniência mínima de comparabilidade — higiene, elegibilidade
+    # M2.1, ledger e as seis populações M2.2, com N/exclusões/relaxamentos e
+    # versões de política preservados até o contrato e a persistência.
+    comparability = build_comparability_provenance(
+        target_id=damage_reference_id(player_log),
+        reference_eligibility_policy_version=eligibility.policy_version,
+        metric_population_policy_version=METRIC_POPULATION_POLICY_VERSION,
+        ledger_matching_policy_version=criteria.matching_policy_version,
+        hygiene=summarize_hygiene(hygiene_report, quarantine_report),
+        eligibility=summarize_eligibility(eligibility),
+        ledger=summarize_ledger(
+            state=ledger_state,
+            members=matched_logs,
+            match_report=match_report,
+            accepted_ids=dps_gap.comparison.reference_ids,
+            accounting_exclusions=dps_gap.comparison.excluded_references,
+            aspirational_member_ids=[damage_reference_id(log) for log in benchmark_reference],
+            aspirational_limitations=aspirational_limitations,
+        ),
+        metrics=summarize_metrics(metric_populations),
+    )
+    comparability_json = encode_comparability_provenance(comparability)
+
     manifest = build_run_manifest(
         cohort_id=cohort_id,
         n_members=num_positional,
         wcl_partition=partition,
         settings=deps.settings,
         reference_n_quantitative=dps_gap.reference_n_quantitative,
+        reference_eligibility_policy_version=eligibility.policy_version,
+        metric_population_policy_version=METRIC_POPULATION_POLICY_VERSION,
+        ledger_matching_policy_version=criteria.matching_policy_version,
+        comparability_provenance_version=comparability.provenance_version,
+        comparability_provenance_json=comparability_json,
     )
     deps.store.write_run(manifest)
-    core_abilities, proc_result, external_context, actionable_ids = _report_ability_sections(
-        player_log, matched_logs, deps.catalog
-    )
-    comparisons = [item for item in comparisons if item.spell.spell_id in actionable_ids]
 
     return AnalysisResult(
         header=header,
@@ -758,4 +868,5 @@ def run_analysis(
         conclusion=conclusion,
         positive_observation=positive_observation,
         material_priorities=material_priorities,
+        comparability=comparability,
     )

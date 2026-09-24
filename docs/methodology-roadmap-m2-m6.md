@@ -4,7 +4,7 @@ Aprovado pelo usuário e formalizado em 2026-09-13. São **16 submilestones**.
 Correção aritmética na construção do orquestrador: a proposta e sua formalização
 anterior diziam 17, mas enumeravam 16 IDs (3+4+3+3+3). Os IDs, escopos e dependências
 aprovados permanecem exatamente os mesmos; nenhuma unidade foi criada ou retirada.
-Status 2026-09-22: **M2.1 MILESTONE_CLOSED** ([independent review and evidence](m2-1-closure.md)). **M2.2 MILESTONE_CLOSED** ([closure](m2-2-closure.md)). M2.3-M6.3: **NOT_CLOSED**; macro M2 open. Product delivery workspace: `../BotGITGUD-M2.1-product`. Orchestrator suspended; historical run unchanged. This roadmap is not a SPEC.
+Status 2026-09-22: **M2.1 MILESTONE_CLOSED** ([independent review and evidence](m2-1-closure.md)). **M2.2 MILESTONE_CLOSED** ([closure](m2-2-closure.md)). Status 2026-09-24: **M2.3 MILESTONE_CLOSED; macro M2 MILESTONE_CLOSED** ([closure](m2-3-closure.md)). M3.1-M6.3: **NOT_STARTED**. Product delivery workspace: `../BotGITGUD-M2.1-product`. Orchestrator suspended; historical run unchanged. This roadmap is not a SPEC.
 M1 está [MILESTONE_CLOSED](m1-closure.md).
 
 Base: [contrato M0](m0-methodology-contract.md) e [SPEC M1](m1-specification.md).

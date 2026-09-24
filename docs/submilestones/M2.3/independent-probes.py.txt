@@ -1,0 +1,90 @@
+"""Run from product root with .venv/Scripts/python.exe -B this_file."""
+import dataclasses
+import json
+import math
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path[:0] = ["tests/unit", "tests/fixtures"]
+from test_pipeline import _build_deps, _DispatchTransport, _req
+from test_m2_2_metric_population import _make_log
+from botgitgud.analysis.pipeline import run_analysis
+from botgitgud.analysis.comparability_provenance import encode_comparability_provenance, decode_comparability_provenance
+from botgitgud.report.contract import build_report_contract
+from botgitgud.report.coaching_answer import render_coaching_answer
+from botgitgud.report.text import render_report
+
+def make(name, **kwargs):
+    return _make_log(character_name=name, class_name="Warlock", spec_name="Demonology", **kwargs)
+
+def run(case, references):
+    with tempfile.TemporaryDirectory(prefix="m23-review-") as td:
+        deps = _build_deps(Path(td), _DispatchTransport({}))
+        deps.catalog.learn(1, "Example", "wcl")
+        player = make("Target")
+        try:
+            with (
+                patch.object(deps.fetcher, "fetch", return_value=player),
+                patch.object(deps.store, "read_candidate_pool", return_value=[]),
+                patch("botgitgud.analysis.pipeline.fetch_cohort_logs", return_value=references),
+                patch("botgitgud.analysis.pipeline.get_current_partition", return_value=4),
+            ):
+                result = run_analysis(_req(), deps)
+            provenance = result.comparability
+            comparisons = result.dps_gap.metric_comparisons
+            assert set(comparisons) == set(provenance.metrics)
+            for key, comparison in comparisons.items():
+                assert comparison.reference_ids == provenance.metrics[key].descriptive.member_ids
+                assert len(comparison.reference_values) == len(comparison.reference_ids)
+            assert decode_comparability_provenance(result.manifest.comparability_provenance_json) == provenance
+            ledger_comparison = result.dps_gap.comparison
+            assert set(ledger_comparison.reference_ids) <= set(provenance.ledger.member_ids)
+            if ledger_comparison.total_delta_dps is not None:
+                assert math.isclose(math.fsum((*ledger_comparison.ability_delta_dps.values(), ledger_comparison.support_delta_dps, ledger_comparison.residual_dps)), ledger_comparison.total_delta_dps, abs_tol=1e-9)
+            contract = build_report_contract(result, setup=result.setup_analysis)
+            assert contract.confianca.comparability is provenance
+            discord = render_coaching_answer(contract)
+            cli = render_report(result.header, result.comparisons, None, result.performance, result.dps_gap, result.top_actions)
+            summary = {
+                "case": case,
+                "ledger": provenance.ledger.n,
+                "state": provenance.ledger.state,
+                "accounting": result.dps_gap.accounting_status,
+                "ledger_total_delta_dps": ledger_comparison.total_delta_dps,
+                "metrics": {k: {"n": len(v.reference_ids), "graded": v.finding is not None} for k,v in comparisons.items()},
+                "setup": result.setup_analysis is not None,
+                "cli_chars": len(cli), "discord_chars": len(discord),
+            }
+            print(json.dumps(summary))
+            return provenance
+        finally:
+            deps.store.close()
+
+references = [make(f"R{i}", fight_id=i+2, damage=200000, complete_damage_collection=i<16) for i in range(30)]
+references += [make(f"Tier{i}", fight_id=100+i, tier_pieces=0) for i in range(4)]
+wrong = make("Wrong", fight_id=999)
+references.append(dataclasses.replace(wrong, build=dataclasses.replace(wrong.build, class_name="Mage")))
+forward = run("mixed", references)
+reverse = run("mixed-reversed", references[::-1])
+assert encode_comparability_provenance(forward) == encode_comparability_provenance(reverse)
+assert forward.ledger.n == 30
+assert forward.metrics["aura_uptime_fraction:1"].descriptive.n == 34
+assert forward.metrics["gross_ability_dps:1"].descriptive.n == 16
+empty = run("ledger-empty-metric-sufficient", [make(f"Long{i}", fight_id=i+2, duration_s=390) for i in range(16)])
+assert empty.ledger.n == 0
+assert empty.metrics["gross_ability_dps:1"].descriptive.n == 16
+
+good = make("Duplicate", fight_id=500)
+bad = dataclasses.replace(good, build=dataclasses.replace(good.build, class_name="Mage"))
+one = run("duplicate-compatible-first", [good, bad])
+two = run("duplicate-incompatible-first", [bad, good])
+print(json.dumps({"duplicate_provenance_equal": encode_comparability_provenance(one) == encode_comparability_provenance(two)}))
+missing = make("UptimeDuplicate", fight_id=501, uptime=None)
+observed = make("UptimeDuplicate", fight_id=501, uptime=0.5)
+one = run("duplicate-uptime-missing-first", [missing, observed])
+two = run("duplicate-uptime-observed-first", [observed, missing])
+assert one.metrics["aura_uptime_fraction:1"].descriptive.n == 0
+assert two.metrics["aura_uptime_fraction:1"].descriptive.n == 1
+assert encode_comparability_provenance(one) != encode_comparability_provenance(two)

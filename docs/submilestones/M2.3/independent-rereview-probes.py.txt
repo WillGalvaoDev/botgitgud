@@ -1,0 +1,50 @@
+"""Independent v002 review; run from product root. No production mutations."""
+import dataclasses
+import itertools
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path[:0] = ["tests/unit", "tests/fixtures"]
+from test_m2_3_comparability_integration import (
+    _run_analysis_with_fake_references,
+    _r1_counterexample_target_and_clean_refs,
+    _make_log,
+)
+from botgitgud.analysis.comparability_provenance import (
+    encode_comparability_provenance,
+    decode_comparability_provenance,
+)
+from botgitgud.analysis.measurement import damage_reference_id
+from botgitgud.report.contract import build_report_contract
+
+target, clean = _r1_counterexample_target_and_clean_refs()
+a = _make_log(character_name="Duplicate", class_name="Warlock", spec_name="Demonology", fight_id=501, uptime=None)
+b = dataclasses.replace(a, uptimes={1: 0.5})
+c = dataclasses.replace(b, percentile=99.0 if b.percentile != 99.0 else 98.0)
+rid = damage_reference_id(a)
+assert rid == damage_reference_id(b) == damage_reference_id(c)
+encoded = []
+with tempfile.TemporaryDirectory(prefix="m23-v002-review-") as td:
+    for index, order in enumerate(itertools.permutations([a, b, c])):
+        result, deps = _run_analysis_with_fake_references(Path(td) / str(index), target, [*clean, *order])
+        try:
+            p = result.comparability
+            payload = encode_comparability_provenance(p)
+            encoded.append(payload)
+            assert decode_comparability_provenance(result.manifest.comparability_provenance_json) == p
+            assert build_report_contract(result, setup=result.setup_analysis).confianca.comparability == p
+            row = deps.store.query("SELECT comparability_provenance_json FROM runs").row(-1)
+            assert decode_comparability_provenance(row[0]) == p
+            assert p.hygiene.excluded_conflicting_duplicates == 2
+            assert rid in p.hygiene.conflicting_duplicate_ids
+            assert rid in p.eligibility.eligible_ids
+            assert rid in p.ledger.member_ids
+            metrics = [key for key, value in p.metrics.items() if rid in value.descriptive.member_ids]
+            assert metrics
+            print(json.dumps({"permutation": index, "id": rid, "excluded_logs": p.hygiene.excluded_conflicting_duplicates, "conflicting_ids": p.hygiene.conflicting_duplicate_ids, "also_eligible": True, "also_in_ledger": True, "also_in_metrics": metrics, "contract_and_store_roundtrip": True}))
+        finally:
+            deps.store.close()
+assert len(set(encoded)) == 1
+print("All six permutations deterministic; all six violate SPEC v002 section 7.1 ID exclusion invariant.")
