@@ -1166,8 +1166,12 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
     fetched list to M2.1/M2.2, which by contract do not deduplicate.
 
     The target is the first kill of the most populated coherent partition
-    (encounter, difficulty, partition, class, spec), so the replay produces
-    real ELIGIBLE references instead of a vacuous empty population. Absence
+    (encounter, difficulty, partition, class, spec) among logs whose damage
+    scope is reconciled (WCL_TARGET_SCOPE_V1). Legacy-unscoped logs are
+    deliberately not selected: their subtotals never yield AVAILABLE
+    observations, so M2.2 would correctly return an empty population for them
+    and the replay would prove nothing. The replay must end in a genuinely
+    NON-EMPTY M2.2 population of compatible references. Absence
     of the corpus is declared explicitly; this skip can never itself serve
     as passed acceptance proof for AC6 — the real M2.2 coverage proof in this
     suite is test_replay_gate1_scope_rankings_census_matches_manual_expectation.
@@ -1193,13 +1197,16 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
             log.build.spec_name,
         )
 
+    scoped = DamageScopeVersion.WCL_TARGET_SCOPE_V1
     counts: dict[tuple[int, int, int | None, str, str], int] = {}
     for log in logs:
-        if log.fight.kill:
+        if log.fight.kill and log.damage_scope is scoped:
             counts[partition_key(log)] = counts.get(partition_key(log), 0) + 1
     chosen = max(counts, key=lambda key: (counts[key], key))
     target_index = next(
-        i for i, log in enumerate(logs) if log.fight.kill and partition_key(log) == chosen
+        i
+        for i, log in enumerate(logs)
+        if log.fight.kill and log.damage_scope is scoped and partition_key(log) == chosen
     )
     target = logs[target_index]
     fetched = tuple(log for i, log in enumerate(logs) if i != target_index)
@@ -1221,6 +1228,17 @@ def test_replay_over_data_raw_corpus_if_present() -> None:
         catalog=None,
     )
     assert population_set.policy_version == METRIC_POPULATION_POLICY_VERSION
+
+    descriptive = population_set.descriptive
+    assert descriptive.n > 0, "the real replay must produce a non-empty M2.2 population"
+    assert descriptive.n == len(descriptive.members)
+    logs_by_id = {damage_reference_id(log): log for log in hygienic}
+    for member in descriptive.members:
+        assert member in eligibility.eligible_ids
+        assert member not in quarantine_report.conflicting_ids
+        member_log = logs_by_id[member]
+        assert member_log.damage_scope is scoped
+        assert partition_key(member_log) == chosen
 
 
 def test_percentile_only_duplicate_is_refused_by_m2_2_and_quarantined_by_the_m2_path() -> None:
