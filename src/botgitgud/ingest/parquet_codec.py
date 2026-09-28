@@ -20,6 +20,7 @@ from botgitgud.domain.models import (
     AbilitySourceDamage,
     AuraBand,
     AuraDetail,
+    AuraTableProvenance,
     CollectionProvenance,
     CollectionStatus,
     EventMix,
@@ -29,7 +30,9 @@ from botgitgud.domain.models import (
     PhaseInterval,
     PlayerBuild,
     PlayerLog,
+    ResourceStreamProvenance,
     SetupProfile,
+    StreamProvenance,
     TalentNode,
 )
 
@@ -65,6 +68,105 @@ def _decode_provenance(raw: str | None) -> MeasurementProvenance | None:
         payload.get("targets_per_cast_reasons", ("CAST_INSTANCE_LINK_UNAVAILABLE",))
     )
     return MeasurementProvenance(**payload)
+
+
+def _encode_collection(value: CollectionProvenance) -> dict:
+    return {
+        "status": value.status.value,
+        "reasons": list(value.reasons),
+        "requested_start_ms": value.requested_start_ms,
+        "requested_end_ms": value.requested_end_ms,
+    }
+
+
+def _decode_collection(payload: dict) -> CollectionProvenance:
+    return CollectionProvenance(
+        CollectionStatus(payload["status"]),
+        tuple(payload.get("reasons", ())),
+        payload.get("requested_start_ms"),
+        payload.get("requested_end_ms"),
+    )
+
+
+def _encode_aura_table(table: AuraTableProvenance | None) -> dict | None:
+    if table is None:
+        return None
+    return {
+        "collection": _encode_collection(table.collection),
+        "total_time_ms": table.total_time_ms,
+        "auras": {str(k): list(v) for k, v in table.auras.items()},
+    }
+
+
+def _decode_aura_table(payload: dict | None) -> AuraTableProvenance | None:
+    if payload is None:
+        return None
+    return AuraTableProvenance(
+        collection=_decode_collection(payload["collection"]),
+        total_time_ms=payload.get("total_time_ms"),
+        auras={int(k): (v[0], v[1]) for k, v in payload.get("auras", {}).items()},
+    )
+
+
+def _encode_resource_stream(resources: ResourceStreamProvenance | None) -> dict | None:
+    if resources is None:
+        return None
+    return {
+        "collection": _encode_collection(resources.collection),
+        "player_event_count": resources.player_event_count,
+        "by_type": {str(k): list(v) for k, v in resources.by_type.items()},
+        "incomplete_types": sorted(resources.incomplete_types),
+    }
+
+
+def _decode_resource_stream(payload: dict | None) -> ResourceStreamProvenance | None:
+    if payload is None:
+        return None
+    return ResourceStreamProvenance(
+        collection=_decode_collection(payload["collection"]),
+        player_event_count=payload.get("player_event_count", 0),
+        by_type={int(k): (v[0], v[1]) for k, v in payload.get("by_type", {}).items()},
+        incomplete_types=frozenset(payload.get("incomplete_types", ())),
+    )
+
+
+def _encode_stream_provenance(value: StreamProvenance | None) -> str | None:
+    """M3.1 (docs/m3-1-specification.md D-M31-08): additive column; `None`
+    (never a fabricated empty StreamProvenance) for every log fetched
+    before this unit — read back as `None` by `_decode_stream_provenance`.
+
+    `allow_nan=False`: D-M31-08 requires canonical JSON with no NaN.
+    `parse_aura_table_provenance` already drops any non-finite
+    `totalUptime` before it ever reaches a `StreamProvenance`, so this
+    never fires for data produced by this unit's own parsers — it is a
+    defense-in-depth guard against a hand-built StreamProvenance (or a
+    future caller) smuggling one through, raising loudly instead of ever
+    writing an out-of-spec JSON file.
+    """
+    if value is None:
+        return None
+    payload = {
+        "schema_version": value.schema_version,
+        "buffs": _encode_aura_table(value.buffs),
+        "debuffs": _encode_aura_table(value.debuffs),
+        "resources": _encode_resource_stream(value.resources),
+    }
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False)
+
+
+def _decode_stream_provenance(raw: str | None) -> StreamProvenance | None:
+    if not raw:
+        return None
+    payload = json.loads(raw)
+    schema_version = payload.get("schema_version", "stream-availability-v1")
+    if schema_version != "stream-availability-v1":
+        raise ValueError("unsupported stream provenance schema")
+    return StreamProvenance(
+        schema_version=schema_version,
+        buffs=_decode_aura_table(payload.get("buffs")),
+        debuffs=_decode_aura_table(payload.get("debuffs")),
+        resources=_decode_resource_stream(payload.get("resources")),
+    )
 
 
 def _encode_setup(setup: SetupProfile | None) -> str | None:
@@ -201,6 +303,7 @@ def write_parquet_log(log: PlayerLog, path: Path) -> None:
                 else 0.0
             ],
             "measurement_provenance_json": [_encode_provenance(log.measurement_provenance)],
+            "stream_provenance_json": [_encode_stream_provenance(log.stream_provenance)],
         }
     )
     pq.write_table(table, path)
@@ -295,4 +398,5 @@ def read_parquet_log(path: Path) -> PlayerLog:
             else 0.0
         ),
         measurement_provenance=_decode_provenance(row.get("measurement_provenance_json")),
+        stream_provenance=_decode_stream_provenance(row.get("stream_provenance_json")),
     )

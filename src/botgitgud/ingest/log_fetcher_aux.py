@@ -17,6 +17,7 @@ import structlog
 from botgitgud.domain.external_buffs import AUGMENTATION_BUFF_IDS, EXTERNAL_BUFF_IDS
 from botgitgud.domain.models import (
     AuraDetail,
+    AuraTableProvenance,
     CollectionProvenance,
     CollectionStatus,
     PhaseInterval,
@@ -25,7 +26,7 @@ from botgitgud.domain.models import (
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError
 from botgitgud.ingest.event_validation import valid_event
-from botgitgud.ingest.performance_parsing import parse_aura_uptimes
+from botgitgud.ingest.performance_parsing import parse_aura_table_provenance, parse_aura_uptimes
 from botgitgud.ingest.wcl_parsing import (
     find_matching_rank_percent,
     parse_aura_ids,
@@ -89,7 +90,15 @@ def fetch_buffs_and_debuffs(
     fight_id: int,
     player_id: int,
     catalog: SpellCatalog,
-) -> tuple[bool, frozenset[int], dict[int, float], dict[int, AuraDetail]]:
+    duration_ms: float,
+) -> tuple[
+    bool,
+    frozenset[int],
+    dict[int, float],
+    dict[int, AuraDetail],
+    AuraTableProvenance,
+    AuraTableProvenance,
+]:
     """T2.1 (has_augmentation/external_buffs) + T3.1 (uptimes): one query
     each to the Buffs and Debuffs tables — a single Buffs fetch serves
     both purposes rather than querying it twice. (False, frozenset(), {})
@@ -97,11 +106,22 @@ def fetch_buffs_and_debuffs(
     never blocks the whole log fetch (has_augmentation/external_buffs
     already degrade gracefully in the match cascade; a missing uptime is
     just absent from the report, not fabricated as 0).
+
+    M3.1 (docs/m3-1-specification.md D-M31-08): also returns each table's
+    own AuraTableProvenance (STREAM_UNAVAILABLE on the same ApiError this
+    already degrades on) — additive, never changes the four legacy return
+    values above for the same responses (AC6).
     """
     has_augmentation = False
     external_buffs: frozenset[int] = frozenset()
     uptimes: dict[int, float] = {}
     aura_details: dict[int, AuraDetail] = {}
+    # Reuses parse_aura_table_provenance's own None-shape branch (rather
+    # than duplicating the STREAM_UNAVAILABLE construction) so the ApiError
+    # default and every other failure path always carry the same requested
+    # interval (D-M31-08).
+    buffs_provenance = parse_aura_table_provenance(None, duration_ms)
+    debuffs_provenance = parse_aura_table_provenance(None, duration_ms)
 
     try:
         res_json = query_fn(
@@ -123,6 +143,7 @@ def fetch_buffs_and_debuffs(
             catalog.learn(aura.spell_id, aura.name, "wcl")
             uptimes[aura.spell_id] = aura.uptime_frac
             aura_details[aura.spell_id] = AuraDetail(aura.total_uses, aura.bands)
+        buffs_provenance = parse_aura_table_provenance(buffs_data, duration_ms)
     except ApiError as e:
         log.warning("log_fetcher.buffs_failed", error=str(e))
 
@@ -143,10 +164,18 @@ def fetch_buffs_and_debuffs(
             catalog.learn(aura.spell_id, aura.name, "wcl")
             uptimes[aura.spell_id] = aura.uptime_frac
             aura_details[aura.spell_id] = AuraDetail(aura.total_uses, aura.bands)
+        debuffs_provenance = parse_aura_table_provenance(debuffs_data, duration_ms)
     except ApiError as e:
         log.warning("log_fetcher.debuffs_failed", error=str(e))
 
-    return has_augmentation, external_buffs, uptimes, aura_details
+    return (
+        has_augmentation,
+        external_buffs,
+        uptimes,
+        aura_details,
+        buffs_provenance,
+        debuffs_provenance,
+    )
 
 
 def fetch_cast_timelines(

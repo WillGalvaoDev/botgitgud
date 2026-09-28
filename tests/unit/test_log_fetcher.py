@@ -8,7 +8,14 @@ import httpx
 import pytest
 
 from botgitgud.domain.damage_scope import DamageScopeVersion
-from botgitgud.domain.models import FightRef, PlayerBuild, PlayerLog
+from botgitgud.domain.models import (
+    AuraTableProvenance,
+    CollectionProvenance,
+    CollectionStatus,
+    FightRef,
+    PlayerBuild,
+    PlayerLog,
+)
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.log_fetcher import LogFetcher, LogRequest
@@ -677,6 +684,55 @@ def test_fetch_populates_uptimes_from_buffs_and_debuffs(tmp_path: Path) -> None:
 
     assert result.uptimes[395152] == 1.0  # totalUptime=1000 / totalTime=1000
     assert result.uptimes[777] == 2.0  # totalUptime=1000 / totalTime=500 (fixture default)
+    # M3.1 (D-M31-08): additive — neither table's totalTime (1000/500) equals
+    # the default fixture fight duration (100000 ms), so both are PARTIAL,
+    # never COMPLETE, even though the legacy uptimes above are unaffected.
+    provenance = result.stream_provenance
+    assert provenance is not None
+    assert provenance.buffs is not None
+    assert provenance.buffs.collection.status is CollectionStatus.PARTIAL
+    assert provenance.buffs.collection.reasons == ("AURA_TABLE_TOTAL_TIME_MISMATCH",)
+    assert provenance.buffs.auras == {395152: (1000.0, 1)}
+    assert provenance.debuffs is not None
+    assert provenance.debuffs.collection.status is CollectionStatus.PARTIAL
+    assert provenance.debuffs.auras == {777: (1000.0, 1)}
+
+
+def test_fetch_stream_provenance_buffs_complete_when_total_time_matches_duration(
+    tmp_path: Path,
+) -> None:
+    # _meta_response()'s default fight spans start=0, end=100000 (ms).
+    responses = _default_responses()
+    responses["buffs"] = [_buffs_response([395152], total_time=100000.0)]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    provenance = result.stream_provenance
+    assert provenance is not None
+    assert provenance.buffs is not None
+    assert provenance.buffs.collection == CollectionProvenance(
+        CollectionStatus.COMPLETE, (), 0.0, 100000.0
+    )
+    assert provenance.buffs.total_time_ms == 100000.0
+
+
+def test_fetch_stream_provenance_buffs_unavailable_on_graphql_error(tmp_path: Path) -> None:
+    responses = _default_responses()
+    responses["buffs"] = [{"errors": [{"message": "boom"}]}]
+    fetcher, _transport, _store = _make_fetcher(tmp_path, responses)
+
+    result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
+
+    # T2.1/T3.1's own degrade: a failed buffs table still yields an empty
+    # (not fabricated) has_augmentation/external_buffs/uptimes contribution.
+    assert result.build.has_augmentation is False
+    assert result.build.external_buffs == frozenset()
+    provenance = result.stream_provenance
+    assert provenance is not None
+    assert provenance.buffs == AuraTableProvenance(
+        CollectionProvenance(CollectionStatus.UNKNOWN, ("STREAM_UNAVAILABLE",), 0.0, 100000.0)
+    )
 
 
 def test_fetch_populates_resource_waste_for_the_player_only(tmp_path: Path) -> None:
@@ -694,6 +750,16 @@ def test_fetch_populates_resource_waste_for_the_player_only(tmp_path: Path) -> N
     result = fetcher.fetch("ABCDEFGHIJKLMNOP", 1, "Zarad")
 
     assert result.resource_waste == {"Fragmentos de Alma": 5.0}
+    # M3.1: the same successful, single-page pagination that already
+    # produced the legacy dict above is now also classified as COMPLETE
+    # coverage, keyed by the raw integer type rather than the label.
+    provenance = result.stream_provenance
+    assert provenance is not None
+    assert provenance.resources is not None
+    assert provenance.resources.collection.status is CollectionStatus.COMPLETE
+    assert provenance.resources.collection.reasons == ()
+    assert provenance.resources.by_type == {7: (1, 5.0)}
+    assert provenance.resources.player_event_count == 1
 
 
 # -- T-DG.0: partition populated from report.rankings --------------------------

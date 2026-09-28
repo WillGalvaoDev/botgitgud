@@ -37,6 +37,15 @@ def test_build_run_manifest_fills_every_field() -> None:
     assert manifest.settings_hash == _settings().settings_hash()
 
 
+def test_build_run_manifest_defaults_stream_availability_version_to_unknown() -> None:
+    # M3.1 is local (docs/m3-1-specification.md): pipeline.py does not wire
+    # this yet (M3.4). Changing this default is exactly the M3.4 signal.
+    manifest = build_run_manifest(
+        cohort_id="x", n_members=1, wcl_partition=None, settings=_settings()
+    )
+    assert manifest.stream_availability_version == "unknown"
+
+
 def test_build_run_manifest_accepts_none_partition() -> None:
     manifest = build_run_manifest(
         cohort_id="x", n_members=1, wcl_partition=None, settings=_settings()

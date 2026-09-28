@@ -91,10 +91,14 @@ from botgitgud.analysis.reference_eligibility import (
 )
 from botgitgud.domain.models import (
     DEFAULT_MATCHING_POLICY_VERSION,
+    AuraTableProvenance,
+    CollectionProvenance,
+    CollectionStatus,
     FightRef,
     PlayerBuild,
     PlayerLog,
     RunManifest,
+    StreamProvenance,
 )
 from botgitgud.ingest.store import Store
 from botgitgud.report.coaching_answer import render_coaching_answer
@@ -554,6 +558,50 @@ def _duplicate_scenario_target_and_clean_refs() -> tuple[PlayerLog, list[PlayerL
     target = make("Target")
     clean_refs = [make(f"Clean{i}", fight_id=i + 2, tier_pieces=4) for i in range(16)]
     return target, clean_refs
+
+
+def test_stream_provenance_alone_never_triggers_the_quarantine_or_changes_the_ledger(
+    tmp_path: Path,
+) -> None:
+    """M3.1 independent review R1: adding ONLY a `stream_provenance` to an
+    otherwise byte-identical clean reference must produce the exact same
+    quarantine/ledger outcome as the reference with no stream_provenance at
+    all (`None`, the historical/pre-M3.1 shape) — never a "conflicting
+    duplicate" manufactured purely by this diagnostic field's presence.
+    `PlayerLog.stream_provenance` is `compare=False` precisely so
+    `quarantine_conflicting_duplicates`' own `log != first` (cohort_match.py)
+    and `metric_population.py`'s collision guard never see it.
+    """
+    target, clean_refs = _duplicate_scenario_target_and_clean_refs()
+    base = clean_refs[0]
+    stream_provenance = StreamProvenance(
+        buffs=AuraTableProvenance(
+            CollectionProvenance(CollectionStatus.COMPLETE, (), 0.0, 300000.0),
+            total_time_ms=300000.0,
+        )
+    )
+    with_provenance = dataclasses.replace(base, stream_provenance=stream_provenance)
+    assert base == with_provenance  # the field is excluded from equality by design
+
+    legacy_result, legacy_deps = _run_analysis_with_fake_references(
+        tmp_path / "legacy", target, [*clean_refs[1:], base]
+    )
+    additive_result, additive_deps = _run_analysis_with_fake_references(
+        tmp_path / "additive", target, [*clean_refs[1:], with_provenance]
+    )
+    legacy_deps.store.close()
+    additive_deps.store.close()
+
+    assert (
+        additive_result.comparability.hygiene.excluded_conflicting_duplicates
+        == legacy_result.comparability.hygiene.excluded_conflicting_duplicates
+        == 0
+    )
+    assert (
+        additive_result.comparability.ledger.member_ids
+        == legacy_result.comparability.ledger.member_ids
+    )
+    assert len(additive_result.comparability.ledger.member_ids) == 16
 
 
 def test_run_analysis_uptime_divergent_duplicate_quarantined_and_order_invariant(

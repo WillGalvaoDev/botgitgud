@@ -239,6 +239,74 @@ class AuraDetail:
 
 
 @dataclass(frozen=True, slots=True)
+class AuraTableProvenance:
+    """M3.1 (docs/m3-1-specification.md D-M31-08): coverage of ONE aura
+    table (Buffs or Debuffs) plus its own raw per-spell readings —
+    `totalUptime` in ms and `totalUses`, never the derived fraction, so the
+    interface (analysis/stream_availability.py) can recompute it against
+    whichever table it trusts. `collection.status` is COMPLETE only when
+    the table answered with a positive `totalTime` EXACTLY equal to this
+    fight's own duration (D-M31-03); `total_time_ms` is that raw value,
+    required whenever `collection` is COMPLETE.
+    """
+
+    collection: CollectionProvenance
+    total_time_ms: float | None = None
+    auras: Mapping[int, tuple[float, int]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.collection.status is CollectionStatus.COMPLETE and self.total_time_ms is None:
+            raise ValueError("COMPLETE aura table requires total_time_ms")
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceStreamProvenance:
+    """M3.1 (D-M31-08): coverage of the RESOURCES event stream (the whole
+    fight, this player's own `resourcechange` events only) plus, per
+    integer `resourceChangeType`, its own event count and waste total —
+    never a rounded/derived rate.
+
+    `incomplete_types` (M3.1 R2 fix): the subset of `resourceChangeType`
+    values that had at least one of this player's own resourcechange
+    events with an unusable `waste` (missing, non-numeric, or non-finite).
+    `by_type`'s subtotal for such a type sums only the USABLE events —
+    it is never the fight's proven-complete total for that type, even
+    when the stream's own `collection` is COMPLETE (that status describes
+    the pagination, not per-event field validity). A type absent from
+    `incomplete_types` had every one of its own events usable.
+    """
+
+    collection: CollectionProvenance
+    player_event_count: int = 0
+    by_type: Mapping[int, tuple[int, float]] = field(default_factory=dict)
+    incomplete_types: frozenset[int] = frozenset()
+
+    def __post_init__(self) -> None:
+        if self.player_event_count < 0:
+            raise ValueError("player_event_count must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class StreamProvenance:
+    """M3.1 (docs/m3-1-specification.md, `stream-availability-v1`): a log
+    fetched before M3.1 has no StreamProvenance at all (`None` on
+    PlayerLog) — read back as STREAM_COVERAGE_UNRECORDED by
+    analysis/stream_availability.py, never as proven completeness or
+    absence (D-M31-07). Additive; does not replace or alter
+    `measurement_provenance` (`measurement-input-v1`, dano/casts, M1).
+    """
+
+    schema_version: str = "stream-availability-v1"
+    buffs: AuraTableProvenance | None = None
+    debuffs: AuraTableProvenance | None = None
+    resources: ResourceStreamProvenance | None = None
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "stream-availability-v1":
+            raise ValueError("unsupported stream provenance schema")
+
+
+@dataclass(frozen=True, slots=True)
 class PlayerLog:
     fight: FightRef
     build: PlayerBuild
@@ -276,6 +344,21 @@ class PlayerLog:
     # population semantics.
     support_subtracted_damage: float = 0.0
     measurement_provenance: MeasurementProvenance | None = None
+    # M3.1: every log fetched before this unit omits this field, exactly
+    # like measurement_provenance did before M1 (D-M31-07) — None, never a
+    # fabricated COMPLETE or empty StreamProvenance. `compare=False` (and
+    # therefore excluded from the generated __hash__ too, since frozen
+    # dataclasses hash on the same fields they compare): M2's quarantine
+    # (cohort_match.py) and M2.2's collision guard (metric_population.py)
+    # both decide identity via PlayerLog.__eq__/!=, over data fetched
+    # BEFORE this field existed. Letting this purely-diagnostic field
+    # participate would make an otherwise byte-identical historical log
+    # and its freshly re-fetched twin (one None, one populated
+    # StreamProvenance) compare unequal, and M2.3's quarantine would then
+    # remove both as a false "conflicting duplicate" — changing M2's
+    # accepted membership by nothing but this field's presence, which AC6
+    # explicitly forbids.
+    stream_provenance: StreamProvenance | None = field(default=None, compare=False)
 
 
 # EC.2/M4: a política histórica v1 coexiste com a v2 sem invalidar caches;
@@ -414,3 +497,6 @@ class RunManifest:
     ledger_matching_policy_version: str = "unknown"
     comparability_provenance_version: str = "unknown"
     comparability_provenance_json: str | None = None
+    # M3.1 (D-M31-08): aditivo. Manifestos anteriores ficam "unknown" — a
+    # unidade é local e nenhum consumidor ainda a lê (M3.4).
+    stream_availability_version: str = "unknown"

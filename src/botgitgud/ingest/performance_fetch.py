@@ -14,7 +14,11 @@ from typing import Any
 
 import structlog
 
-from botgitgud.domain.models import CollectionProvenance, CollectionStatus
+from botgitgud.domain.models import (
+    CollectionProvenance,
+    CollectionStatus,
+    ResourceStreamProvenance,
+)
 from botgitgud.domain.resource_types import resource_type_label
 from botgitgud.errors import ApiError
 from botgitgud.ingest.damage_aggregation import (
@@ -25,7 +29,11 @@ from botgitgud.ingest.damage_aggregation import (
     support_subtracted_total,
 )
 from botgitgud.ingest.event_validation import valid_event
-from botgitgud.ingest.performance_parsing import parse_resource_waste
+from botgitgud.ingest.performance_parsing import (
+    classify_resource_stream_provenance,
+    parse_resource_type_counts,
+    parse_resource_waste,
+)
 from botgitgud.wcl.queries import QUERY_PLAYER_DAMAGE_EVENTS, QUERY_PLAYER_RESOURCE_EVENTS
 
 log = structlog.get_logger(__name__)
@@ -217,13 +225,19 @@ def fetch_resource_waste(
     player_id: int,
     start_time_ms: float,
     end_time_ms: float,
-) -> dict[str, float]:
+) -> tuple[dict[str, float], ResourceStreamProvenance]:
     """Pages `events(dataType: Resources)` for the whole fight, filters to
     this player's own resourcechange events client-side (mirrors
     fetch_cast_timelines' own pattern), and labels each
     `resourceChangeType` via domain/resource_types.py.
+
+    M3.1 (docs/m3-1-specification.md D-M31-08): the pagination's own
+    CollectionProvenance — discarded here before M3.1 — is now classified
+    and returned alongside the legacy label-keyed dict (unchanged, AC6) as
+    a ResourceStreamProvenance, keyed by the raw integer
+    `resourceChangeType` rather than its localized label.
     """
-    events, _ = _paginate_events(
+    events, raw_provenance = _paginate_events(
         query_fn,
         QUERY_PLAYER_RESOURCE_EVENTS,
         report_code=report_code,
@@ -233,4 +247,11 @@ def fetch_resource_waste(
         op_name="fetch_player_resource_events",
     )
     waste_by_type = parse_resource_waste(events, player_id)
-    return {resource_type_label(t): v for t, v in waste_by_type.items()}
+    by_type_counts, incomplete_types = parse_resource_type_counts(events, player_id)
+    provenance = ResourceStreamProvenance(
+        collection=classify_resource_stream_provenance(raw_provenance),
+        player_event_count=sum(count for count, _waste in by_type_counts.values()),
+        by_type=by_type_counts,
+        incomplete_types=incomplete_types,
+    )
+    return {resource_type_label(t): v for t, v in waste_by_type.items()}, provenance

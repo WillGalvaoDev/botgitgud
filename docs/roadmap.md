@@ -1,6 +1,7 @@
 # Roadmap M3–M6
 
-Trabalho metodológico planejado. Estado: **M2 fechado; M3 NOT_STARTED**; M4–M6 não
+Trabalho metodológico planejado. Estado: **M2 fechado; M3.1 fechado (política
+`stream-availability-v1`); M3.2 NOT_STARTED** (M3.3, M3.4 não iniciados); M4–M6 não
 iniciados. Os contratos já vigentes estão em [`methodology.md`](methodology.md).
 
 ## Regras comuns
@@ -27,7 +28,11 @@ iniciados. Os contratos já vigentes estão em [`methodology.md`](methodology.md
 
 ## M3 — Evidência, interpretação e elegibilidade de recomendação
 
-### M3.1 — Disponibilidade dos streams restantes (local)
+### M3.1 — Disponibilidade dos streams restantes (local) — CLOSED
+
+Fechada. Especificação em [`m3-1-specification.md`](m3-1-specification.md) (política
+`stream-availability-v1`, interface em `analysis/stream_availability.py`). Unidade local: nenhum
+consumidor existente foi religado a ela; a integração é M3.4.
 
 **Depende de:** contratos de disponibilidade de M1. **Escopo:** cobertura e estados das auras e
 recursos já consumidos. **Fora:** novos sinais, motor de oportunidades, features experimentais.

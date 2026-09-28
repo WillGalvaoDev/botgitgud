@@ -21,7 +21,13 @@ import structlog
 from botgitgud import telemetry
 from botgitgud.analysis.phases import derive_phase_intervals
 from botgitgud.domain.damage_scope import DamageScopeVersion
-from botgitgud.domain.models import FightRef, MeasurementProvenance, PlayerBuild, PlayerLog
+from botgitgud.domain.models import (
+    FightRef,
+    MeasurementProvenance,
+    PlayerBuild,
+    PlayerLog,
+    StreamProvenance,
+)
 from botgitgud.domain.spells import SpellCatalog
 from botgitgud.errors import ApiError, FightNotFound, PlayerNotFound, RateLimitBudgetExceeded
 from botgitgud.ingest.fight_rankings import fetch_partition
@@ -315,12 +321,20 @@ class LogFetcher:
                 encounter_id=raw_fight["encounterID"],
                 difficulty=raw_fight.get("difficulty"),
             )
-        has_augmentation, external_buffs, uptimes, aura_details = fetch_buffs_and_debuffs(
+        (
+            has_augmentation,
+            external_buffs,
+            uptimes,
+            aura_details,
+            buffs_provenance,
+            debuffs_provenance,
+        ) = fetch_buffs_and_debuffs(
             query_fn,
             report_code=report_code,
             fight_id=fight_id,
             player_id=match.player_id,
             catalog=self._catalog,
+            duration_ms=end_time_ms - start_time_ms,
         )
 
         # T-DG.0: report.rankings is the strong partition source — never
@@ -390,7 +404,7 @@ class LogFetcher:
             resource_events.extend(e for e in event_data if isinstance(e, dict))
             return response
 
-        resource_waste = fetch_resource_waste(
+        resource_waste, resources_provenance = fetch_resource_waste(
             recording_resource_query,
             report_code=report_code,
             fight_id=fight_id,
@@ -461,5 +475,10 @@ class LogFetcher:
                 pet_actor_ids=tuple(sorted(pet_ids)),
                 damage_event_mix_by_spell=event_mix,
                 damage_reconciliation_status=damage_scope.value,
+            ),
+            stream_provenance=StreamProvenance(
+                buffs=buffs_provenance,
+                debuffs=debuffs_provenance,
+                resources=resources_provenance,
             ),
         )

@@ -6,11 +6,17 @@ this module is exactly the T3.1-shaped growth of that one.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from botgitgud.domain.models import AuraBand
+from botgitgud.domain.models import (
+    AuraBand,
+    AuraTableProvenance,
+    CollectionProvenance,
+    CollectionStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,3 +167,163 @@ def parse_resource_waste_by_ability(
         ability_id = int(ability_id)
         by_ability[ability_id] = by_ability.get(ability_id, 0.0) + float(ev.get("waste") or 0)
     return waste
+
+
+def parse_resource_type_counts(
+    events: list[dict[str, Any]], player_id: int
+) -> tuple[dict[int, tuple[int, float]], frozenset[int]]:
+    """M3.1 (docs/m3-1-specification.md D-M31-08): same event domain as
+    parse_resource_waste (this player's own resourcechange events), but
+    keeps each resourceChangeType's own EVENT COUNT alongside its waste
+    total — the proof that the type was actually observed, not inferred
+    from a nonzero waste sum (a type with zero waste is still applicable).
+
+    Unlike parse_resource_waste (M1, unchanged, `float(ev.get("waste") or
+    0)`), an event whose `waste` is missing or non-numeric does NOT count
+    toward the returned subtotal: stream-availability's AVAILABLE means an
+    OBSERVED value, and docs/schema_confirmado.md §10 confirms `waste` is
+    always present on a real resourcechange event, so a missing one has
+    nothing to observe — counting it as a zero-waste occurrence would
+    fabricate the very "zero observed" state D-M31-04 requires proof for.
+
+    R2 (independent review, residual): silently dropping that event is not
+    enough on its own — if this player has ANOTHER event of the SAME type
+    that IS usable, the subtotal would still look like a complete measure
+    of the whole fight for that type. The second return value is exactly
+    the set of types with at least one unusable event, so a caller can
+    degrade that type's status even though every OTHER type, and the
+    stream as a whole, may still be COMPLETE.
+    """
+    counts: dict[int, int] = {}
+    waste: dict[int, float] = {}
+    incomplete_types: set[int] = set()
+    for ev in events:
+        if ev.get("type") != "resourcechange" or ev.get("sourceID") != player_id:
+            continue
+        rtype = ev.get("resourceChangeType")
+        if rtype is None:
+            continue
+        rtype = int(rtype)
+        raw_waste = ev.get("waste")
+        if (
+            isinstance(raw_waste, bool)
+            or not isinstance(raw_waste, (int, float))
+            or not math.isfinite(raw_waste)
+        ):
+            incomplete_types.add(rtype)
+            continue
+        counts[rtype] = counts.get(rtype, 0) + 1
+        waste[rtype] = waste.get(rtype, 0.0) + float(raw_waste)
+    return {rtype: (counts[rtype], waste[rtype]) for rtype in counts}, frozenset(incomplete_types)
+
+
+def parse_aura_table_provenance(table_data: Any, duration_ms: float) -> AuraTableProvenance:
+    """M3.1 (D-M31-03/D-M31-08): classifies coverage of ONE Buffs/Debuffs
+    table response — COMPLETE only when it answered with a positive
+    `totalTime` EXACTLY equal to this fight's own duration in ms (a
+    permanent regression test replays this against every recorded aura
+    table cassette; see test_stream_availability_corpus_replay.py). The
+    QUERY_PLAYER_BUFFS/QUERY_PLAYER_DEBUFFS queries take no explicit
+    startTime/endTime — WCL scopes the table to the whole fight via
+    `fightIDs` — so the requested interval this stream ever covers is
+    `[0, duration_ms)`, recorded on every branch below, including failure.
+
+    Independent of parse_aura_uptimes (unchanged): this keeps the table's
+    own raw `totalUptime`/`totalUses` per spell for provenance, never the
+    derived fraction, and never mutates the shared parsing logic that
+    existing consumers depend on.
+
+    A `guid` repeated within the SAME table with disagreeing
+    `(totalUptime, totalUses)` is an intra-table conflict — the same
+    refusal-to-guess D-M31-06 already applies across the Buffs/Debuffs
+    pair — and is dropped entirely (order-independent: decided by the set
+    of distinct representations seen, never by which came first or last),
+    so `observe_aura_uptime` sees it as simply not listed in this table
+    rather than picking one arbitrarily. A non-finite `totalUptime` (e.g. a
+    malformed NaN token) is dropped the same way `totalUptime is None`
+    already was — never serialized (D-M31-08 requires canonical JSON with
+    no NaN) and never fabricated as a value.
+    """
+    requested_start_ms = 0.0
+    requested_end_ms = duration_ms
+    if not isinstance(table_data, dict):
+        return AuraTableProvenance(
+            CollectionProvenance(
+                CollectionStatus.UNKNOWN,
+                ("STREAM_UNAVAILABLE",),
+                requested_start_ms,
+                requested_end_ms,
+            )
+        )
+    auras = table_data.get("auras")
+    total_time = table_data.get("totalTime")
+    valid_shape = (
+        isinstance(auras, list)
+        and isinstance(total_time, (int, float))
+        and not isinstance(total_time, bool)
+        and total_time > 0
+    )
+    if not valid_shape or not isinstance(auras, list) or not isinstance(total_time, (int, float)):
+        return AuraTableProvenance(
+            CollectionProvenance(
+                CollectionStatus.UNKNOWN,
+                ("STREAM_UNAVAILABLE",),
+                requested_start_ms,
+                requested_end_ms,
+            )
+        )
+    seen: dict[int, set[tuple[float, int]]] = {}
+    for a in auras:
+        if not isinstance(a, dict) or "guid" not in a:
+            continue
+        uptime_ms = a.get("totalUptime")
+        if uptime_ms is None:
+            continue
+        if isinstance(uptime_ms, bool) or not isinstance(uptime_ms, (int, float)):
+            continue
+        if not math.isfinite(uptime_ms):
+            continue
+        entry = (float(uptime_ms), int(a.get("totalUses") or 0))
+        seen.setdefault(int(a["guid"]), set()).add(entry)
+    raw = {guid: next(iter(values)) for guid, values in seen.items() if len(values) == 1}
+    total_time_ms = float(total_time)
+    if total_time_ms != duration_ms:
+        return AuraTableProvenance(
+            CollectionProvenance(
+                CollectionStatus.PARTIAL,
+                ("AURA_TABLE_TOTAL_TIME_MISMATCH",),
+                requested_start_ms,
+                requested_end_ms,
+            ),
+            total_time_ms=total_time_ms,
+            auras=raw,
+        )
+    return AuraTableProvenance(
+        CollectionProvenance(CollectionStatus.COMPLETE, (), requested_start_ms, requested_end_ms),
+        total_time_ms=total_time_ms,
+        auras=raw,
+    )
+
+
+def classify_resource_stream_provenance(raw: CollectionProvenance) -> CollectionProvenance:
+    """M3.1 (D-M31-03): translates `_paginate_events`'s own
+    CollectionProvenance (ingest/performance_fetch.py) into the
+    stream-availability vocabulary, keeping its original reasons intact
+    (never discarding them, unlike `fetch_resource_waste`'s prior `_`).
+    """
+    if raw.status is CollectionStatus.COMPLETE:
+        return raw
+    canonical_status = (
+        CollectionStatus.UNKNOWN
+        if raw.status is CollectionStatus.UNKNOWN
+        else CollectionStatus.PARTIAL
+    )
+    canonical_reason = (
+        "STREAM_UNAVAILABLE" if raw.status is CollectionStatus.UNKNOWN else "STREAM_PARTIAL"
+    )
+    return CollectionProvenance(
+        canonical_status,
+        (canonical_reason, *raw.reasons),
+        raw.requested_start_ms,
+        raw.requested_end_ms,
+    )

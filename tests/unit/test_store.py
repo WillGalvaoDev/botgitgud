@@ -272,6 +272,36 @@ def test_write_run_persists_manifest_row(tmp_path: Path) -> None:
     assert rows["settings_hash"][0] == "feedface1234"
 
 
+def test_write_run_persists_stream_availability_version(tmp_path: Path) -> None:
+    # M3.1 (D-M31-08): additive column; default "unknown" for a manifest
+    # that never set it, and the explicit value otherwise — never derived.
+    unset = RunManifest(
+        cohort_id="unset0000000001",
+        code_version="abc1234",
+        generated_at=datetime.now(UTC),
+        n_members=1,
+        wcl_partition=1,
+        settings_hash="hash",
+    )
+    explicit = RunManifest(
+        cohort_id="explicit00000001",
+        code_version="abc1234",
+        generated_at=datetime.now(UTC),
+        n_members=1,
+        wcl_partition=1,
+        settings_hash="hash",
+        stream_availability_version="stream-availability-v1",
+    )
+    with Store(tmp_path) as store:
+        store.write_run(unset)
+        store.write_run(explicit)
+        rows = store.query(
+            "SELECT cohort_id, stream_availability_version FROM runs ORDER BY cohort_id"
+        )
+    assert rows["cohort_id"].to_list() == ["explicit00000001", "unset0000000001"]
+    assert rows["stream_availability_version"].to_list() == ["stream-availability-v1", "unknown"]
+
+
 def test_write_run_twice_keeps_both_rows(tmp_path: Path) -> None:
     """Insert-only audit log (D-12c immutability rationale): repeated runs
     of the same cohort must not overwrite each other.

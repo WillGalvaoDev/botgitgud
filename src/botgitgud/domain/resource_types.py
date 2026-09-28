@@ -32,3 +32,34 @@ POWER_TYPE_LABELS: dict[int, str] = {
 
 def resource_type_label(resource_change_type: int) -> str:
     return POWER_TYPE_LABELS.get(resource_change_type, f"recurso #{resource_change_type}")
+
+
+# M3.1 (docs/m3-1-specification.md D-M31-05): the exact inverse of
+# POWER_TYPE_LABELS — every label here is unique (Rage and Fury share no
+# spelling), so this is unambiguous.
+_LABEL_TO_TYPE: dict[str, int] = {label: rtype for rtype, label in POWER_TYPE_LABELS.items()}
+_LEGACY_PREFIX = "recurso #"
+
+
+def resource_type_from_label(label: str) -> int | None:
+    """D-M31-05: recovers the integer `resourceChangeType` identity a
+    historical `PlayerLog.resource_waste` label was built from, via the
+    exact inverse of POWER_TYPE_LABELS plus the `"recurso #<n>"` fallback
+    `resource_type_label` itself produces for an unmapped type. Any other
+    string cannot be traced back to an identity — returns `None`, which a
+    caller declares LEGACY_RESOURCE_LABEL_UNMAPPABLE (D-M31-02), never a
+    guessed type.
+
+    This is IDENTITY resolution only, independent of D-M31-07's coverage
+    gate: `observe_resource_waste` returns STREAM_COVERAGE_UNRECORDED for
+    every historical log regardless of whether its label maps back here —
+    knowing WHICH type a legacy label named never proves the historical
+    paginator recorded complete coverage for it.
+    """
+    if label in _LABEL_TO_TYPE:
+        return _LABEL_TO_TYPE[label]
+    if label.startswith(_LEGACY_PREFIX):
+        suffix = label[len(_LEGACY_PREFIX) :]
+        if suffix.isdigit():
+            return int(suffix)
+    return None

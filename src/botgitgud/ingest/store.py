@@ -147,6 +147,9 @@ class Store:
             ("ledger_matching_policy_version", "VARCHAR"),
             ("comparability_provenance_version", "VARCHAR"),
             ("comparability_provenance_json", "VARCHAR"),
+            # M3.1 (D-M31-08): aditivo. Linhas antigas ficam NULL e são
+            # lidas como versão desconhecida/legada, nunca a corrente.
+            ("stream_availability_version", "VARCHAR"),
         ):
             self._conn.execute(f"ALTER TABLE runs ADD COLUMN IF NOT EXISTS {column} {dtype}")
 
@@ -339,8 +342,8 @@ class Store:
                     measurement_input_version, damage_comparison_version, reference_n_quantitative,
                     reference_eligibility_policy_version, metric_population_policy_version,
                     ledger_matching_policy_version, comparability_provenance_version,
-                    comparability_provenance_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    comparability_provenance_json, stream_availability_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     manifest.cohort_id,
@@ -357,6 +360,7 @@ class Store:
                     manifest.ledger_matching_policy_version,
                     manifest.comparability_provenance_version,
                     manifest.comparability_provenance_json,
+                    manifest.stream_availability_version,
                 ],
             )
 
