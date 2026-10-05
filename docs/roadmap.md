@@ -1,7 +1,7 @@
 # Roadmap M3–M6
 
 Trabalho metodológico planejado. Estado: **M2 fechado; M3.1 fechado (política
-`stream-availability-v1`); M3.2 NOT_STARTED** (M3.3, M3.4 não iniciados); M4–M6 não
+`stream-availability-v1`); M3.2 SPEC v001 DRAFT** (M3.3, M3.4 não iniciados); M4–M6 não
 iniciados. Os contratos já vigentes estão em [`methodology.md`](methodology.md).
 
 ## Regras comuns
@@ -47,7 +47,10 @@ Evidência: respostas gravadas de coleta completa, vazia, parcial e ausente; val
 calculados dos dados; round-trip dos estados. Decisão prévia: prova mínima de cobertura por
 stream, aplicabilidade e normalização, com lista finita de streams e consumidores.
 
-### M3.2 — Semântica das grades (local)
+### M3.2 — Semântica das grades (local) — SPEC DRAFT
+
+Rascunho em [`m3-2-specification.md`](m3-2-specification.md) (política `grade-semantics-v1`,
+B06 = descrição), com as decisões D-M32-06..09 aceitas em 2026-10-05.
 
 **Depende de:** populações de M2; **B06**. **Escopo:** significado das grades e demais
 indicadores estatísticos. **Fora:** materialidade, prioridade global, recomendações temporais.
@@ -71,7 +74,9 @@ recomendação dos sinais existentes. **Fora:** disponibilidade temporal e orden
 5. Diferença contábil não gera promessa de ganho nem causa.
 
 Decisão prévia: complemento de B09 e tabela finita de evidência por família de recomendação,
-preservando a visibilidade de déficit já existente.
+preservando a visibilidade de déficit já existente. A tabela registra obrigatoriamente se um
+uptime com banda amarela é elegível para recomendação, observação ou abstenção (regra
+**R-M32-01**, [`m3-2-specification.md`](m3-2-specification.md) D-M32-09).
 
 ### M3.4 — Integração e closure da interpretação
 
@@ -82,6 +87,8 @@ remediação e consumidores. **Fora:** redesign editorial (M5) e oportunidades (
 2. Nenhum consumidor promove hipótese a causa ou déficit a ganho.
 3. Observação material permanece acessível mesmo sem ação elegível.
 4. Caminhos ativos usam a mesma semântica de grades e evidências.
+5. **R-M32-01:** o filtro BH em `findings` só é removido depois do registro de M3.3 sobre
+   uptime amarelo; a remoção nunca é o mecanismo que decide essa elegibilidade.
 
 ## M4 — Disponibilidade e oportunidades
 
@@ -205,9 +212,9 @@ Prontidão dos dados não equivale a aprovação de modelo.
 |---|---|---|---|
 | B02 | M4.1 | Quais eventos permitem atribuir alvos a instâncias de cast? | Matriz por mecanismo (direto, AoE, periódico, pet), cobertura e ambiguidade; sem prova, alvos por cast continua bloqueado. |
 | B05 | M4.1/M4.2 | Qual fonte prova cooldown, cargas, reset, build e disponibilidade? | Proveniência, versão, regras de aplicabilidade e conjunto inicial de mecanismos; nunca inferir disponibilidade da mediana de casts. |
-| B06 | M3.2 | Grades são descrição ou inferência com controle de erro? | Se inferência: hipótese, calibração de p-valores finitos e família de testes; se descrição: retirar alegações de FDR/confiança causal. |
 | B07 (resto) | M6.1/M6.2 | Como versionar/recalcular derivados e ausências? | Dependências por feature, preservação de brutos, estados explícitos; recalcular, excluir ou manter indisponível por categoria, sem backfill irrestrito. |
 | B08 | M5.2 | Qual conteúdo mínimo cabe na mensagem? | Priorizar evidência, comparabilidade, ação e ressalva; decidir redução de itens antes de eliminar qualificadores. |
-| B09 (resto) | M3.3 | Qual regra de materialidade preserva déficit absoluto sem inventar ação? | Separar sinal para revisão de elegibilidade de recomendação, sem reintroduzir causalidade pelo tamanho do gap. |
+| B09 (resto) | M3.3 | Qual regra de materialidade preserva déficit absoluto sem inventar ação? | Separar sinal para revisão de elegibilidade de recomendação, sem reintroduzir causalidade pelo tamanho do gap; decidir uptime amarelo (R-M32-01). |
 
-B01, B03 e B04 estão resolvidos (estimando M1, elegibilidade M2.1, matriz M2.2).
+B01, B03 e B04 estão resolvidos (estimando M1, elegibilidade M2.1, matriz M2.2). B06 está
+registrada como descrição em [`m3-2-specification.md`](m3-2-specification.md) (D-M32-01).
