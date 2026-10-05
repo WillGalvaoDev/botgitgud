@@ -1,7 +1,7 @@
 # Roadmap M3–M6
 
 Trabalho metodológico planejado. Estado: **M2 fechado; M3.1 fechado (política
-`stream-availability-v1`); M3.2 SPEC v001 DRAFT** (M3.3, M3.4 não iniciados); M4–M6 não
+`stream-availability-v1`); M3.2 SPEC v002 pronta para implementação** (M3.3, M3.4 não iniciados); M4–M6 não
 iniciados. Os contratos já vigentes estão em [`methodology.md`](methodology.md).
 
 ## Regras comuns
@@ -47,9 +47,9 @@ Evidência: respostas gravadas de coleta completa, vazia, parcial e ausente; val
 calculados dos dados; round-trip dos estados. Decisão prévia: prova mínima de cobertura por
 stream, aplicabilidade e normalização, com lista finita de streams e consumidores.
 
-### M3.2 — Semântica das grades (local) — SPEC DRAFT
+### M3.2 — Semântica das grades (local) — SPEC READY
 
-Rascunho em [`m3-2-specification.md`](m3-2-specification.md) (política `grade-semantics-v1`,
+Especificação em [`m3-2-specification.md`](m3-2-specification.md) (política `grade-semantics-v1`,
 B06 = descrição), com as decisões D-M32-06..09 aceitas em 2026-10-05.
 
 **Depende de:** populações de M2; **B06**. **Escopo:** significado das grades e demais

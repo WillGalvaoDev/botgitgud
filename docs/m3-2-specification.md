@@ -4,8 +4,11 @@ Unidade local de M3 ([`roadmap.md`](roadmap.md) §M3.2). Política nova:
 **`grade-semantics-v1`**. Depende das populações de M2 ([`methodology.md`](methodology.md) §4,
 §5) e resolve a decisão aberta **B06**. Não altera nenhum contrato de M1, M2 ou M3.1.
 
-Estado: SPEC v001, **DRAFT** (não implementada; decisões D-M32-06..09 aceitas pelo dono em
-2026-10-05). M3.3+ fora.
+Estado: SPEC v002, **READY FOR IMPLEMENTATION** (não implementada; decisões D-M32-06..09
+aceitas pelo dono em 2026-10-05). M3.3+ fora. A v002 fecha ambiguidades de implementação da
+v001: casos de borda da interface (D-M32-04), restrição de imports (§4.2), mediana abaixo do
+piso no CLI (D-M32-10), lista fechada de arquivos e testes (§9) e método de prova de
+AC2/AC3/AC7/AC8.
 
 ## 1. Objetivo e fronteira
 
@@ -24,8 +27,8 @@ M3.2 é local quanto à **seleção de coaching**: nenhum consumidor de findings
 materialidade ou resposta de coaching troca de população, de corte ou de regra de seleção. A
 troca desses consumidores para a interface nova, incluindo a aposentadoria do filtro BH em
 `findings`, é M3.4 (§7), condicionada à regra R-M32-01 (D-M32-09). As únicas mudanças fora da
-interface são no relatório CLI (§3, D-M32-06 e D-M32-07), exigidas pelo critério 3 do
-roadmap.
+interface são no relatório CLI (D-M32-06, D-M32-07, D-M32-10), a remoção do parâmetro
+`survives_bh` (D-M32-08) e documentação; a lista fechada de arquivos está em §9.
 
 Fora: materialidade e elegibilidade de recomendação (M3.3), disponibilidade de streams (M3.1),
 seleção e ordenação globais (M5.1), redação da resposta (M5.2), novas métricas, novos limiares.
@@ -98,7 +101,7 @@ Uma posição descritiva carrega, e só carrega:
 | `n_below`, `n_tied`, `n_above` | contagens exatas contra o valor do jogador; somam `n` |
 | `mid_rank_quantile` | `(n_below + 0,5·n_tied) / n`; `None` se `n = 0` |
 | `direction` | `TWO_TAILED`, `HIGHER_BETTER` ou `LOWER_BETTER` |
-| `sufficiency` | `INSUFFICIENT` (n < 8), `SUFFICIENT_FOR_COMPARISON` (8 ≤ n < 15), `SUFFICIENT_FOR_GRADING` (n ≥ 15) |
+| `sufficiency` | `INSUFFICIENT` (n < 8), `SUFFICIENT_FOR_COMPARISON` (8 ≤ n < 15), `SUFFICIENT_FOR_GRADING` (n ≥ 15); limiares lidos de `cohort.COHORT_MIN_HARD` e `grading.MIN_N_FOR_GRADING`, nunca literais |
 | `band` | `green`/`yellow`/`red` só com `SUFFICIENT_FOR_GRADING`; senão `None` |
 | `summary` | P10, P25, P50, P75, P90 (tipo 7) só com `n ≥ 8`; senão `None` |
 
@@ -117,9 +120,19 @@ Não há p-valor, intervalo de confiança, score ou peso.
 
 ### D-M32-04 — Valores não finitos
 
-Valor do jogador não finito → `INVALID` com razão `NONFINITE_TARGET_VALUE`, sem posição.
-Referências não finitas são **excluídas** e contadas em `excluded_nonfinite`; `n` é só dos
-finitos. Nunca entram no denominador (corrige G5 na interface nova).
+Não finito = `NaN`, `+inf` ou `-inf` (`math.isfinite` falso). Referências não finitas são
+**excluídas** e contadas em `excluded_nonfinite`; `n` é só dos finitos. Nunca entram no
+denominador (corrige G5 na interface nova). Tabela completa de estados:
+
+| Entrada | `status` | `reasons` | Contagens e `n` | `mid_rank_quantile` | `sufficiency` | `band`, `summary` |
+|---|---|---|---|---|---|---|
+| valor finito, `n ≥ 1` | `AVAILABLE` | `()` | calculadas | calculado | pela escada | pelas regras de D-M32-02 |
+| valor finito, `n = 0` (lista vazia ou só não finitos) | `AVAILABLE` | `()` | todas 0 | `None` | `INSUFFICIENT` | `None` |
+| valor não finito | `INVALID` | `("NONFINITE_TARGET_VALUE",)` | todas 0 (`excluded_nonfinite` ainda contado) | `None` | `INSUFFICIENT` | `None` |
+
+Lista fechada de razões em `grade-semantics-v1`: `NONFINITE_TARGET_VALUE`. Nenhuma outra
+razão é produzida. Comparações são exatas em `float` (sem tolerância nem arredondamento);
+`-0.0` e `0.0` empatam; valores `int` são aceitos e tratados como `float`.
 
 ### D-M32-05 — N da própria métrica
 
@@ -149,6 +162,13 @@ comparação** (tamanho de amostra e relaxamento), não confiança estatística 
 parâmetro `survives_bh` é removido (nenhum chamador o usa). A troca da palavra "confiança" nas
 saídas fica para M5.2 (B08), porque muda redação, não semântica.
 
+### D-M32-10 — Mediana de coorte abaixo do piso no CLI (corrige G7)
+
+Em `report/performance_text.py`, a "coorte mediana" de mortes, downtime, tempo ativo e
+desperdício só é impressa com `finding.stats.n ≥ COHORT_MIN_HARD` (8), a mesma regra que
+uptimes já seguem. Abaixo disso a linha mostra só o valor do jogador e o status. Nada muda na
+grade nem em `ScalarFinding`.
+
 ### D-M32-09 — Regra R-M32-01: uptime amarelo e retirada do BH (aceita)
 
 Hoje o BH impede que qualquer uptime amarelo chegue ao coaching (G2). Retirar o BH muda isso
@@ -164,10 +184,17 @@ A regra é registrada também em [`roadmap.md`](roadmap.md) §M3.3 e §M3.4.
 
 ## 4. Interface
 
+### 4.1 Tipos e função
+
 `src/botgitgud/analysis/grade_semantics.py`, versão `grade-semantics-v1`:
 
 ```python
+GRADE_SEMANTICS_VERSION = "grade-semantics-v1"
+
 class GradeDirection(StrEnum): TWO_TAILED; HIGHER_BETTER; LOWER_BETTER
+
+class PositionSufficiency(StrEnum):
+    INSUFFICIENT; SUFFICIENT_FOR_COMPARISON; SUFFICIENT_FOR_GRADING
 
 @dataclass(frozen=True, slots=True)
 class DescriptivePosition:
@@ -181,7 +208,7 @@ class DescriptivePosition:
     n_above: int
     excluded_nonfinite: int
     mid_rank_quantile: float | None
-    sufficiency: SufficiencyState    # reutiliza M2.2
+    sufficiency: PositionSufficiency
     band: Literal["green", "yellow", "red"] | None
     summary: QuantileStats | None    # reutiliza grading.QuantileStats
 
@@ -190,20 +217,43 @@ def describe_position(
 ) -> DescriptivePosition: ...
 ```
 
-Função pura, sem RNG, resultado independente da ordem de `reference_values`.
+Função pura, sem RNG, sem I/O, resultado independente da ordem de `reference_values`.
+`band` é calculada assim, com `q = mid_rank_quantile`:
+
+- `TWO_TAILED`: verde `0,25 ≤ q ≤ 0,75`; amarela `0,10 ≤ q < 0,25` ou `0,75 < q ≤ 0,90`;
+  vermelha senão (idêntico a `grading.grade_from_quantile`);
+- `HIGHER_BETTER`/`LOWER_BETTER`: `b = q` ou `b = 1 − q`; vermelha `b < 0,10`, amarela
+  `b < 0,25`, verde senão (idêntico a `performance_features._grade_one_tailed`).
+
+A implementação pode chamar `grading.grade_from_quantile`; não pode importar
+`performance_features` (ver 4.2), então a regra unicaudal é reescrita e sua equivalência é
+provada por AC4.
+
+### 4.2 Restrição de imports
+
+`grade_semantics` será importado por `performance_features` e `comparison` em M3.4. Hoje
+`metric_population → metric_observations → performance_features` já forma cadeia (por isso
+`performance_features` importa `metric_population` só sob `TYPE_CHECKING`). Portanto
+`grade_semantics` **só** pode importar da biblioteca padrão, `analysis.grading`,
+`analysis.cohort` (`COHORT_MIN_HARD`) e `analysis.measurement` (`MetricStatus`). Não importa
+`metric_population`, `metric_observations`, `performance_features`, `comparison` nem nada de
+`report`/`bot`.
+
+`PositionSufficiency` é um enum próprio pelo mesmo motivo; seus valores (strings) são
+idênticos aos de `metric_population.SufficiencyState`, e um teste prova essa igualdade.
 
 ## 5. Critérios de aceite
 
 | AC | Roadmap | Critério | Evidência |
 |---|---|---|---|
 | AC1 | 1 | `n`, contagens e quantis usam só os valores recebidos e finitos; `n_below + n_tied + n_above = n`. | Propriedade (hypothesis) com listas aleatórias, inclusive NaN/±inf. |
-| AC2 | 2 | `summary` coincide com `numpy.percentile(..., method="linear")`; `mid_rank_quantile` coincide com cálculo independente por contagem; resultado invariante a permutação. | Oráculo independente; empates massivos (mortes = 0 em 80%); `n` em {1, 2, 7, 8, 14, 15, 60}. |
-| AC3 | 3 | Nenhuma saída CLI ou Discord contém "significativ", "FDR", "p-valor", "IC90" ou "intervalo de confiança". | Varredura das saídas golden e de um replay do corpus real; teste de regressão das strings. |
+| AC2 | 2 | `summary` coincide com interpolação linear tipo 7 escrita no próprio teste (`h = (n−1)·p`, interpolação entre `x[⌊h⌋]` e `x[⌈h⌉]` dos valores ordenados), sem chamar `statistics`; `mid_rank_quantile` coincide com contagem escrita no teste; resultado invariante a permutação. `numpy` (instalado pelo extra `ml`) pode ser oráculo adicional, nunca o único. | Exemplos fixos com valores calculados à mão; propriedade (hypothesis) com empates massivos (mortes = 0 em 80%); `n` em {1, 2, 7, 8, 14, 15, 60}. |
+| AC3 | 3 | Nenhuma saída CLI ou Discord casa com a regex `(?i)significativ`, `\bFDR\b`, `p-valor`, `\bIC ?\d` ou `intervalo de confian`. "confiança" sozinha é permitida (D-M32-08). | Teste que aplica as regex ao texto de `render_text_report` e da resposta de coaching em todos os cenários já construídos por `test_report_text.py`, `test_report_text_performance.py`, `test_coaching_answer.py` e pelo golden Zarad. |
 | AC4 | 3 | Banda da interface = grade atual para toda entrada finita com `n ≥ 15`, nas três direções. | Propriedade contra `grade_deviation`/`grade_scalar`; fronteiras 0,10/0,25/0,75/0,90 exatas. |
-| AC5 | 5 | `n < 15` → `band = None`; `n < 8` → `summary = None`; nenhuma mediana é exibida abaixo do piso contratado; nenhum intervalo é exibido em caso algum. | Casos `n` em {0, 1, 7, 8, 14}; renderização CLI de G4 e G7. |
+| AC5 | 5 | `n < 15` → `band = None`; `n < 8` → `summary = None`; nenhuma mediana de coorte é exibida com `n < 8` (D-M32-10); nenhum intervalo é exibido em caso algum. | Casos `n` em {0, 1, 7, 8, 14}; renderização CLI de mortes, downtime, tempo ativo, desperdício e passo MATCH com `n` em {1, 7, 8}. |
 | AC6 | — | Posição ordinal correta: "abaixo de todas" ⇔ `n_below = 0 ∧ n_tied = 0`. | Caso de G8 (`n = 15`, uma referência menor). |
-| AC7 | — | Seleção de coaching inalterada (R-M32-01): findings, remediação, candidatos materiais e resposta Discord idênticos antes e depois em todo o corpus. | Replay do corpus real comparando `ReportContract` serializado e a resposta de coaching. |
-| AC8 | 3 | CLI sem seção de desvios menores e sem chamada a BH: todo passo MATCH graduado aparece inline com sua banda; o conjunto de passos listados é o mesmo de antes (só muda a seção). | Golden do CLI; teste que conta passos MATCH graduados antes/depois. |
+| AC7 | — | Seleção de coaching inalterada (R-M32-01): findings, remediação, candidatos materiais e resposta Discord idênticos. | (a) o diff da unidade não toca arquivos fora de §9; (b) `test_findings.py`, os testes de materialidade, `test_coaching_answer.py` e o golden passam sem alterar asserções, exceto as de `survives_bh` listadas em §9; (c) teste novo: com um uptime vermelho (q = 0,05) e um amarelo, ambos elegíveis, `build_findings` continua devolvendo zero `RelevanceFinding` (BH ainda ativo em findings). |
+| AC8 | 3 | CLI sem seção de desvios menores e sem BH: todo passo MATCH graduado aparece inline, na ordem dos passos, com sua banda. | Teste com passos verde, amarelo, vermelho e `insufficient`: cada um aparece uma vez no bloco do seu spell; o texto não contém "Desvios menores"; nenhum módulo de `report/` importa `benjamini_hochberg`. |
 
 ## 6. Limitações
 
@@ -232,3 +282,56 @@ Função pura, sem RNG, resultado independente da ordem de `reference_values`.
 | "IC90" | Apenas retirar (D-M32-07) |
 | Palavra "confiança" | Definir como suporte da comparação; troca da palavra em M5.2 (D-M32-08) |
 | Uptime amarelo após retirada do BH | Regra vinculante R-M32-01 (D-M32-09) |
+
+## 9. Escopo fechado de arquivos e testes
+
+**Criar:** `src/botgitgud/analysis/grade_semantics.py`; `tests/unit/test_m3_2_grade_semantics.py`
+(AC1, AC2, AC4, AC5 da interface, AC6, igualdade de `PositionSufficiency`/`SufficiencyState`,
+restrição de imports de §4.2); `tests/unit/test_m3_2_outputs.py` (AC3, AC5 do CLI, AC7(c),
+AC8).
+
+**Alterar (código):**
+
+| Arquivo | Mudança |
+|---|---|
+| `report/grading_text.py` | Remover `compute_minor_deviation_keys`, `render_minor_deviations_section`, `DeviationKey` e o import de BH; `render_match_step_line` sem IC; docstring sem FDR. |
+| `report/cd_sections_text.py` | `_render_spell_block` lista todo MATCH inline (sem `minor_keys`); `render_cd_sections` sem seção colapsada; docstrings atualizados. |
+| `report/performance_text.py` | D-M32-10. |
+| `report/text.py` | Só docstring ou comentário que cite BH/FDR. |
+| `analysis/findings.py` | Remover o parâmetro `survives_bh` de `compute_confidence` e a condição correspondente; docstring passa a "suporte da comparação". Nada mais. |
+
+**Não alterar:** `analysis/grading.py` (as funções continuam servindo `findings` até M3.4),
+`comparison.py`, `performance_features.py`, `materiality.py`, `prioritization.py`,
+`remediation.py`, `pipeline.py`, `metric_population.py`, `reference_eligibility.py`,
+`metric_observations.py`, `stream_availability.py`, `report/coaching_answer.py`, `bot/`.
+
+**Testes existentes que mudam (e só estes):**
+
+| Teste | Novo comportamento esperado |
+|---|---|
+| `test_report_text.py::test_green_deviation_shows_green_and_is_never_collapsed` | Mantido; só remove menção ao colapso, se houver. |
+| `test_report_text.py::test_single_yellow_deviation_collapses_alone` | Reescrito: o passo amarelo aparece inline com 🟡; não existe "Desvios menores". |
+| `test_report_text.py::test_single_extreme_red_deviation_survives_bh_alone` | Reescrito sem BH: o passo vermelho aparece inline com 🔴. |
+| `test_report_text.py::test_ic90_shown_in_the_ideal_line_when_bootstrap_ci_available` | Invertido: "IC90" nunca aparece, mesmo com `ci90` preenchido. |
+| `test_findings.py` (as duas asserções com `survives_bh=`) | Removida a de `survives_bh=False`; a outra chama sem o parâmetro. |
+
+Nenhum teste nem o golden atual dependem de "coorte mediana" com `n < 8` (verificado em
+`5120489`), então D-M32-10 só acrescenta testes. Se outro teste precisar mudar, a implementação para e registra o motivo: é sinal de que saiu do
+escopo. Fixtures que constroem `ScalarFinding`/`StepGrade` com `ci90=` continuam válidas (o
+campo permanece até M3.4).
+
+**Documentação:** `methodology.md` ganha §2.8 "Semântica das grades (M3.2)" com D-M32-01..04,
+D-M32-08 e D-M32-10 em forma normativa, e §6 deixa de citar B06 como aberta; `roadmap.md` marca
+M3.2 CLOSED; este arquivo passa a CLOSED com a matriz AC → teste → resultado (formato de
+`m3-1-specification.md`).
+
+**Comandos de closure** (os mesmos da CI):
+
+```
+.venv/Scripts/python -m pytest tests -q
+.venv/Scripts/python -m ruff check .
+.venv/Scripts/python -m ruff format --check .
+.venv/Scripts/python -m pyright
+```
+
+Rodar com e sem `data/raw` presente; os dois resultados entram na matriz.
