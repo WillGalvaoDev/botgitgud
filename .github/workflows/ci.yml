@@ -67,6 +67,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Historico completo: os testes de M2.3 leem a implementacao pre-M2.3
+          # com `git show <commit>:<arquivo>`, que falha num checkout raso.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
